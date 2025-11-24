@@ -1,40 +1,154 @@
 <template>
   <div class="map-page">
-    <!-- 地圖容器 -->
-    <div class="map-container">
-      <!-- SceneView -->
-      <div ref="viewDiv" class="scene-view"></div>
+    <!-- ========== 頂部導航欄 ========== -->
+    <header class="nav-header">
+      <div class="nav-content">
+        <!-- 左側：Logo + 標題 -->
+        <NuxtLink to="/" class="nav-brand">
+          <div class="brand-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <span class="brand-text">科學園區數位孿生系統</span>
+        </NuxtLink>
 
-      <!-- 查詢工具欄 -->
-      <div class="query-toolbar">
-        <button id="point-btn" class="geometry-btn" title="以點查詢">●</button>
-        <button id="line-btn" class="geometry-btn" title="以線查詢">─</button>
-        <button id="polygon-btn" class="geometry-btn" title="以多邊形查詢">▭</button>
-        <button id="clear-btn" class="geometry-btn clear" title="清除">✕</button>
+        <!-- 右側：導航連結 -->
+        <nav class="nav-links">
+          <NuxtLink to="/dashboard" class="nav-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7" rx="1"/>
+              <rect x="14" y="3" width="7" height="7" rx="1"/>
+              <rect x="3" y="14" width="7" height="7" rx="1"/>
+              <rect x="14" y="14" width="7" height="7" rx="1"/>
+            </svg>
+            <span>儀表板</span>
+          </NuxtLink>
+          <NuxtLink to="/feedback" class="nav-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span>民眾回饋</span>
+          </NuxtLink>
+        </nav>
       </div>
+    </header>
 
-      <!-- 緩衝區滑桿 -->
-      <div class="buffer-panel">
-        <label>緩衝區: <span id="buffer-value">0</span>m</label>
-        <input 
-          type="range" 
-          id="buffer-slider" 
-          min="0" 
-          max="500" 
-          value="0"
-          @input="handleBufferChange"
-        >
-      </div>
+    <!-- ========== 功能模組按鈕列 ========== -->
+    <div class="module-bar">
+      <button
+        v-for="module in modules"
+        :key="module.id"
+        class="module-btn"
+        :class="{ active: activeModule === module.id }"
+        @click="toggleModule(module.id)"
+      >
+        <div class="module-icon" v-html="module.icon"></div>
+        <span class="module-label">{{ module.label }}</span>
+      </button>
     </div>
 
-    <!-- 右側面板 -->
-    <RightSidePanel />
+    <!-- ========== 主要內容區 ========== -->
+    <div class="map-content">
+      <!-- 左側面板容器 -->
+      <transition name="slide-left">
+        <aside v-if="activeModule" class="side-panel left-panel">
+          <div class="panel-header">
+            <h3>{{ currentModuleLabel }}</h3>
+            <button class="panel-close" @click="activeModule = null">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+          <div class="panel-body">
+            <!-- 模組內容容器 - 預留 -->
+          </div>
+        </aside>
+      </transition>
+
+      <!-- 地圖容器 -->
+      <div class="map-container">
+        <!-- SceneView -->
+        <div ref="viewDiv" class="scene-view"></div>
+
+        <!-- 查詢工具欄 -->
+        <div class="query-toolbar">
+          <button id="point-btn" class="geometry-btn" title="以點查詢">●</button>
+          <button id="line-btn" class="geometry-btn" title="以線查詢">─</button>
+          <button id="polygon-btn" class="geometry-btn" title="以多邊形查詢">▭</button>
+          <button id="clear-btn" class="geometry-btn clear" title="清除">✕</button>
+        </div>
+
+        <!-- 緩衝區滑桿 -->
+        <div class="buffer-panel">
+          <label>緩衝區: <span id="buffer-value">0</span>m</label>
+          <input
+            type="range"
+            id="buffer-slider"
+            min="0"
+            max="500"
+            value="0"
+            @input="handleBufferChange"
+          >
+        </div>
+      </div>
+
+      <!-- 右側面板 (來自 main 分支) -->
+      <RightSidePanel />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 // 🔧 修復：使用 shallowRef 代替 ref 來存儲 ArcGIS 物件
-import { ref, shallowRef, onMounted, onUnmounted, markRaw } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted, computed, markRaw } from 'vue'
+
+// ==================== 版面配置 ====================
+
+// 功能模組定義
+const modules = [
+  {
+    id: 'layers',
+    label: '圖層管理',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>'
+  },
+  {
+    id: 'query',
+    label: '智慧查詢',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>'
+  },
+  {
+    id: 'realtime',
+    label: '即時資訊',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>'
+  },
+  {
+    id: 'disaster',
+    label: '防災專區',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+  }
+]
+
+// 當前啟用的模組
+const activeModule = ref<string | null>(null)
+
+// 計算當前模組標籤
+const currentModuleLabel = computed(() => {
+  const module = modules.find(m => m.id === activeModule.value)
+  return module?.label || ''
+})
+
+// 切換模組
+const toggleModule = (moduleId: string) => {
+  activeModule.value = activeModule.value === moduleId ? null : moduleId
+}
+
+// 使用 blank layout（不顯示預設 Header）
+definePageMeta({
+  layout: 'blank'
+})
+
 import SceneView from '@arcgis/core/views/SceneView'
 import WebScene from '@arcgis/core/WebScene'
 import Portal from '@arcgis/core/portal/Portal'
@@ -72,7 +186,7 @@ let mapQueryComposable: ReturnType<typeof useMapQuery> | null = null
 onMounted(async () => {
   try {
     console.log('📍 開始初始化地圖...')
-    
+
     await initSceneView()
     console.log('✅ SceneView 初始化完成')
 
@@ -131,10 +245,10 @@ const initSceneView = async (): Promise<void> => {
   })
 
   await view.when()
-  
+
   // 🔧 修復：使用 markRaw 標記非響應式
   sceneView.value = markRaw(view)
-  
+
   mapStore.setIsMapLoaded(true)
   mapStore.setSceneView(view)
 }
@@ -163,7 +277,7 @@ const initQuery = (): void => {
   bufferLayer.value = markRaw(
     new GraphicsLayer({ id: 'buffer-layer', title: '緩衝區圖層' })
   )
-  
+
   sceneView.value.map.addMany([bufferLayer.value, sketchLayer.value])
 
   // 🔧 修復：建立 SketchViewModel 後使用 markRaw
@@ -172,7 +286,7 @@ const initQuery = (): void => {
     view: sceneView.value,
     defaultCreateOptions: { hasZ: false }
   })
-  
+
   sketchViewModel.value = markRaw(sketch)
 
   // Sketch 事件監聽
@@ -198,7 +312,7 @@ const initQuery = (): void => {
     }
   })
 
-  // 按鈕事件監聽
+  // 按鈕事件監聯
   document.getElementById('point-btn')?.addEventListener('click', () => {
     clearGeometry()
     sketchViewModel.value?.create('point')
@@ -300,7 +414,7 @@ const updateBufferGraphic = (geometry: any): void => {
   if (!bufferLayer.value || !geometry) return
 
   bufferLayer.value.removeAll()
-  
+
   try {
     // 🔧 修復：Graphic 物件使用 markRaw
     const graphic = markRaw(
@@ -324,22 +438,238 @@ const updateBufferGraphic = (geometry: any): void => {
 </script>
 
 <style scoped>
-/* ==================== 主容器 ==================== */
+/* ==================== 頁面整體佈局 ==================== */
 .map-page {
-  position: relative;
   width: 100%;
   height: 100vh;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
-  background: #f3f4f6;
+  background: #0f172a;
+}
+
+/* ==================== 頂部導航欄 ==================== */
+.nav-header {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  z-index: 100;
+}
+
+.nav-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 64px;
+}
+
+/* Logo 與標題 */
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  transition: opacity 0.2s ease;
+}
+
+.nav-brand:hover {
+  opacity: 0.8;
+}
+
+.brand-icon {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}
+
+.brand-icon svg {
+  width: 100%;
+  height: 100%;
+  color: white;
+}
+
+.brand-text {
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  letter-spacing: 0.5px;
+}
+
+/* 導航連結 */
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  background: transparent;
+}
+
+.nav-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.nav-link svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ==================== 功能模組按鈕列 ==================== */
+.module-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.9) 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  z-index: 90;
+}
+
+.module-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.module-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: white;
+  transform: translateY(-2px);
+}
+
+.module-btn.active {
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  border-color: transparent;
+  color: white;
+  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+}
+
+.module-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.module-icon :deep(svg) {
+  width: 100%;
+  height: 100%;
+}
+
+.module-label {
+  white-space: nowrap;
+}
+
+/* ==================== 主要內容區 ==================== */
+.map-content {
+  flex: 1;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ==================== 側邊面板 ==================== */
+.side-panel {
+  width: 360px;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+  backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+}
+
+.panel-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.panel-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.panel-close svg {
+  width: 16px;
+  height: 16px;
+}
+
+.panel-body {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+/* 側邊面板滑入動畫 */
+.slide-left-enter-active,
+.slide-left-leave-active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slide-left-enter-from,
+.slide-left-leave-to {
+  transform: translateX(-100%);
+  opacity: 0;
 }
 
 /* ==================== 地圖容器 ==================== */
 .map-container {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 400px; /* 為右側面板留空間 */
-  bottom: 0;
+  flex: 1;
+  position: relative;
   overflow: hidden;
 }
 
@@ -348,67 +678,65 @@ const updateBufferGraphic = (geometry: any): void => {
   height: 100%;
 }
 
-/* ==================== 查詢工具欄 ==================== */
+/* ==================== 查詢工具欄 (現代化) ==================== */
 .query-toolbar {
   position: absolute;
   top: 20px;
   left: 20px;
   display: flex;
-  gap: 5px;
-  background: white;
-  padding: 10px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(20px);
+  padding: 8px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
   z-index: 10;
 }
 
 .geometry-btn {
-  width: 40px;
-  height: 40px;
-  border: 1px solid #e5e7eb;
-  background: white;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 10px;
   font-weight: bold;
-  transition: all 0.2s;
   font-size: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  transition: all 0.2s ease;
 }
 
 .geometry-btn:hover {
-  background: #f3f4f6;
-  border-color: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
-}
-
-.geometry-btn:active {
-  transform: translateY(0);
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: white;
+  transform: scale(1.05);
 }
 
 .geometry-btn.clear {
-  background: #fee2e2;
-  color: #dc2626;
-  border-color: #fecaca;
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
 }
 
 .geometry-btn.clear:hover {
-  background: #fecaca;
-  border-color: #dc2626;
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.5);
 }
 
-/* ==================== 緩衝區面板 ==================== */
+/* ==================== 緩衝區面板 (現代化) ==================== */
 .buffer-panel {
   position: absolute;
-  top: 80px;
+  top: 84px;
   left: 20px;
-  background: white;
-  padding: 16px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  min-width: 250px;
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(20px);
+  padding: 16px 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  min-width: 260px;
   z-index: 10;
 }
 
@@ -416,117 +744,96 @@ const updateBufferGraphic = (geometry: any): void => {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
   font-size: 14px;
-  color: #374151;
 }
 
 .buffer-panel input[type="range"] {
   width: 100%;
   height: 6px;
   border-radius: 3px;
-  background: #e5e7eb;
-  outline: none;
-  -webkit-appearance: none;
+  background: rgba(255, 255, 255, 0.1);
+  appearance: none;
+  cursor: pointer;
 }
 
 .buffer-panel input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
   appearance: none;
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #2563eb;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
   cursor: pointer;
-  transition: all 0.2s;
-}
-
-.buffer-panel input[type="range"]::-webkit-slider-thumb:hover {
-  background: #1d4ed8;
-  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
 }
 
 .buffer-panel input[type="range"]::-moz-range-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #2563eb;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
   cursor: pointer;
   border: none;
-  transition: all 0.2s;
-}
-
-.buffer-panel input[type="range"]::-moz-range-thumb:hover {
-  background: #1d4ed8;
-  transform: scale(1.1);
 }
 
 /* ==================== 響應式設計 ==================== */
-
-/* 平板 */
-@media (max-width: 1024px) {
-  .map-container {
-    right: 350px; /* 右側面板較窄 */
-  }
-}
-
-/* 手機 */
 @media (max-width: 768px) {
-  .map-container {
-    right: 0; /* 地圖全寬 */
-    bottom: 0;
+  .nav-content {
+    padding: 0 16px;
   }
-  
-  .query-toolbar,
-  .buffer-panel {
-    left: 10px;
-  }
-  
-  .query-toolbar {
-    top: 10px;
-  }
-  
-  .buffer-panel {
-    top: 70px;
-    min-width: 200px;
-  }
-  
-  .geometry-btn {
-    width: 36px;
-    height: 36px;
-    font-size: 14px;
-  }
-}
 
-/* 小手機 */
-@media (max-width: 480px) {
-  .query-toolbar {
-    padding: 8px;
-    gap: 4px;
-  }
-  
-  .geometry-btn {
-    width: 32px;
-    height: 32px;
-    font-size: 12px;
-  }
-  
-  .buffer-panel {
-    min-width: 180px;
-    padding: 12px;
-  }
-  
-  .buffer-panel label {
-    font-size: 13px;
-  }
-}
-
-/* ==================== 列印樣式 ==================== */
-@media print {
-  .query-toolbar,
-  .buffer-panel {
+  .brand-text {
     display: none;
   }
+
+  .module-bar {
+    padding: 10px 16px;
+    gap: 8px;
+    overflow-x: auto;
+  }
+
+  .module-btn {
+    padding: 10px 14px;
+  }
+
+  .module-label {
+    display: none;
+  }
+
+  .side-panel {
+    position: absolute;
+    width: 100%;
+    height: 50%;
+    bottom: 0;
+    left: 0;
+    border-right: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px 20px 0 0;
+  }
+
+  .query-toolbar,
+  .buffer-panel {
+    left: 16px;
+  }
+}
+
+/* 自訂滾動條 */
+.panel-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.panel-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panel-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.panel-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 </style>
