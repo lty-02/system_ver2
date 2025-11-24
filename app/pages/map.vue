@@ -92,52 +92,10 @@
             @input="handleBufferChange"
           >
         </div>
-
-        <!-- 查詢結果面板 -->
-        <div class="result-panel">
-          <!-- 加載狀態 -->
-          <div v-if="isQuerying" class="status loading">
-            查詢中... {{ queryProgress }}%
-            <progress :value="queryProgress" max="100"></progress>
-          </div>
-
-          <!-- 結果表格 -->
-          <div v-if="!isQuerying && hasResults" class="results">
-            <h3>查詢結果</h3>
-
-            <table class="result-table">
-              <thead>
-                <tr>
-                  <th>圖層名稱</th>
-                  <th>特徵數</th>
-                </tr>
-              </thead>
-              <tbody id="resultTableBody">
-                <tr v-for="result in queryResults" :key="result.layerId">
-                  <td>{{ result.layerTitle }}</td>
-                  <td>{{ result.count }}</td>
-                </tr>
-              </tbody>
-            </table>
-
-            <!-- 評分顯示 -->
-            <div v-if="queryScore" class="score-display">
-              <h4>綜合評分: {{ queryScore.totalScore.toFixed(2) }}</h4>
-              <div class="dimension-scores">
-                <div v-for="dim in queryScore.dimensions" :key="dim.name" class="score-item">
-                  <span>{{ dim.name }}</span>
-                  <span>{{ dim.value.toFixed(2) }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 無結果提示 -->
-          <div v-else-if="!isQuerying" class="status info">
-            選擇繪製方式並在地圖上繪製範圍進行查詢
-          </div>
-        </div>
       </div>
+
+      <!-- 右側面板 (來自 main 分支) -->
+      <RightSidePanel />
     </div>
   </div>
 </template>
@@ -200,6 +158,7 @@ import SketchViewModel from '@arcgis/core/widgets/Sketch/SketchViewModel'
 import * as geometryEngine from '@arcgis/core/geometry/geometryEngine'
 import { useMapQuery } from '@/composables/useMapQuery'
 import { useMapStore } from '@/stores/mapStore'
+import RightSidePanel from '@/components/map/RightSidePanel.vue'
 
 // ==================== 引用 ====================
 const viewDiv = ref<HTMLDivElement | null>(null)
@@ -222,19 +181,12 @@ let highlightHandles: any[] = []
 // useMapQuery composable
 let mapQueryComposable: ReturnType<typeof useMapQuery> | null = null
 
-// 從 composable 獲取的狀態
-const isQuerying = computed(() => mapQueryComposable?.isQuerying.value ?? false)
-const queryProgress = computed(() => mapQueryComposable?.queryProgress.value ?? 0)
-const queryResults = computed(() => mapQueryComposable?.queryResults.value ?? [])
-const queryScore = computed(() => mapQueryComposable?.queryScore.value ?? null)
-const hasResults = computed(() => mapQueryComposable?.hasResults.value ?? false)
-
 // ==================== 生命週期 ====================
 
 onMounted(async () => {
   try {
     console.log('📍 開始初始化地圖...')
-    
+
     await initSceneView()
     console.log('✅ SceneView 初始化完成')
 
@@ -293,10 +245,10 @@ const initSceneView = async (): Promise<void> => {
   })
 
   await view.when()
-  
+
   // 🔧 修復：使用 markRaw 標記非響應式
   sceneView.value = markRaw(view)
-  
+
   mapStore.setIsMapLoaded(true)
   mapStore.setSceneView(view)
 }
@@ -325,7 +277,7 @@ const initQuery = (): void => {
   bufferLayer.value = markRaw(
     new GraphicsLayer({ id: 'buffer-layer', title: '緩衝區圖層' })
   )
-  
+
   sceneView.value.map.addMany([bufferLayer.value, sketchLayer.value])
 
   // 🔧 修復：建立 SketchViewModel 後使用 markRaw
@@ -334,7 +286,7 @@ const initQuery = (): void => {
     view: sceneView.value,
     defaultCreateOptions: { hasZ: false }
   })
-  
+
   sketchViewModel.value = markRaw(sketch)
 
   // Sketch 事件監聽
@@ -360,7 +312,7 @@ const initQuery = (): void => {
     }
   })
 
-  // 按鈕事件監聽
+  // 按鈕事件監聯
   document.getElementById('point-btn')?.addEventListener('click', () => {
     clearGeometry()
     sketchViewModel.value?.create('point')
@@ -462,7 +414,7 @@ const updateBufferGraphic = (geometry: any): void => {
   if (!bufferLayer.value || !geometry) return
 
   bufferLayer.value.removeAll()
-  
+
   try {
     // 🔧 修復：Graphic 物件使用 markRaw
     const graphic = markRaw(
@@ -817,129 +769,13 @@ const updateBufferGraphic = (geometry: any): void => {
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
 }
 
-/* ==================== 結果面板 (現代化) ==================== */
-.result-panel {
-  position: absolute;
-  bottom: 20px;
-  right: 20px;
-  width: 380px;
-  background: rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(20px);
-  border-radius: 16px;
-  padding: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  font-family: 'Inter', 'Segoe UI', sans-serif;
-  font-size: 14px;
-  max-height: 60vh;
-  overflow-y: auto;
-  z-index: 10;
-  color: white;
-}
-
-.status {
-  padding: 14px 16px;
-  border-radius: 10px;
-  margin-bottom: 12px;
-}
-
-.status.loading {
-  background: rgba(59, 130, 246, 0.15);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  color: #60a5fa;
-}
-
-.status.info {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.6);
-  text-align: center;
-}
-
-progress {
-  width: 100%;
-  height: 4px;
-  margin-top: 10px;
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-progress::-webkit-progress-bar {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-}
-
-progress::-webkit-progress-value {
-  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
-  border-radius: 2px;
-}
-
-.results h3 {
-  margin: 0 0 16px 0;
-  color: white;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.result-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 16px;
-}
-
-.result-table th,
-.result-table td {
-  padding: 12px 14px;
-  text-align: left;
-}
-
-.result-table th {
-  background: rgba(255, 255, 255, 0.05);
-  font-weight: 600;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: rgba(255, 255, 255, 0.6);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.result-table td {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.result-table tr:hover td {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.score-display {
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%);
-  padding: 16px;
-  border-radius: 12px;
-  border: 1px solid rgba(34, 197, 94, 0.2);
-}
-
-.score-display h4 {
-  margin: 0 0 14px 0;
-  color: #4ade80;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.dimension-scores {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.score-item {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  color: rgba(255, 255, 255, 0.8);
+.buffer-panel input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  cursor: pointer;
+  border: none;
 }
 
 /* ==================== 響應式設計 ==================== */
@@ -977,12 +813,6 @@ progress::-webkit-progress-value {
     border-radius: 20px 20px 0 0;
   }
 
-  .result-panel {
-    width: calc(100% - 32px);
-    left: 16px;
-    right: 16px;
-  }
-
   .query-toolbar,
   .buffer-panel {
     left: 16px;
@@ -990,24 +820,20 @@ progress::-webkit-progress-value {
 }
 
 /* 自訂滾動條 */
-.panel-body::-webkit-scrollbar,
-.result-panel::-webkit-scrollbar {
+.panel-body::-webkit-scrollbar {
   width: 6px;
 }
 
-.panel-body::-webkit-scrollbar-track,
-.result-panel::-webkit-scrollbar-track {
+.panel-body::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.panel-body::-webkit-scrollbar-thumb,
-.result-panel::-webkit-scrollbar-thumb {
+.panel-body::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
   border-radius: 3px;
 }
 
-.panel-body::-webkit-scrollbar-thumb:hover,
-.result-panel::-webkit-scrollbar-thumb:hover {
+.panel-body::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.3);
 }
 </style>
