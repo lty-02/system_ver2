@@ -1,79 +1,40 @@
 <template>
-  <div class="map-container">
-    <!-- SceneView -->
-    <div ref="viewDiv" class="scene-view"></div>
+  <div class="map-page">
+    <!-- 地圖容器 -->
+    <div class="map-container">
+      <!-- SceneView -->
+      <div ref="viewDiv" class="scene-view"></div>
 
-    <!-- 查詢工具欄 -->
-    <div class="query-toolbar">
-      <button id="point-btn" class="geometry-btn" title="以點查詢">●</button>
-      <button id="line-btn" class="geometry-btn" title="以線查詢">─</button>
-      <button id="polygon-btn" class="geometry-btn" title="以多邊形查詢">▭</button>
-      <button id="clear-btn" class="geometry-btn clear" title="清除">✕</button>
-    </div>
-
-    <!-- 緩衝區滑桿 -->
-    <div class="buffer-panel">
-      <label>緩衝區: <span id="buffer-value">0</span>m</label>
-      <input 
-        type="range" 
-        id="buffer-slider" 
-        min="0" 
-        max="500" 
-        value="0"
-        @input="handleBufferChange"
-      >
-    </div>
-
-    <!-- 查詢結果面板 -->
-    <div class="result-panel">
-      <!-- 加載狀態 -->
-      <div v-if="isQuerying" class="status loading">
-        查詢中... {{ queryProgress }}%
-        <progress :value="queryProgress" max="100"></progress>
+      <!-- 查詢工具欄 -->
+      <div class="query-toolbar">
+        <button id="point-btn" class="geometry-btn" title="以點查詢">●</button>
+        <button id="line-btn" class="geometry-btn" title="以線查詢">─</button>
+        <button id="polygon-btn" class="geometry-btn" title="以多邊形查詢">▭</button>
+        <button id="clear-btn" class="geometry-btn clear" title="清除">✕</button>
       </div>
 
-      <!-- 結果表格 -->
-      <div v-if="!isQuerying && hasResults" class="results">
-        <h3>查詢結果</h3>
-        
-        <table class="result-table">
-          <thead>
-            <tr>
-              <th>圖層名稱</th>
-              <th>特徵數</th>
-            </tr>
-          </thead>
-          <tbody id="resultTableBody">
-            <tr v-for="result in queryResults" :key="result.layerId">
-              <td>{{ result.layerTitle }}</td>
-              <td>{{ result.count }}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <!-- 評分顯示 -->
-        <div v-if="queryScore" class="score-display">
-          <h4>綜合評分: {{ queryScore.totalScore.toFixed(2) }}</h4>
-          <div class="dimension-scores">
-            <div v-for="dim in queryScore.dimensions" :key="dim.name" class="score-item">
-              <span>{{ dim.name }}</span>
-              <span>{{ dim.value.toFixed(2) }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 無結果提示 -->
-      <div v-else-if="!isQuerying" class="status info">
-        選擇繪製方式並在地圖上繪製範圍進行查詢
+      <!-- 緩衝區滑桿 -->
+      <div class="buffer-panel">
+        <label>緩衝區: <span id="buffer-value">0</span>m</label>
+        <input 
+          type="range" 
+          id="buffer-slider" 
+          min="0" 
+          max="500" 
+          value="0"
+          @input="handleBufferChange"
+        >
       </div>
     </div>
+
+    <!-- 右側面板 -->
+    <RightSidePanel />
   </div>
 </template>
 
 <script setup lang="ts">
 // 🔧 修復：使用 shallowRef 代替 ref 來存儲 ArcGIS 物件
-import { ref, shallowRef, onMounted, onUnmounted, computed, markRaw } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted, markRaw } from 'vue'
 import SceneView from '@arcgis/core/views/SceneView'
 import WebScene from '@arcgis/core/WebScene'
 import Portal from '@arcgis/core/portal/Portal'
@@ -83,6 +44,7 @@ import SketchViewModel from '@arcgis/core/widgets/Sketch/SketchViewModel'
 import * as geometryEngine from '@arcgis/core/geometry/geometryEngine'
 import { useMapQuery } from '@/composables/useMapQuery'
 import { useMapStore } from '@/stores/mapStore'
+import RightSidePanel from '@/components/map/RightSidePanel.vue'
 
 // ==================== 引用 ====================
 const viewDiv = ref<HTMLDivElement | null>(null)
@@ -104,13 +66,6 @@ let highlightHandles: any[] = []
 
 // useMapQuery composable
 let mapQueryComposable: ReturnType<typeof useMapQuery> | null = null
-
-// 從 composable 獲取的狀態
-const isQuerying = computed(() => mapQueryComposable?.isQuerying.value ?? false)
-const queryProgress = computed(() => mapQueryComposable?.queryProgress.value ?? 0)
-const queryResults = computed(() => mapQueryComposable?.queryResults.value ?? [])
-const queryScore = computed(() => mapQueryComposable?.queryScore.value ?? null)
-const hasResults = computed(() => mapQueryComposable?.hasResults.value ?? false)
 
 // ==================== 生命週期 ====================
 
@@ -369,10 +324,22 @@ const updateBufferGraphic = (geometry: any): void => {
 </script>
 
 <style scoped>
-.map-container {
+/* ==================== 主容器 ==================== */
+.map-page {
+  position: relative;
   width: 100%;
   height: 100vh;
-  position: relative;
+  overflow: hidden;
+  background: #f3f4f6;
+}
+
+/* ==================== 地圖容器 ==================== */
+.map-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 400px; /* 為右側面板留空間 */
+  bottom: 0;
   overflow: hidden;
 }
 
@@ -381,6 +348,7 @@ const updateBufferGraphic = (geometry: any): void => {
   height: 100%;
 }
 
+/* ==================== 查詢工具欄 ==================== */
 .query-toolbar {
   position: absolute;
   top: 20px;
@@ -389,40 +357,57 @@ const updateBufferGraphic = (geometry: any): void => {
   gap: 5px;
   background: white;
   padding: 10px;
-  border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   z-index: 10;
 }
 
 .geometry-btn {
   width: 40px;
   height: 40px;
-  border: 1px solid #ccc;
+  border: 1px solid #e5e7eb;
   background: white;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 6px;
   font-weight: bold;
   transition: all 0.2s;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .geometry-btn:hover {
-  background: #f0f0f0;
+  background: #f3f4f6;
+  border-color: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+}
+
+.geometry-btn:active {
+  transform: translateY(0);
 }
 
 .geometry-btn.clear {
-  background: #ff6b6b;
-  color: white;
-  border-color: #ff6b6b;
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fecaca;
 }
 
+.geometry-btn.clear:hover {
+  background: #fecaca;
+  border-color: #dc2626;
+}
+
+/* ==================== 緩衝區面板 ==================== */
 .buffer-panel {
   position: absolute;
   top: 80px;
   left: 20px;
   background: white;
-  padding: 15px;
-  border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   min-width: 250px;
   z-index: 10;
 }
@@ -433,111 +418,115 @@ const updateBufferGraphic = (geometry: any): void => {
   gap: 10px;
   margin-bottom: 10px;
   font-weight: 500;
+  font-size: 14px;
+  color: #374151;
 }
 
 .buffer-panel input[type="range"] {
   width: 100%;
-}
-
-.result-panel {
-  position: absolute;
-  bottom: 20px;
-  right: 20px;
-  width: 400px;
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-  font-family: 'Segoe UI', Tahoma, Geneva, sans-serif;
-  font-size: 14px;
-  max-height: 70vh;
-  overflow-y: auto;
-  z-index: 10;
-}
-
-.status {
-  padding: 12px;
-  border-radius: 4px;
-  margin-bottom: 12px;
-}
-
-.status.loading {
-  background: #e3f2fd;
-  color: #1976d2;
-}
-
-.status.info {
-  background: #f5f5f5;
-  color: #666;
-  text-align: center;
-}
-
-progress {
-  width: 100%;
-  height: 4px;
-  margin-top: 8px;
-  border-radius: 2px;
-}
-
-.results h3 {
-  margin: 0 0 12px 0;
-  color: #333;
-  font-size: 16px;
-}
-
-.result-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 12px;
-}
-
-.result-table th,
-.result-table td {
-  padding: 8px;
-  text-align: left;
-  border-bottom: 1px solid #eee;
-}
-
-.result-table th {
-  background: #f5f5f5;
-  font-weight: 600;
-}
-
-.score-display {
-  background: #f5f5f5;
-  padding: 12px;
-  border-radius: 4px;
-  border-left: 3px solid #4caf50;
-}
-
-.score-display h4 {
-  margin: 0 0 10px 0;
-  color: #333;
-}
-
-.dimension-scores {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.score-item {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  padding: 4px;
-  background: white;
+  height: 6px;
   border-radius: 3px;
+  background: #e5e7eb;
+  outline: none;
+  -webkit-appearance: none;
 }
 
+.buffer-panel input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #2563eb;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.buffer-panel input[type="range"]::-webkit-slider-thumb:hover {
+  background: #1d4ed8;
+  transform: scale(1.1);
+}
+
+.buffer-panel input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #2563eb;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.buffer-panel input[type="range"]::-moz-range-thumb:hover {
+  background: #1d4ed8;
+  transform: scale(1.1);
+}
+
+/* ==================== 響應式設計 ==================== */
+
+/* 平板 */
+@media (max-width: 1024px) {
+  .map-container {
+    right: 350px; /* 右側面板較窄 */
+  }
+}
+
+/* 手機 */
 @media (max-width: 768px) {
-  .result-panel {
-    width: calc(100% - 40px);
+  .map-container {
+    right: 0; /* 地圖全寬 */
+    bottom: 0;
   }
   
   .query-toolbar,
   .buffer-panel {
     left: 10px;
+  }
+  
+  .query-toolbar {
+    top: 10px;
+  }
+  
+  .buffer-panel {
+    top: 70px;
+    min-width: 200px;
+  }
+  
+  .geometry-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+  }
+}
+
+/* 小手機 */
+@media (max-width: 480px) {
+  .query-toolbar {
+    padding: 8px;
+    gap: 4px;
+  }
+  
+  .geometry-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+  
+  .buffer-panel {
+    min-width: 180px;
+    padding: 12px;
+  }
+  
+  .buffer-panel label {
+    font-size: 13px;
+  }
+}
+
+/* ==================== 列印樣式 ==================== */
+@media print {
+  .query-toolbar,
+  .buffer-panel {
+    display: none;
   }
 }
 </style>
