@@ -1,17 +1,18 @@
 /**
  * @file stores/index.ts
- * @description 統一導出所有 Pinia stores
+ * @description 統一導出所有 Pinia stores（更新版 - 包含 Layer Store）
  * 
  * 用途：
  * 提供單一的導入點，方便在組件中使用 stores。
  * 
  * 使用方式：
  * // ✅ 推薦：統一導入
- * import { useMapStore, usePanelStore } from '@/stores'
+ * import { useMapStore, usePanelStore, useLayerStore } from '@/stores'
  * 
  * // ❌ 而不是：分散導入
  * import { useMapStore } from '@/stores/mapStore'
  * import { usePanelStore } from '@/stores/panelStore'
+ * import { useLayerStore } from '@/stores/layerStore'
  */
 
 // 導出所有 stores
@@ -19,6 +20,7 @@ export { useMapStore } from './mapStore'
 export { usePanelStore } from './panelStore'
 export { useQueryStore } from './queryStore'
 export { useSensorStore } from './sensorStore'
+export { useLayerStore } from './layerStore' // 新增
 
 // 導出所有類型（便於在組件中使用）
 export type {
@@ -67,5 +69,11 @@ export type {
   StateWrapper,
   PagedResult,
 } from './types'
+
+// 導出 Layer Store 特定類型
+export type {
+  LayerInfo,
+  LayerGroup,
+} from './layerStore'
 
 // 枚舉已在上面導出，不需要重複

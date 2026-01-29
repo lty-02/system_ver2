@@ -10,7 +10,7 @@
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
             </svg>
           </div>
-          <span class="brand-text">科學園區數位孿生系統</span>
+          <span class="brand-text">科學園區數位孿生示範系統</span>
         </NuxtLink>
 
         <!-- 右側：導航連結 -->
@@ -62,7 +62,26 @@
             </button>
           </div>
           <div class="panel-body">
-            <!-- 模組內容容器 - 預留 -->
+            <!-- 圖層管理模組 -->
+            <LayerManagementPanel v-if="activeModule === 'layers'" />
+            
+            <!-- 圖例/底圖模組 -->
+            <LegendBasemapPanel v-else-if="activeModule === 'legend-basemap'" />
+            
+            <!-- 即時資訊模組 -->
+            <div v-else-if="activeModule === 'realtime'" class="module-placeholder">
+              <p>即時資訊功能開發中...</p>
+            </div>
+            
+            <!-- 防災專區模組 -->
+            <div v-else-if="activeModule === 'disaster'" class="module-placeholder">
+              <p>防災專區功能開發中...</p>
+            </div>
+            
+            <!-- 其他模組 -->
+            <div v-else class="module-placeholder">
+              <p>{{ currentModuleLabel }} 功能開發中...</p>
+            </div>
           </div>
         </aside>
       </transition>
@@ -114,9 +133,9 @@ const modules = [
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>'
   },
   {
-    id: 'query',
-    label: '智慧查詢',
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>'
+    id: 'legend-basemap',
+    label: '圖例/底圖',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M3 14h7"/><path d="M3 17h7"/><path d="M3 20h7"/></svg>'
   },
   {
     id: 'realtime',
@@ -158,13 +177,20 @@ import SketchViewModel from '@arcgis/core/widgets/Sketch/SketchViewModel'
 import * as geometryEngine from '@arcgis/core/geometry/geometryEngine'
 import { useMapQuery } from '@/composables/useMapQuery'
 import { useMapStore } from '@/stores/mapStore'
+import { useLayerStore } from '@/stores/layerStore'
 import RightSidePanel from '@/components/map/RightSidePanel.vue'
+import LayerManagementPanel from '@/components/map/LayerManagementPanel.vue'
+import LegendBasemapPanel from '@/components/map/LegendBasemapPanel.vue'
 
 // ==================== 引用 ====================
 const viewDiv = ref<HTMLDivElement | null>(null)
 
 // ==================== Store ====================
 const mapStore = useMapStore()
+const layerStore = useLayerStore()
+
+// ==================== 排除的圖層列表 ====================
+const EXCLUDED_LAYERS = ['樹', '地點和標籤', '建築物']
 
 // ==================== 狀態 ====================
 // 🔧 修復：使用 shallowRef 存儲 ArcGIS 物件
@@ -332,20 +358,66 @@ const initQuery = (): void => {
 }
 
 /**
- * 加載圖層
+ * 加載圖層（更新版 - 過濾掉排除的圖層）
  */
 const loadLayers = (): void => {
   if (!sceneView.value?.map) return
 
+  // 獲取所有可用圖層並過濾掉排除的圖層
   const layers = sceneView.value.map.allLayers.filter((layer: any) => {
-    return layer.type === 'feature' && layer.visible
+    // 排除特定圖層
+    if (EXCLUDED_LAYERS.includes(layer.title)) {
+      console.log(`🚫 已排除圖層: ${layer.title}`)
+      // 直接隱藏這些圖層
+      layer.visible = false
+      return false
+    }
+    
+    // 過濾出圖層並排除隱藏圖層
+    return (layer.type === 'feature' || layer.type === 'tile' || layer.type === 'scene') 
+           && layer.listMode !== 'hide'
   })
 
-  console.log(`📊 找到 ${layers.length} 個 FeatureLayer`)
+  console.log(`📊 找到 ${layers.length} 個圖層（已排除 ${EXCLUDED_LAYERS.length} 個圖層）`)
 
-  layers.forEach((layer) => {
-    mapStore.addActiveLayer(layer.id)
+  // 轉換為普通對象數組
+  const layerDataArray: any[] = []
+  layers.forEach((layer: any) => {
+    layerDataArray.push({
+      id: layer.id,
+      title: layer.title || layer.id,
+      type: layer.type,
+      visible: layer.visible ?? false,
+      opacity: layer.opacity ?? 1,
+      url: layer.url,
+      minScale: layer.minScale,
+      maxScale: layer.maxScale,
+      legendEnabled: layer.legendEnabled ?? true,
+      popupEnabled: layer.popupEnabled ?? true,
+    })
   })
+
+  // 初始化 Layer Store（會自動設置基礎設施為預設開啟）
+  layerStore.initializeLayers(layerDataArray)
+  console.log(`✅ Layer Store 已初始化，包含 ${layerDataArray.length} 個圖層`)
+
+  // 同步實際地圖狀態
+  // 關閉所有圖層
+  layers.forEach((layer: any) => {
+    layer.visible = false
+  })
+
+  // 只開啟基礎設施類別的圖層
+  layerStore.addedLayers.forEach(layerInfo => {
+    const mapLayer = layers.find((l: any) => l.id === layerInfo.id)
+    if (mapLayer) {
+      mapLayer.visible = layerInfo.visible
+      mapStore.addActiveLayer(mapLayer.id)
+      console.log(`✅ 預設開啟圖層: ${mapLayer.title}`)
+    }
+  })
+
+  console.log(`📍 已套用預設圖層設定`)
 }
 
 // ==================== 查詢方法 ====================
@@ -445,14 +517,14 @@ const updateBufferGraphic = (geometry: any): void => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #0f172a;
+  background: #f8fafc; /* 淺灰白色背景 */
 }
 
 /* ==================== 頂部導航欄 ==================== */
 .nav-header {
-  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   z-index: 100;
 }
 
@@ -480,12 +552,13 @@ const updateBufferGraphic = (geometry: any): void => {
 .brand-icon {
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #60a5fa 0%, #93c5fd 100%); /* 淺藍色漸層 */
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 8px;
+  box-shadow: 0 2px 8px rgba(96, 165, 250, 0.2);
 }
 
 .brand-icon svg {
@@ -497,7 +570,7 @@ const updateBufferGraphic = (geometry: any): void => {
 .brand-text {
   font-size: 18px;
   font-weight: 600;
-  color: white;
+  color: #1e293b;
   letter-spacing: 0.5px;
 }
 
@@ -515,7 +588,7 @@ const updateBufferGraphic = (geometry: any): void => {
   padding: 10px 18px;
   border-radius: 10px;
   text-decoration: none;
-  color: rgba(255, 255, 255, 0.7);
+  color: #64748b;
   font-size: 14px;
   font-weight: 500;
   transition: all 0.2s ease;
@@ -523,8 +596,8 @@ const updateBufferGraphic = (geometry: any): void => {
 }
 
 .nav-link:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
+  background: #f1f5f9;
+  color: #1e293b;
 }
 
 .nav-link svg {
@@ -538,9 +611,9 @@ const updateBufferGraphic = (geometry: any): void => {
   align-items: center;
   gap: 12px;
   padding: 12px 24px;
-  background: linear-gradient(180deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.9) 100%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   z-index: 90;
 }
 
@@ -549,10 +622,10 @@ const updateBufferGraphic = (geometry: any): void => {
   align-items: center;
   gap: 10px;
   padding: 12px 20px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.7);
+  background: #ffffff;
+  color: #64748b;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -560,17 +633,18 @@ const updateBufferGraphic = (geometry: any): void => {
 }
 
 .module-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: white;
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1e293b;
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .module-btn.active {
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #60a5fa 0%, #93c5fd 100%); /* 淺藍色 */
   border-color: transparent;
   color: white;
-  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 4px 16px rgba(96, 165, 250, 0.3);
 }
 
 .module-icon {
@@ -596,14 +670,19 @@ const updateBufferGraphic = (geometry: any): void => {
   display: flex;
   position: relative;
   overflow: hidden;
+  min-height: 0; /* 防止內容溢出 */
 }
 
 /* ==================== 側邊面板 ==================== */
 .side-panel {
+  position: absolute; /* 改為絕對定位 */
+  left: 0;
+  top: 0;
+  bottom: 0;
   width: 360px;
-  background: linear-gradient(180deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
-  backdrop-filter: blur(20px);
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  background: #ffffff;
+  border-right: 1px solid #e2e8f0;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
   display: flex;
   flex-direction: column;
   z-index: 50;
@@ -614,14 +693,15 @@ const updateBufferGraphic = (geometry: any): void => {
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
 }
 
 .panel-header h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: white;
+  color: #1e293b;
 }
 
 .panel-close {
@@ -629,8 +709,8 @@ const updateBufferGraphic = (geometry: any): void => {
   height: 32px;
   border: none;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.6);
+  background: #f1f5f9;
+  color: #64748b;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -639,8 +719,8 @@ const updateBufferGraphic = (geometry: any): void => {
 }
 
 .panel-close:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
+  background: #e2e8f0;
+  color: #1e293b;
 }
 
 .panel-close svg {
@@ -650,8 +730,26 @@ const updateBufferGraphic = (geometry: any): void => {
 
 .panel-body {
   flex: 1;
-  padding: 24px;
   overflow-y: auto;
+  padding: 0;
+  background: #ffffff;
+}
+
+/* 模組佔位符 */
+.module-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.module-placeholder p {
+  font-size: 14px;
+  color: #94a3b8;
+  font-weight: 500;
 }
 
 /* 側邊面板滑入動畫 */
@@ -685,21 +783,21 @@ const updateBufferGraphic = (geometry: any): void => {
   left: 20px;
   display: flex;
   gap: 6px;
-  background: rgba(15, 23, 42, 0.9);
+  background: #ffffff;
   backdrop-filter: blur(20px);
   padding: 8px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   z-index: 10;
 }
 
 .geometry-btn {
   width: 44px;
   height: 44px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.8);
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #64748b;
   cursor: pointer;
   border-radius: 10px;
   font-weight: bold;
@@ -708,21 +806,22 @@ const updateBufferGraphic = (geometry: any): void => {
 }
 
 .geometry-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: white;
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1e293b;
   transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .geometry-btn.clear {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.3);
-  color: #f87171;
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
 }
 
 .geometry-btn.clear:hover {
-  background: rgba(239, 68, 68, 0.3);
-  border-color: rgba(239, 68, 68, 0.5);
+  background: #fee2e2;
+  border-color: #fca5a5;
 }
 
 /* ==================== 緩衝區面板 (現代化) ==================== */
@@ -730,12 +829,12 @@ const updateBufferGraphic = (geometry: any): void => {
   position: absolute;
   top: 84px;
   left: 20px;
-  background: rgba(15, 23, 42, 0.9);
+  background: #ffffff;
   backdrop-filter: blur(20px);
   padding: 16px 20px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   min-width: 260px;
   z-index: 10;
 }
@@ -746,7 +845,7 @@ const updateBufferGraphic = (geometry: any): void => {
   gap: 10px;
   margin-bottom: 12px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
+  color: #1e293b;
   font-size: 14px;
 }
 
@@ -754,7 +853,7 @@ const updateBufferGraphic = (geometry: any): void => {
   width: 100%;
   height: 6px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.1);
+  background: #f1f5f9;
   appearance: none;
   cursor: pointer;
 }
@@ -764,16 +863,16 @@ const updateBufferGraphic = (geometry: any): void => {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #fbbf24 0%, #fcd34d 100%); /* 淺黃色漸層 */
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.4);
 }
 
 .buffer-panel input[type="range"]::-moz-range-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #fbbf24 0%, #fcd34d 100%);
   cursor: pointer;
   border: none;
 }
@@ -825,15 +924,15 @@ const updateBufferGraphic = (geometry: any): void => {
 }
 
 .panel-body::-webkit-scrollbar-track {
-  background: transparent;
+  background: #f8fafc;
 }
 
 .panel-body::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: #cbd5e1;
   border-radius: 3px;
 }
 
 .panel-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: #94a3b8;
 }
 </style>

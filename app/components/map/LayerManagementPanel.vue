@@ -517,7 +517,7 @@ const clearSearch = () => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 /* 面板標題 */
@@ -526,14 +526,13 @@ const clearSearch = () => {
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .panel-title {
   font-size: 16px;
   font-weight: 600;
-  color: #1e293b;
+  color: white;
   margin: 0;
 }
 
@@ -545,15 +544,14 @@ const clearSearch = () => {
 
 .layer-count {
   font-size: 13px;
-  color: #64748b;
+  color: rgba(255, 255, 255, 0.6);
   font-weight: 500;
 }
 
 /* 搜尋欄 */
 .search-section {
   padding: 16px 24px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #ffffff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .search-box {
@@ -567,29 +565,28 @@ const clearSearch = () => {
   left: 12px;
   width: 18px;
   height: 18px;
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .search-input {
   width: 100%;
   padding: 10px 36px 10px 40px;
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  color: #1e293b;
+  color: white;
   font-size: 14px;
   transition: all 0.2s;
 }
 
 .search-input:focus {
   outline: none;
-  background: #ffffff;
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(59, 130, 246, 0.5);
 }
 
 .search-input::placeholder {
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .clear-search {
@@ -598,8 +595,8 @@ const clearSearch = () => {
   width: 24px;
   height: 24px;
   border: none;
-  background: #cbd5e1;
-  color: #475569;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
@@ -614,8 +611,8 @@ const clearSearch = () => {
 /* 標籤頁 */
 .tabs {
   display: flex;
-  border-bottom: 2px solid #e2e8f0;
-  background: #f8fafc;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .tab {
@@ -627,7 +624,7 @@ const clearSearch = () => {
   padding: 14px 16px;
   border: none;
   background: transparent;
-  color: #64748b;
+  color: rgba(255, 255, 255, 0.6);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -636,13 +633,13 @@ const clearSearch = () => {
 }
 
 .tab:hover {
-  background: #f1f5f9;
-  color: #1e293b;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .tab.active {
-  color: #60a5fa;
-  background: #ffffff;
+  color: white;
+  background: rgba(59, 130, 246, 0.1);
 }
 
 .tab.active::after {
@@ -652,7 +649,7 @@ const clearSearch = () => {
   left: 0;
   right: 0;
   height: 2px;
-  background: #60a5fa;
+  background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
 }
 
 .tab-badge {
@@ -662,16 +659,15 @@ const clearSearch = () => {
   min-width: 24px;
   height: 20px;
   padding: 0 6px;
-  background: #e2e8f0;
-  color: #64748b;
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 10px;
   font-size: 11px;
   font-weight: 600;
 }
 
 .tab.active .tab-badge {
-  background: #dbeafe;
-  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.3);
+  color: white;
 }
 
 /* 圖層列表 */
@@ -690,9 +686,8 @@ const clearSearch = () => {
   gap: 8px;
   margin: 0 24px 16px;
   padding: 12px;
-  background: #f8fafc;
+  background: rgba(0, 0, 0, 0.2);
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
 }
 
 .batch-btn {
@@ -702,9 +697,9 @@ const clearSearch = () => {
   justify-content: center;
   gap: 6px;
   padding: 8px 12px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #475569;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
   font-size: 12px;
   font-weight: 500;
   border-radius: 6px;
@@ -713,9 +708,9 @@ const clearSearch = () => {
 }
 
 .batch-btn:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-  color: #1e293b;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: white;
 }
 
 .batch-btn svg {
@@ -724,9 +719,9 @@ const clearSearch = () => {
 }
 
 .batch-btn.danger:hover {
-  background: #fee2e2;
-  border-color: #fca5a5;
-  color: #dc2626;
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
 }
 
 /* 圖層分組 */
@@ -736,7 +731,7 @@ const clearSearch = () => {
 }
 
 .layer-group {
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .group-header {
@@ -746,11 +741,11 @@ const clearSearch = () => {
   padding: 14px 24px;
   cursor: pointer;
   transition: all 0.2s;
-  background: #f8fafc;
+  background: rgba(0, 0, 0, 0.1);
 }
 
 .group-header:hover {
-  background: #f1f5f9;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .group-info {
@@ -763,7 +758,7 @@ const clearSearch = () => {
 .expand-icon {
   width: 16px;
   height: 16px;
-  color: #64748b;
+  color: rgba(255, 255, 255, 0.6);
   transition: transform 0.2s;
 }
 
@@ -774,7 +769,7 @@ const clearSearch = () => {
 .group-title {
   font-size: 14px;
   font-weight: 600;
-  color: #1e293b;
+  color: white;
 }
 
 .group-count {
@@ -784,7 +779,7 @@ const clearSearch = () => {
   min-width: 22px;
   height: 22px;
   padding: 0 6px;
-  background: #dbeafe;
+  background: rgba(59, 130, 246, 0.2);
   color: #60a5fa;
   border-radius: 11px;
   font-size: 11px;
@@ -798,31 +793,31 @@ const clearSearch = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .group-add-btn {
-  color: #22c55e;
+  color: rgba(34, 197, 94, 0.8);
 }
 
 .group-add-btn:hover {
-  background: #dcfce7;
-  border-color: #86efac;
-  color: #16a34a;
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.4);
+  color: #4ade80;
 }
 
 .group-remove-btn {
-  color: #ef4444;
+  color: rgba(239, 68, 68, 0.8);
 }
 
 .group-remove-btn:hover {
-  background: #fee2e2;
-  border-color: #fca5a5;
-  color: #dc2626;
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
 }
 
 .group-add-btn svg,
@@ -857,13 +852,13 @@ const clearSearch = () => {
 
 /* 圖層項目 */
 .layer-item {
-  background: #ffffff;
+  background: transparent;
   transition: all 0.2s;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 }
 
 .layer-item:hover {
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .layer-item:last-child {
@@ -889,21 +884,21 @@ const clearSearch = () => {
 }
 
 .visibility-btn {
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  color: #94a3b8;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.4);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .visibility-btn:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .visibility-btn.visible {
-  background: #dbeafe;
-  border-color: #93c5fd;
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.4);
   color: #60a5fa;
 }
 
@@ -914,9 +909,9 @@ const clearSearch = () => {
 }
 
 .layer-icon {
-  background: #fef3c7;
-  border: 1px solid #fde68a;
-  color: #f59e0b;
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  color: #a78bfa;
 }
 
 .layer-info {
@@ -927,7 +922,7 @@ const clearSearch = () => {
 .layer-title {
   font-size: 13px;
   font-weight: 500;
-  color: #1e293b;
+  color: rgba(255, 255, 255, 0.9);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -940,8 +935,8 @@ const clearSearch = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
@@ -949,23 +944,23 @@ const clearSearch = () => {
 }
 
 .remove-btn {
-  color: #ef4444;
+  color: rgba(239, 68, 68, 0.8);
 }
 
 .remove-btn:hover {
-  background: #fee2e2;
-  border-color: #fca5a5;
-  color: #dc2626;
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
 }
 
 .add-btn {
-  color: #22c55e;
+  color: rgba(34, 197, 94, 0.8);
 }
 
 .add-btn:hover {
-  background: #dcfce7;
-  border-color: #86efac;
-  color: #16a34a;
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.4);
+  color: #4ade80;
 }
 
 .remove-btn svg,
@@ -977,13 +972,13 @@ const clearSearch = () => {
 /* 透明度控制 */
 .layer-controls {
   padding: 8px 24px 10px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
 }
 
 .opacity-label {
   display: block;
   font-size: 11px;
-  color: #64748b;
+  color: rgba(255, 255, 255, 0.6);
   margin-bottom: 6px;
   font-weight: 500;
 }
@@ -992,7 +987,7 @@ const clearSearch = () => {
   width: 100%;
   height: 4px;
   border-radius: 2px;
-  background: #e2e8f0;
+  background: rgba(255, 255, 255, 0.1);
   appearance: none;
   cursor: pointer;
 }
@@ -1002,16 +997,16 @@ const clearSearch = () => {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #60a5fa 0%, #93c5fd 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(96, 165, 250, 0.4);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
 }
 
 .opacity-slider::-moz-range-thumb {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #60a5fa 0%, #93c5fd 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
   cursor: pointer;
   border: none;
 }
@@ -1029,19 +1024,19 @@ const clearSearch = () => {
 .empty-icon {
   font-size: 48px;
   margin-bottom: 16px;
-  opacity: 0.3;
+  opacity: 0.6;
 }
 
 .empty-text {
   font-size: 15px;
   font-weight: 500;
-  color: #475569;
+  color: rgba(255, 255, 255, 0.8);
   margin: 0 0 8px 0;
 }
 
 .empty-hint {
   font-size: 13px;
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.5);
   margin: 0;
 }
 
@@ -1051,16 +1046,16 @@ const clearSearch = () => {
 }
 
 .layer-list::-webkit-scrollbar-track {
-  background: #f8fafc;
+  background: transparent;
 }
 
 .layer-list::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 3px;
 }
 
 .layer-list::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: rgba(255, 255, 255, 0.3);
 }
 
 /* 響應式 */
