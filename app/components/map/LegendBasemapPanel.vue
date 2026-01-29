@@ -191,38 +191,120 @@ const changeBasemap = (basemapId: string) => {
 .legend-container {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 24px;
+  padding: 16px 20px;
   background: #ffffff;
 }
 
-/* 圖例內部樣式覆蓋 */
+/* ==================== 圖例樣式優化 ==================== */
+
+/* 整體圖例容器 */
 .legend-container :deep(.esri-legend) {
   background: transparent;
   color: #1e293b;
+  padding: 0;
 }
 
+/* 圖層服務區塊 */
 .legend-container :deep(.esri-legend__service) {
-  padding: 8px 0;
+  padding: 12px 0;
+  border-bottom: 1px solid #f1f5f9;
 }
 
+.legend-container :deep(.esri-legend__service:last-child) {
+  border-bottom: none;
+}
+
+/* 圖層標題 - 統一文字大小 */
 .legend-container :deep(.esri-legend__layer-caption) {
-  font-size: 14px;
+  font-size: 13px !important;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+  border-left: 3px solid #60a5fa;
+  border-radius: 4px;
+}
+
+/* 圖層項目容器 */
+.legend-container :deep(.esri-legend__layer) {
+  padding: 4px 0;
+}
+
+/* 圖層單元格 */
+.legend-container :deep(.esri-legend__layer-cell) {
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  transition: background 0.2s;
+  border-radius: 4px;
+}
+
+.legend-container :deep(.esri-legend__layer-cell:hover) {
+  background: #f8fafc;
+}
+
+/* 圖例符號 */
+.legend-container :deep(.esri-legend__symbol) {
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+/* 圖例文字 - 統一文字大小 */
+.legend-container :deep(.esri-legend__layer-cell-info) {
+  font-size: 13px !important;
+  color: #475569;
+  line-height: 1.4;
+}
+
+/* 圖層表格 */
+.legend-container :deep(.esri-legend__layer-table) {
+  width: 100%;
+  border-spacing: 0;
+}
+
+.legend-container :deep(.esri-legend__layer-row) {
+  transition: background 0.2s;
+}
+
+.legend-container :deep(.esri-legend__layer-row:hover) {
+  background: #f8fafc;
+}
+
+/* 圖層體 */
+.legend-container :deep(.esri-legend__layer-body) {
+  padding: 4px 0;
+}
+
+/* 圖層子項容器 */
+.legend-container :deep(.esri-legend__layer-child-table) {
+  margin-left: 8px;
+  padding-left: 12px;
+  border-left: 2px solid #e2e8f0;
+}
+
+/* 圖例消息（無圖例時顯示） */
+.legend-container :deep(.esri-legend__message) {
+  font-size: 13px !important;
+  color: #94a3b8;
+  padding: 20px;
+  text-align: center;
+  font-style: italic;
+}
+
+/* 圖例服務標題 */
+.legend-container :deep(.esri-legend__service-label) {
+  font-size: 13px !important;
   font-weight: 600;
   color: #1e293b;
   margin-bottom: 8px;
 }
 
-.legend-container :deep(.esri-legend__layer-cell) {
-  padding: 6px 0;
-}
-
-.legend-container :deep(.esri-legend__symbol) {
-  margin-right: 12px;
-}
-
-.legend-container :deep(.esri-legend__layer-cell-info) {
-  font-size: 13px;
-  color: #475569;
+/* 優化間距 */
+.legend-container :deep(.esri-widget__heading) {
+  font-size: 13px !important;
+  margin: 0;
+  padding: 0;
 }
 
 /* ==================== 分隔線 ==================== */

@@ -1,7 +1,12 @@
 <template>
   <div class="empty-state">
     <div class="icon-wrapper">
-      <div class="icon">🔍</div>
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="M21 21l-4.35-4.35"/>
+        </svg>
+      </div>
       <div class="icon-pulse"></div>
     </div>
     <h4 class="message">請選擇查詢範圍</h4>
@@ -34,7 +39,7 @@
   height: 100%;
   padding: 40px 20px;
   text-align: center;
-  color: #6b7280;
+  color: #64748b;
 }
 
 .icon-wrapper {
@@ -43,11 +48,17 @@
 }
 
 .icon {
-  font-size: 72px;
+  font-size: 48px;
   opacity: 0.6;
   animation: float 3s ease-in-out infinite;
   position: relative;
   z-index: 2;
+  color: #60a5fa;
+}
+
+.icon svg {
+  width: 64px;
+  height: 64px;
 }
 
 .icon-pulse {
@@ -57,7 +68,7 @@
   transform: translate(-50%, -50%);
   width: 80px;
   height: 80px;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.15) 0%, transparent 70%);
   border-radius: 50%;
   animation: pulse 2s ease-in-out infinite;
   z-index: 1;
@@ -87,13 +98,13 @@
   font-size: 18px;
   font-weight: 600;
   margin: 0 0 8px 0;
-  color: #374151;
+  color: #1e293b;
 }
 
 .hint {
   font-size: 14px;
   margin: 0 0 32px 0;
-  color: #9ca3af;
+  color: #94a3b8;
 }
 
 .steps {
@@ -109,15 +120,17 @@
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: #f9fafb;
+  background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
   border-radius: 8px;
+  border: 1px solid #dbeafe;
   text-align: left;
   transition: all 0.2s;
 }
 
 .step:hover {
-  background: #f3f4f6;
+  background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
   transform: translateX(4px);
+  border-color: #93c5fd;
 }
 
 .step-number {
@@ -126,17 +139,18 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(135deg, #60a5fa 0%, #93c5fd 100%);
   color: white;
   border-radius: 50%;
   font-size: 13px;
   font-weight: 600;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(96, 165, 250, 0.25);
 }
 
 .step-text {
   font-size: 14px;
-  color: #4b5563;
+  color: #475569;
   font-weight: 500;
 }
 
@@ -146,8 +160,9 @@
     padding: 30px 20px;
   }
   
-  .icon {
-    font-size: 60px;
+  .icon svg {
+    width: 56px;
+    height: 56px;
   }
   
   .message {

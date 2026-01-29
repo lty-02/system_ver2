@@ -2,7 +2,12 @@
   <div class="result-display">
     <!-- 尚未查詢狀態 -->
     <div v-if="!hasResults" class="empty-state">
-      <div class="empty-icon">🎯</div>
+      <div class="empty-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 6v6l4 2"/>
+        </svg>
+      </div>
       <p class="empty-text">尚未進行查詢</p>
       <p class="empty-hint">請在左側「生活圈分析」面板<br>使用繪圖工具選擇查詢區域</p>
     </div>
@@ -28,7 +33,12 @@
             :key="func.id"
             class="function-item"
           >
-            <div class="function-icon">{{ func.icon }}</div>
+            <div class="function-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 6v6l4 2"/>
+              </svg>
+            </div>
             <div class="function-main">
               <div class="function-header">
                 <span class="function-name">{{ func.name }}</span>
@@ -58,7 +68,17 @@
             class="risk-item"
             :class="`risk-${risk.level}`"
           >
-            <div class="risk-icon">{{ risk.icon }}</div>
+            <div class="risk-icon">
+              <svg v-if="risk.level === 'safe'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </div>
             <div class="risk-info">
               <div class="risk-name">{{ risk.name }}</div>
               <div class="risk-status">{{ risk.status }}</div>
@@ -299,10 +319,10 @@ const getScoreLevel = (score: number): string => {
 }
 
 const getFunctionColor = (ratio: number): string => {
-  if (ratio >= 0.8) return 'linear-gradient(90deg, #10b981, #34d399)'
-  if (ratio >= 0.5) return 'linear-gradient(90deg, #3b82f6, #60a5fa)'
+  if (ratio >= 0.8) return 'linear-gradient(90deg, #fbbf24, #fcd34d)'
+  if (ratio >= 0.5) return 'linear-gradient(90deg, #60a5fa, #93c5fd)'
   if (ratio >= 0.3) return 'linear-gradient(90deg, #f59e0b, #fbbf24)'
-  return 'linear-gradient(90deg, #ef4444, #f87171)'
+  return 'linear-gradient(90deg, #cbd5e1, #e2e8f0)'
 }
 </script>
 
@@ -325,9 +345,16 @@ const getFunctionColor = (ratio: number): string => {
 }
 
 .empty-icon {
-  font-size: 56px;
+  width: 64px;
+  height: 64px;
   margin-bottom: 16px;
-  opacity: 0.3;
+  color: #60a5fa;
+  opacity: 0.5;
+}
+
+.empty-icon svg {
+  width: 100%;
+  height: 100%;
 }
 
 .empty-text {
@@ -353,17 +380,17 @@ const getFunctionColor = (ratio: number): string => {
 
 /* 綜合評分卡 */
 .score-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #60a5fa 0%, #93c5fd 100%);
   color: white;
   padding: 24px;
   border-radius: 12px;
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 6px 20px rgba(96, 165, 250, 0.3);
   text-align: center;
 }
 
 .score-label {
   font-size: 13px;
-  opacity: 0.9;
+  opacity: 0.95;
   margin-bottom: 8px;
   font-weight: 500;
   letter-spacing: 0.5px;
@@ -408,7 +435,7 @@ const getFunctionColor = (ratio: number): string => {
   color: #1e293b;
   margin: 0 0 12px 0;
   padding-bottom: 8px;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid #dbeafe;
 }
 
 /* 機能列表 */
@@ -423,20 +450,28 @@ const getFunctionColor = (ratio: number): string => {
   align-items: center;
   gap: 12px;
   padding: 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+  border: 1px solid #dbeafe;
   border-radius: 8px;
   transition: all 0.2s;
 }
 
 .function-item:hover {
-  background: #f1f5f9;
+  background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
   transform: translateX(2px);
+  border-color: #93c5fd;
 }
 
 .function-icon {
-  font-size: 24px;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
+  color: #60a5fa;
+}
+
+.function-icon svg {
+  width: 100%;
+  height: 100%;
 }
 
 .function-main {
@@ -499,28 +534,50 @@ const getFunctionColor = (ratio: number): string => {
 }
 
 .risk-safe {
-  background: #f0fdf4;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
   border-color: #86efac;
 }
 
 .risk-low {
-  background: #fef3c7;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
   border-color: #fcd34d;
 }
 
 .risk-medium {
-  background: #fed7aa;
+  background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
   border-color: #fb923c;
 }
 
 .risk-high {
-  background: #fee2e2;
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
   border-color: #fca5a5;
 }
 
 .risk-icon {
-  font-size: 18px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
+}
+
+.risk-safe .risk-icon {
+  color: #16a34a;
+}
+
+.risk-low .risk-icon {
+  color: #d97706;
+}
+
+.risk-medium .risk-icon {
+  color: #ea580c;
+}
+
+.risk-high .risk-icon {
+  color: #dc2626;
+}
+
+.risk-icon svg {
+  width: 100%;
+  height: 100%;
 }
 
 .risk-info {
@@ -561,30 +618,37 @@ const getFunctionColor = (ratio: number): string => {
 }
 
 .stat-box {
-  background: #f8fafc;
+  background: linear-gradient(135deg, #fef3c7 0%, #fef9e7 100%);
   padding: 12px;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #fde68a;
   text-align: center;
+  transition: all 0.2s;
+}
+
+.stat-box:hover {
+  background: linear-gradient(135deg, #fde68a 0%, #fef3c7 100%);
+  border-color: #fbbf24;
+  transform: translateY(-2px);
 }
 
 .stat-value {
   font-size: 24px;
   font-weight: 700;
-  color: #1e293b;
+  color: #92400e;
   margin-bottom: 4px;
 }
 
 .stat-label {
   font-size: 12px;
   font-weight: 600;
-  color: #64748b;
+  color: #78350f;
   margin-bottom: 2px;
 }
 
 .stat-detail {
   font-size: 10px;
-  color: #94a3b8;
+  color: #a16207;
 }
 
 /* 明細切換 */
@@ -594,8 +658,8 @@ const getFunctionColor = (ratio: number): string => {
   justify-content: space-between;
   align-items: center;
   padding: 12px 14px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+  border: 1px solid #dbeafe;
   border-radius: 8px;
   cursor: pointer;
   font-size: 13px;
@@ -605,14 +669,15 @@ const getFunctionColor = (ratio: number): string => {
 }
 
 .detail-toggle:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+  background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
+  border-color: #93c5fd;
 }
 
 .toggle-icon {
   width: 16px;
   height: 16px;
   transition: transform 0.3s;
+  color: #60a5fa;
 }
 
 .toggle-icon.expanded {
@@ -634,16 +699,17 @@ const getFunctionColor = (ratio: number): string => {
   display: flex;
   justify-content: space-between;
   padding: 6px 10px;
-  background: #f8fafc;
+  background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 600;
   color: #1e293b;
   margin-bottom: 4px;
+  border: 1px solid #dbeafe;
 }
 
 .category-count {
-  color: #64748b;
+  color: #60a5fa;
   font-weight: 500;
 }
 
@@ -677,7 +743,12 @@ const getFunctionColor = (ratio: number): string => {
 
 .result-display::-webkit-scrollbar-thumb,
 .detail-content::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #bfdbfe;
   border-radius: 3px;
+}
+
+.result-display::-webkit-scrollbar-thumb:hover,
+.detail-content::-webkit-scrollbar-thumb:hover {
+  background: #93c5fd;
 }
 </style>

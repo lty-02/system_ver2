@@ -21,30 +21,33 @@ import QueryResultPanel from './QueryResultPanel.vue'
 .right-side-panel {
   position: fixed;
   right: 0;
-  top: 64px; /* NavBar 高度 */
+  top: 64px;
   width: 400px;
   height: calc(100vh - 64px);
   display: flex;
   flex-direction: column;
-  background: white;
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+  background: #ffffff;
+  border-left: 2px solid #e2e8f0;
+  box-shadow: -2px 0 12px rgba(96, 165, 250, 0.08);
   z-index: 100;
 }
 
 .iot-section {
-  flex: 1; /* 1/3 */
+  flex: 1;
   min-height: 33.33%;
   max-height: 33.33%;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid #dbeafe;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  background: linear-gradient(to bottom, #eff6ff 0%, #ffffff 100%);
 }
 
 .query-section {
-  flex: 2; /* 2/3 */
+  flex: 2;
   min-height: 66.66%;
   overflow-y: auto;
+  background: #ffffff;
 }
 
 /* 響應式設計 */
@@ -57,7 +60,7 @@ import QueryResultPanel from './QueryResultPanel.vue'
 @media (max-width: 768px) {
   .right-side-panel {
     width: 100%;
-    top: 56px; /* 手機版 NavBar 較矮 */
+    top: 56px;
     height: calc(100vh - 56px);
   }
   

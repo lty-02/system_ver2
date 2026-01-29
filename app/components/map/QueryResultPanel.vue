@@ -9,7 +9,9 @@
         @click="handleClear"
         title="清除查詢"
       >
-        ✕
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
       </button>
     </div>
 
@@ -52,15 +54,15 @@ const handleClear = () => {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 2px solid #e5e7eb;
-  background: #f9fafb;
+  border-bottom: 2px solid #dbeafe;
+  background: #f8fafc;
   flex-shrink: 0;
 }
 
 .panel-title {
   font-size: 16px;
   font-weight: 600;
-  color: #111827;
+  color: #1e293b;
   margin: 0;
 }
 
@@ -71,17 +73,21 @@ const handleClear = () => {
   align-items: center;
   justify-content: center;
   border: none;
-  background: #fee2e2;
-  color: #dc2626;
-  border-radius: 4px;
+  background: #fed7aa;
+  color: #ea580c;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 16px;
   transition: all 0.2s;
 }
 
 .clear-button:hover {
-  background: #fecaca;
+  background: #fdba74;
   transform: scale(1.05);
+}
+
+.clear-button svg {
+  width: 14px;
+  height: 14px;
 }
 
 .panel-body {
@@ -96,15 +102,15 @@ const handleClear = () => {
 }
 
 .panel-body::-webkit-scrollbar-track {
-  background: #f3f4f6;
+  background: #f8fafc;
 }
 
 .panel-body::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: #bfdbfe;
   border-radius: 3px;
 }
 
 .panel-body::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: #93c5fd;
 }
 </style>
