@@ -68,10 +68,8 @@
             <!-- 圖例/底圖模組 -->
             <LegendBasemapPanel v-else-if="activeModule === 'legend-basemap'" />
             
-            <!-- 即時資訊模組 -->
-            <div v-else-if="activeModule === 'realtime'" class="module-placeholder">
-              <p>即時資訊功能開發中...</p>
-            </div>
+            <!-- 生活圈分析模組 -->
+            <BufferAnalysisPanel v-else-if="activeModule === 'buffer-analysis'" />
             
             <!-- 防災專區模組 -->
             <div v-else-if="activeModule === 'disaster'" class="module-placeholder">
@@ -90,27 +88,6 @@
       <div class="map-container">
         <!-- SceneView -->
         <div ref="viewDiv" class="scene-view"></div>
-
-        <!-- 查詢工具欄 -->
-        <div class="query-toolbar">
-          <button id="point-btn" class="geometry-btn" title="以點查詢">●</button>
-          <button id="line-btn" class="geometry-btn" title="以線查詢">─</button>
-          <button id="polygon-btn" class="geometry-btn" title="以多邊形查詢">▭</button>
-          <button id="clear-btn" class="geometry-btn clear" title="清除">✕</button>
-        </div>
-
-        <!-- 緩衝區滑桿 -->
-        <div class="buffer-panel">
-          <label>緩衝區: <span id="buffer-value">0</span>m</label>
-          <input
-            type="range"
-            id="buffer-slider"
-            min="0"
-            max="500"
-            value="0"
-            @input="handleBufferChange"
-          >
-        </div>
       </div>
 
       <!-- 右側面板 (來自 main 分支) -->
@@ -138,9 +115,9 @@ const modules = [
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M3 14h7"/><path d="M3 17h7"/><path d="M3 20h7"/></svg>'
   },
   {
-    id: 'realtime',
-    label: '即時資訊',
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>'
+    id: 'buffer-analysis',
+    label: '生活圈分析',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>'
   },
   {
     id: 'disaster',
@@ -181,6 +158,7 @@ import { useLayerStore } from '@/stores/layerStore'
 import RightSidePanel from '@/components/map/RightSidePanel.vue'
 import LayerManagementPanel from '@/components/map/LayerManagementPanel.vue'
 import LegendBasemapPanel from '@/components/map/LegendBasemapPanel.vue'
+import BufferAnalysisPanel from '@/components/map/buffer-analysis-panel.vue'
 
 // ==================== 引用 ====================
 const viewDiv = ref<HTMLDivElement | null>(null)
@@ -222,6 +200,10 @@ onMounted(async () => {
     initQuery()
     console.log('✅ 查詢功能初始化完成')
 
+    // 設置事件監聽（只執行一次）
+    setupEventListeners()
+    console.log('✅ 事件監聽器設置完成')
+
     loadLayers()
     console.log('✅ 圖層加載完成')
 
@@ -240,6 +222,9 @@ onUnmounted(() => {
   if (sceneView.value) {
     sceneView.value.destroy()
   }
+  // 清理事件監聽器
+  document.removeEventListener('input', handleInputEvent)
+  document.removeEventListener('click', handleClickEvent)
 })
 
 // ==================== 初始化方法 ====================
@@ -318,7 +303,6 @@ const initQuery = (): void => {
   // Sketch 事件監聽
   sketch.on('create', (event) => {
     if (event.state === 'complete') {
-      // 🔧 修復：檢查 geometry 是否存在,然後使用 markRaw
       const geometry = event.graphic?.geometry
       if (geometry) {
         sketchGeometry = markRaw(geometry)
@@ -329,7 +313,6 @@ const initQuery = (): void => {
 
   sketch.on('update', (event: any) => {
     if (event.state === 'complete' && event.graphics?.[0]) {
-      // 🔧 修復：檢查 geometry 是否存在,然後使用 markRaw
       const geometry = event.graphics[0]?.geometry
       if (geometry) {
         sketchGeometry = markRaw(geometry)
@@ -337,24 +320,55 @@ const initQuery = (): void => {
       }
     }
   })
+}
 
-  // 按鈕事件監聯
-  document.getElementById('point-btn')?.addEventListener('click', () => {
-    clearGeometry()
-    sketchViewModel.value?.create('point')
-  })
+/**
+ * 設置事件監聽器（全局）
+ */
+const handleInputEvent = (event: Event) => {
+  const target = event.target as HTMLElement
+  if (target.id === 'buffer-slider') {
+    const inputTarget = target as HTMLInputElement
+    bufferSize = parseInt(inputTarget.value)
+    console.log(`🎯 緩衝區已更新: ${bufferSize}m`)
+    runQuery()
+  }
+}
 
-  document.getElementById('line-btn')?.addEventListener('click', () => {
-    clearGeometry()
-    sketchViewModel.value?.create('polyline')
-  })
+const handleClickEvent = (event: Event) => {
+  const target = event.target as HTMLElement
+  const button = target.closest('button')
+  
+  if (!button) return
+  
+  const buttonId = button.id
+  
+  switch (buttonId) {
+    case 'point-btn':
+      clearGeometry()
+      sketchViewModel.value?.create('point')
+      console.log('📍 開始點查詢')
+      break
+    case 'line-btn':
+      clearGeometry()
+      sketchViewModel.value?.create('polyline')
+      console.log('📏 開始線查詢')
+      break
+    case 'polygon-btn':
+      clearGeometry()
+      sketchViewModel.value?.create('polygon')
+      console.log('🔷 開始面查詢')
+      break
+    case 'clear-btn':
+      clearGeometry()
+      console.log('🧹 已清除查詢')
+      break
+  }
+}
 
-  document.getElementById('polygon-btn')?.addEventListener('click', () => {
-    clearGeometry()
-    sketchViewModel.value?.create('polygon')
-  })
-
-  document.getElementById('clear-btn')?.addEventListener('click', clearGeometry)
+const setupEventListeners = () => {
+  document.addEventListener('input', handleInputEvent)
+  document.addEventListener('click', handleClickEvent)
 }
 
 /**
@@ -437,19 +451,6 @@ const clearGeometry = (): void => {
   })
   highlightHandles = []
   mapQueryComposable?.clearQuery()
-}
-
-/**
- * 緩衝區滑桿變化
- */
-const handleBufferChange = (event: Event): void => {
-  const target = event.target as HTMLInputElement
-  bufferSize = parseInt(target.value)
-  const bufferValueEl = document.getElementById('buffer-value')
-  if (bufferValueEl) {
-    bufferValueEl.textContent = bufferSize.toString()
-  }
-  runQuery()
 }
 
 /**
@@ -776,107 +777,6 @@ const updateBufferGraphic = (geometry: any): void => {
   height: 100%;
 }
 
-/* ==================== 查詢工具欄 (現代化) ==================== */
-.query-toolbar {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  display: flex;
-  gap: 6px;
-  background: #ffffff;
-  backdrop-filter: blur(20px);
-  padding: 8px;
-  border-radius: 14px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  z-index: 10;
-}
-
-.geometry-btn {
-  width: 44px;
-  height: 44px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #64748b;
-  cursor: pointer;
-  border-radius: 10px;
-  font-weight: bold;
-  font-size: 16px;
-  transition: all 0.2s ease;
-}
-
-.geometry-btn:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #1e293b;
-  transform: scale(1.05);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.geometry-btn.clear {
-  background: #fef2f2;
-  border-color: #fecaca;
-  color: #dc2626;
-}
-
-.geometry-btn.clear:hover {
-  background: #fee2e2;
-  border-color: #fca5a5;
-}
-
-/* ==================== 緩衝區面板 (現代化) ==================== */
-.buffer-panel {
-  position: absolute;
-  top: 84px;
-  left: 20px;
-  background: #ffffff;
-  backdrop-filter: blur(20px);
-  padding: 16px 20px;
-  border-radius: 14px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  min-width: 260px;
-  z-index: 10;
-}
-
-.buffer-panel label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
-  font-weight: 500;
-  color: #1e293b;
-  font-size: 14px;
-}
-
-.buffer-panel input[type="range"] {
-  width: 100%;
-  height: 6px;
-  border-radius: 3px;
-  background: #f1f5f9;
-  appearance: none;
-  cursor: pointer;
-}
-
-.buffer-panel input[type="range"]::-webkit-slider-thumb {
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #fbbf24 0%, #fcd34d 100%); /* 淺黃色漸層 */
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.4);
-}
-
-.buffer-panel input[type="range"]::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #fbbf24 0%, #fcd34d 100%);
-  cursor: pointer;
-  border: none;
-}
-
 /* ==================== 響應式設計 ==================== */
 @media (max-width: 768px) {
   .nav-content {
@@ -910,11 +810,6 @@ const updateBufferGraphic = (geometry: any): void => {
     border-right: none;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 20px 20px 0 0;
-  }
-
-  .query-toolbar,
-  .buffer-panel {
-    left: 16px;
   }
 }
 

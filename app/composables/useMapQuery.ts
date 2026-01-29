@@ -1,9 +1,9 @@
 /**
  * @file composables/useMapQuery.ts
- * @description 地圖查詢邏輯 composable (最終修復版)
- * - 修復 ArcGIS 響應式問題
- * - 修復高亮邏輯 (按圖層分別高亮)
- * - 修復所有 TypeScript 錯誤
+ * @description 地圖查詢邏輯 composable - 優化版
+ * - 使用圖層標題列表進行查詢（易於調整）
+ * - 修復高亮邏輯
+ * - 支援生活圈分析
  */
 
 import { ref, computed, markRaw } from 'vue'
@@ -11,6 +11,44 @@ import { useDebounceFn } from '@vueuse/core'
 import type { QueryDefinition, QueryResult, ScoreData } from '@/stores/queryStore'
 import { useQueryStore } from '@/stores/queryStore'
 import { useMapStore } from '@/stores/mapStore'
+
+// ==================== 查詢圖層配置 ====================
+/**
+ * 生活圈分析查詢圖層列表
+ * 根據 ResultDisplay.vue 中的 LAYER_MAPPING 定義
+ * 可以輕鬆添加或移除要查詢的圖層
+ */
+const ANALYSIS_LAYER_TITLES = [
+  // 醫療照護 (25分)
+  '2024年臺南市醫院位置',
+  '2024年臺南市衛生所位置',
+  
+  // 日常採買 (20分)
+  '2024年臺南市連鎖便利商店位置',
+  '2024年臺南市大賣場位置',
+  
+  // 教育資源 (15分)
+  '2024年臺南市國民小學位置',
+  '2024年國中及高中位置',
+  '2024年臺南市幼兒園位置',
+  
+  // 休閒綠地 (20分)
+  '2024年臺南市公園位置_shp',
+  '2024年臺南市活動中心位置_shp',
+  '2024年臺南市體育場位置_shp',
+  '2024年臺南市古蹟位置',
+  
+  // 金融服務 (20分)
+  '2024年臺南市金融機構位置',
+  '2024年臺南市郵局位置_shp',
+  '2024年臺南市停車場位置',
+  
+  // 風險圖層
+  '2021年臺南市活動斷層線',
+  '2024年臺南市土壤液化潛勢地區',
+  '2020年淹水點位',
+  '2022年臺南市焚化爐煙囪位置',
+]
 
 export const useMapQuery = (sceneView?: any) => {
   const queryStore = useQueryStore()
@@ -28,26 +66,13 @@ export const useMapQuery = (sceneView?: any) => {
   const errorMessage = ref<string | null>(null)
   const queryStats = ref<any>(null)
   
-  // 使用普通變數存儲 ArcGIS 物件,避免響應式
   let currentGeometry: any = null
   let highlightHandles: any[] = []
 
   // ==================== Getters ====================
-  const activeQuery = computed(() => {
-    const q = queryStore.getActiveQuery
-    return q || null
-  })
-
-  const queryResults = computed(() => {
-    const r = queryStore.getActiveQueryResults
-    return r || []
-  })
-
-  const queryScore = computed(() => {
-    const s = queryStore.getActiveQueryScore
-    return s || null
-  })
-
+  const activeQuery = computed(() => queryStore.getActiveQuery || null)
+  const queryResults = computed(() => queryStore.getActiveQueryResults || [])
+  const queryScore = computed(() => queryStore.getActiveQueryScore || null)
   const hasResults = computed(() => queryStore.hasResults)
   const featureCount = computed(() => queryStore.getActiveQueryFeatureCount)
 
@@ -59,7 +84,6 @@ export const useMapQuery = (sceneView?: any) => {
       return
     }
 
-    // 使用 markRaw 標記 ArcGIS 物件為非響應式
     currentGeometry = markRaw(geometry)
     isQuerying.value = true
     queryProgress.value = 0
@@ -67,10 +91,8 @@ export const useMapQuery = (sceneView?: any) => {
 
     try {
       const startTime = performance.now()
-
       const queryId = `query-${Date.now()}`
       
-      // 創建查詢定義時,不直接存儲 geometry 物件
       const queryDefinition: QueryDefinition = {
         id: queryId,
         timestamp: new Date(),
@@ -84,14 +106,13 @@ export const useMapQuery = (sceneView?: any) => {
       queryProgress.value = 20
       queryStore.setActiveQueryingState(true)
 
-      // 執行查詢
+      // 執行查詢 - 使用圖層標題列表
       const results = await performLayerViewQuery(geometry)
 
       queryProgress.value = 50
       queryStore.updateActiveQueryResults(results)
 
       queryProgress.value = 70
-      // 修復:傳遞完整的 results 而不是 allFeatures
       highlightFeaturesOnMap(results)
 
       queryProgress.value = 80
@@ -125,7 +146,7 @@ export const useMapQuery = (sceneView?: any) => {
   }
 
   /**
-   * 執行 LayerView 查詢
+   * 執行 LayerView 查詢 - 使用圖層標題列表
    */
   const performLayerViewQuery = async (geometry: any): Promise<QueryResult[]> => {
     if (!sceneView) {
@@ -133,19 +154,30 @@ export const useMapQuery = (sceneView?: any) => {
     }
 
     const results: QueryResult[] = []
-    const activeLayers = mapStore.activeLayers
-
-    if (activeLayers.length === 0) {
-      console.warn('⚠️ 沒有活躍圖層')
-      return results
-    }
 
     try {
-      // 獲取所有 LayerView
-      const layerViewPromises = activeLayers.map(layerId => {
+      // 方法：從所有圖層中篩選出標題在列表中的圖層
+      const allLayers = sceneView.map.allLayers.toArray()
+      
+      const targetLayers = allLayers.filter((layer: __esri.Layer) => 
+        layer.title && ANALYSIS_LAYER_TITLES.includes(layer.title) && 
+        layer.type === 'feature'
+      )
+
+      console.log(`🔍 查詢 ${targetLayers.length} 個生活圈分析圖層`)
+      console.log(`📋 圖層列表:`, targetLayers.map((l: __esri.Layer) => l.title))
+
+      if (targetLayers.length === 0) {
+        console.warn('⚠️ 沒有找到任何生活圈分析圖層，請確認：')
+        console.warn('1. 圖層是否已在圖層管理中添加')
+        console.warn('2. 圖層標題是否與 ANALYSIS_LAYER_TITLES 匹配')
+        console.warn(`📋 可用圖層:`, allLayers.map((l: __esri.Layer) => l.title))
+        return results
+      }
+
+      // 獲取 LayerView 並查詢
+      const layerViewPromises = targetLayers.map((layer: __esri.Layer) => {
         try {
-          const layer = sceneView.map.findLayerById(layerId)
-          if (!layer) return Promise.resolve(null)
           return sceneView.whenLayerView(layer).catch(() => null)
         } catch {
           return Promise.resolve(null)
@@ -160,18 +192,15 @@ export const useMapQuery = (sceneView?: any) => {
         if (!layerView) continue
 
         try {
-          // 創建查詢
           const query = layerView.createQuery()
           query.geometry = geometry
 
           const objectIds: number[] = await layerView.queryObjectIds(query)
 
-          // 獲取圖層資訊
           const layer = layerView.layer
           const layerTitle = String(layer.title || layer.id)
           const layerId = String(layer.id)
 
-          // 轉換為普通物件
           const features = objectIds.map((id) => ({
             id: id,
             attributes: { OBJECTID: id },
@@ -185,9 +214,11 @@ export const useMapQuery = (sceneView?: any) => {
             attributes: []
           })
 
-          console.log(`✅ 圖層 "${layerTitle}": ${objectIds.length} 個特徵`)
+          if (objectIds.length > 0) {
+            console.log(`✅ 圖層 "${layerTitle}": ${objectIds.length} 個特徵`)
+          }
         } catch (e: any) {
-          console.warn(`⚠️ 查詢失敗`, e)
+          console.warn(`⚠️ 查詢圖層失敗:`, e)
         }
       }
 
@@ -200,7 +231,7 @@ export const useMapQuery = (sceneView?: any) => {
   }
 
   /**
-   * 高亮特徵 (修復版 - 按圖層分別高亮)
+   * 高亮特徵
    */
   const highlightFeaturesOnMap = (results: QueryResult[]): void => {
     if (!sceneView || !results || results.length === 0) {
@@ -208,20 +239,16 @@ export const useMapQuery = (sceneView?: any) => {
     }
 
     try {
-      // 清除舊的高亮
       clearHighlight()
-
       let totalHighlighted = 0
 
-      // 對每個圖層使用該圖層自己的 ObjectID
       results.forEach(result => {
-        // 跳過沒有特徵的圖層
         if (result.count === 0 || !result.features || result.features.length === 0) {
           return
         }
 
         try {
-          const layer = sceneView.map.findLayerById(result.layerId)
+          const layer = sceneView.map.allLayers.find((l: any) => l.id === result.layerId)
           if (!layer) {
             console.warn(`⚠️ 找不到圖層: ${result.layerId}`)
             return
@@ -229,7 +256,6 @@ export const useMapQuery = (sceneView?: any) => {
 
           sceneView.whenLayerView(layer).then((layerView: any) => {
             if (layerView && layerView.highlight) {
-              // 只使用這個圖層的 ObjectID
               const objectIds = result.features.map(f => f.id).filter(id => id !== undefined)
               
               if (objectIds.length > 0) {
@@ -279,13 +305,8 @@ export const useMapQuery = (sceneView?: any) => {
     const totalFeatures = results.reduce((sum, r) => sum + r.count, 0)
     const layerCount = results.filter(r => r.count > 0).length
 
-    // 設施覆蓋度：基於總特徵數
     const facilityCoverageScore = Math.min((totalFeatures / 100) * 100, 100)
-
-    // 密度評分：基於圖層覆蓋率
     const densityScore = (layerCount / Math.max(results.length, 1)) * 100
-
-    // 多樣性：基於有數據的圖層比例
     const diversityScore = (layerCount / Math.max(results.length, 1)) * 100
 
     const dimensionScores: Record<string, number> = {
@@ -318,9 +339,6 @@ export const useMapQuery = (sceneView?: any) => {
     }
   }
 
-  /**
-   * 防抖查詢
-   */
   const debouncedUpdateGeometry = useDebounceFn(
     (geometry: any) => {
       executeQuery(geometry)
@@ -328,9 +346,6 @@ export const useMapQuery = (sceneView?: any) => {
     config.debounceTime
   )
 
-  /**
-   * 清除查詢
-   */
   const clearQuery = (): void => {
     currentGeometry = null
     isQuerying.value = false
@@ -342,9 +357,6 @@ export const useMapQuery = (sceneView?: any) => {
     console.log('🧹 已清除查詢')
   }
 
-  /**
-   * 保存查詢
-   */
   const saveCurrentQuery = (name: string): void => {
     if (!queryStore.activeQueryId) {
       errorMessage.value = '沒有活動查詢'
@@ -360,9 +372,6 @@ export const useMapQuery = (sceneView?: any) => {
     }
   }
 
-  /**
-   * 導出結果
-   */
   const exportQueryResults = (): string => {
     if (!activeQuery.value) {
       return ''

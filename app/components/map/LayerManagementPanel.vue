@@ -386,16 +386,29 @@ const removeGroup = (groupId: LayerCategory) => {
  * 添加圖層到地圖
  */
 const addLayer = (layerId: string) => {
+  console.log(`🔧 正在添加圖層: ${layerId}`)
+  
+  // 1. 添加到 store
   layerStore.addLayerToMap(layerId)
   
-  // 更新實際地圖視圖
+  // 2. 獲取地圖視圖
   const view = mapStore.getSceneView()
-  if (view && view.map) {
-    const layer = view.map.findLayerById(layerId)
-    if (layer) {
-      layer.visible = true
-      console.log(`✅ 地圖上顯示圖層: ${layer.title}`)
-    }
+  if (!view || !view.map) {
+    console.warn(`⚠️ SceneView 或 Map 未初始化`)
+    return
+  }
+  
+  // 3. 在地圖中找到圖層並顯示
+  const layer = view.map.allLayers.find((l: any) => l.id === layerId)
+  
+  if (layer) {
+    layer.visible = true
+    mapStore.addActiveLayer(layerId)
+    console.log(`✅ 圖層已顯示: ${layer.title}`)
+  } else {
+    console.error(`❌ 在地圖中找不到圖層: ${layerId}`)
+    // 列出所有可用圖層以供調試
+    console.log(`📋 可用圖層:`, view.map.allLayers.map((l: any) => ({ id: l.id, title: l.title })).toArray())
   }
 }
 
@@ -403,15 +416,19 @@ const addLayer = (layerId: string) => {
  * 從地圖移除圖層
  */
 const removeLayer = (layerId: string) => {
+  console.log(`🗑️ 正在移除圖層: ${layerId}`)
+  
+  // 1. 從 store 移除
   layerStore.removeLayerFromMap(layerId)
   
-  // 更新實際地圖視圖
+  // 2. 更新實際地圖視圖
   const view = mapStore.getSceneView()
   if (view && view.map) {
-    const layer = view.map.findLayerById(layerId)
+    const layer = view.map.allLayers.find((l: any) => l.id === layerId)
     if (layer) {
       layer.visible = false
-      console.log(`🗑️ 地圖上隱藏圖層: ${layer.title}`)
+      mapStore.removeActiveLayer(layerId)
+      console.log(`✅ 圖層已隱藏: ${layer.title}`)
     }
   }
 }
@@ -420,15 +437,22 @@ const removeLayer = (layerId: string) => {
  * 切換圖層可見性
  */
 const toggleVisibility = (layerId: string) => {
+  console.log(`🔧 正在切換圖層可見性: ${layerId}`)
+  
+  // 1. 更新 store
   layerStore.toggleLayerVisibility(layerId)
   
-  // 同步到地圖
+  // 2. 同步到地圖
   const view = mapStore.getSceneView()
   if (view && view.map) {
-    const layer = view.map.findLayerById(layerId)
+    const layer = view.map.allLayers.find((l: any) => l.id === layerId)
     const layerInfo = layerStore.getLayerById(layerId)
+    
     if (layer && layerInfo) {
       layer.visible = layerInfo.visible
+      console.log(`✅ 圖層可見性已切換: ${layer.title} -> ${layerInfo.visible ? '顯示' : '隱藏'}`)
+    } else {
+      console.warn(`⚠️ 找不到圖層: ${layerId}`)
     }
   }
 }
@@ -444,9 +468,10 @@ const updateOpacity = (layerId: string, event: Event) => {
   // 同步到地圖
   const view = mapStore.getSceneView()
   if (view && view.map) {
-    const layer = view.map.findLayerById(layerId)
+    const layer = view.map.allLayers.find((l: any) => l.id === layerId)
     if (layer) {
       layer.opacity = opacity
+      console.log(`🎨 圖層透明度已更新: ${layer.title} -> ${opacity}`)
     }
   }
 }
@@ -455,16 +480,20 @@ const updateOpacity = (layerId: string, event: Event) => {
  * 顯示所有圖層
  */
 const showAllLayers = () => {
+  console.log(`🔧 批次顯示所有已添加的圖層`)
   layerStore.showAllAddedLayers()
   
   const view = mapStore.getSceneView()
   if (view && view.map) {
-    addedLayers.value.forEach(layer => {
-      const mapLayer = view.map.findLayerById(layer.id)
+    let count = 0
+    addedLayers.value.forEach(layerInfo => {
+      const mapLayer = view.map.allLayers.find((l: any) => l.id === layerInfo.id)
       if (mapLayer) {
         mapLayer.visible = true
+        count++
       }
     })
+    console.log(`✅ 已顯示 ${count} 個圖層`)
   }
 }
 
@@ -472,16 +501,20 @@ const showAllLayers = () => {
  * 隱藏所有圖層
  */
 const hideAllLayers = () => {
+  console.log(`🔧 批次隱藏所有已添加的圖層`)
   layerStore.hideAllAddedLayers()
   
   const view = mapStore.getSceneView()
   if (view && view.map) {
-    addedLayers.value.forEach(layer => {
-      const mapLayer = view.map.findLayerById(layer.id)
+    let count = 0
+    addedLayers.value.forEach(layerInfo => {
+      const mapLayer = view.map.allLayers.find((l: any) => l.id === layerInfo.id)
       if (mapLayer) {
         mapLayer.visible = false
+        count++
       }
     })
+    console.log(`✅ 已隱藏 ${count} 個圖層`)
   }
 }
 
@@ -491,14 +524,20 @@ const hideAllLayers = () => {
 const removeAllLayers = () => {
   if (!confirm('確定要移除所有圖層嗎？')) return
   
+  console.log(`🔧 批次移除所有已添加的圖層`)
+  
   const view = mapStore.getSceneView()
   if (view && view.map) {
+    let count = 0
     addedLayers.value.forEach(layer => {
       const mapLayer = view.map.findLayerById(layer.id)
       if (mapLayer) {
         mapLayer.visible = false
+        mapStore.removeActiveLayer(layer.id)
+        count++
       }
     })
+    console.log(`✅ 已移除 ${count} 個圖層`)
   }
   
   layerStore.removeAllLayers()
@@ -517,7 +556,7 @@ const clearSearch = () => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.03);
+  background: #ffffff;
 }
 
 /* 面板標題 */
@@ -526,13 +565,14 @@ const clearSearch = () => {
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
 }
 
 .panel-title {
   font-size: 16px;
   font-weight: 600;
-  color: white;
+  color: #1e293b;
   margin: 0;
 }
 
@@ -544,14 +584,15 @@ const clearSearch = () => {
 
 .layer-count {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.6);
+  color: #64748b;
   font-weight: 500;
 }
 
 /* 搜尋欄 */
 .search-section {
   padding: 16px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid #e2e8f0;
+  background: #ffffff;
 }
 
 .search-box {
@@ -565,28 +606,29 @@ const clearSearch = () => {
   left: 12px;
   width: 18px;
   height: 18px;
-  color: rgba(255, 255, 255, 0.4);
+  color: #94a3b8;
 }
 
 .search-input {
   width: 100%;
   padding: 10px 36px 10px 40px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
   border-radius: 8px;
-  color: white;
+  color: #1e293b;
   font-size: 14px;
   transition: all 0.2s;
 }
 
 .search-input:focus {
   outline: none;
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(59, 130, 246, 0.5);
+  background: #ffffff;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
 }
 
 .search-input::placeholder {
-  color: rgba(255, 255, 255, 0.4);
+  color: #94a3b8;
 }
 
 .clear-search {
@@ -595,8 +637,8 @@ const clearSearch = () => {
   width: 24px;
   height: 24px;
   border: none;
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.6);
+  background: #cbd5e1;
+  color: #475569;
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
@@ -611,8 +653,8 @@ const clearSearch = () => {
 /* 標籤頁 */
 .tabs {
   display: flex;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 2px solid #e2e8f0;
+  background: #f8fafc;
 }
 
 .tab {
@@ -624,7 +666,7 @@ const clearSearch = () => {
   padding: 14px 16px;
   border: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.6);
+  color: #64748b;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -633,13 +675,13 @@ const clearSearch = () => {
 }
 
 .tab:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.8);
+  background: #f1f5f9;
+  color: #1e293b;
 }
 
 .tab.active {
-  color: white;
-  background: rgba(59, 130, 246, 0.1);
+  color: #60a5fa;
+  background: #ffffff;
 }
 
 .tab.active::after {
@@ -649,7 +691,7 @@ const clearSearch = () => {
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
+  background: #60a5fa;
 }
 
 .tab-badge {
@@ -659,15 +701,16 @@ const clearSearch = () => {
   min-width: 24px;
   height: 20px;
   padding: 0 6px;
-  background: rgba(255, 255, 255, 0.1);
+  background: #e2e8f0;
+  color: #64748b;
   border-radius: 10px;
   font-size: 11px;
   font-weight: 600;
 }
 
 .tab.active .tab-badge {
-  background: rgba(59, 130, 246, 0.3);
-  color: white;
+  background: #dbeafe;
+  color: #60a5fa;
 }
 
 /* 圖層列表 */
@@ -686,8 +729,9 @@ const clearSearch = () => {
   gap: 8px;
   margin: 0 24px 16px;
   padding: 12px;
-  background: rgba(0, 0, 0, 0.2);
+  background: #f8fafc;
   border-radius: 8px;
+  border: 1px solid #e2e8f0;
 }
 
 .batch-btn {
@@ -697,9 +741,9 @@ const clearSearch = () => {
   justify-content: center;
   gap: 6px;
   padding: 8px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.8);
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
   font-size: 12px;
   font-weight: 500;
   border-radius: 6px;
@@ -708,9 +752,9 @@ const clearSearch = () => {
 }
 
 .batch-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: white;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #1e293b;
 }
 
 .batch-btn svg {
@@ -719,9 +763,9 @@ const clearSearch = () => {
 }
 
 .batch-btn.danger:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #f87171;
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
 }
 
 /* 圖層分組 */
@@ -731,7 +775,7 @@ const clearSearch = () => {
 }
 
 .layer-group {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .group-header {
@@ -741,11 +785,11 @@ const clearSearch = () => {
   padding: 14px 24px;
   cursor: pointer;
   transition: all 0.2s;
-  background: rgba(0, 0, 0, 0.1);
+  background: #f8fafc;
 }
 
 .group-header:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: #f1f5f9;
 }
 
 .group-info {
@@ -758,7 +802,7 @@ const clearSearch = () => {
 .expand-icon {
   width: 16px;
   height: 16px;
-  color: rgba(255, 255, 255, 0.6);
+  color: #64748b;
   transition: transform 0.2s;
 }
 
@@ -769,7 +813,7 @@ const clearSearch = () => {
 .group-title {
   font-size: 14px;
   font-weight: 600;
-  color: white;
+  color: #1e293b;
 }
 
 .group-count {
@@ -779,7 +823,7 @@ const clearSearch = () => {
   min-width: 22px;
   height: 22px;
   padding: 0 6px;
-  background: rgba(59, 130, 246, 0.2);
+  background: #dbeafe;
   color: #60a5fa;
   border-radius: 11px;
   font-size: 11px;
@@ -793,31 +837,31 @@ const clearSearch = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .group-add-btn {
-  color: rgba(34, 197, 94, 0.8);
+  color: #22c55e;
 }
 
 .group-add-btn:hover {
-  background: rgba(34, 197, 94, 0.2);
-  border-color: rgba(34, 197, 94, 0.4);
-  color: #4ade80;
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #16a34a;
 }
 
 .group-remove-btn {
-  color: rgba(239, 68, 68, 0.8);
+  color: #ef4444;
 }
 
 .group-remove-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #f87171;
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
 }
 
 .group-add-btn svg,
@@ -852,13 +896,13 @@ const clearSearch = () => {
 
 /* 圖層項目 */
 .layer-item {
-  background: transparent;
+  background: #ffffff;
   transition: all 0.2s;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid #f1f5f9;
 }
 
 .layer-item:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: #f8fafc;
 }
 
 .layer-item:last-child {
@@ -884,21 +928,21 @@ const clearSearch = () => {
 }
 
 .visibility-btn {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.4);
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #94a3b8;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .visibility-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: #f1f5f9;
+  border-color: #cbd5e1;
 }
 
 .visibility-btn.visible {
-  background: rgba(59, 130, 246, 0.2);
-  border-color: rgba(59, 130, 246, 0.4);
+  background: #dbeafe;
+  border-color: #93c5fd;
   color: #60a5fa;
 }
 
@@ -909,9 +953,9 @@ const clearSearch = () => {
 }
 
 .layer-icon {
-  background: rgba(139, 92, 246, 0.1);
-  border: 1px solid rgba(139, 92, 246, 0.2);
-  color: #a78bfa;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  color: #f59e0b;
 }
 
 .layer-info {
@@ -922,7 +966,7 @@ const clearSearch = () => {
 .layer-title {
   font-size: 13px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
+  color: #1e293b;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -935,8 +979,8 @@ const clearSearch = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
@@ -944,23 +988,23 @@ const clearSearch = () => {
 }
 
 .remove-btn {
-  color: rgba(239, 68, 68, 0.8);
+  color: #ef4444;
 }
 
 .remove-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #f87171;
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
 }
 
 .add-btn {
-  color: rgba(34, 197, 94, 0.8);
+  color: #22c55e;
 }
 
 .add-btn:hover {
-  background: rgba(34, 197, 94, 0.2);
-  border-color: rgba(34, 197, 94, 0.4);
-  color: #4ade80;
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #16a34a;
 }
 
 .remove-btn svg,
@@ -972,13 +1016,13 @@ const clearSearch = () => {
 /* 透明度控制 */
 .layer-controls {
   padding: 8px 24px 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.03);
+  border-top: 1px solid #f1f5f9;
 }
 
 .opacity-label {
   display: block;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
+  color: #64748b;
   margin-bottom: 6px;
   font-weight: 500;
 }
@@ -987,7 +1031,7 @@ const clearSearch = () => {
   width: 100%;
   height: 4px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.1);
+  background: #e2e8f0;
   appearance: none;
   cursor: pointer;
 }
@@ -997,16 +1041,16 @@ const clearSearch = () => {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #60a5fa 0%, #93c5fd 100%);
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 2px 6px rgba(96, 165, 250, 0.4);
 }
 
 .opacity-slider::-moz-range-thumb {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #60a5fa 0%, #93c5fd 100%);
   cursor: pointer;
   border: none;
 }
@@ -1024,19 +1068,19 @@ const clearSearch = () => {
 .empty-icon {
   font-size: 48px;
   margin-bottom: 16px;
-  opacity: 0.6;
+  opacity: 0.3;
 }
 
 .empty-text {
   font-size: 15px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.8);
+  color: #475569;
   margin: 0 0 8px 0;
 }
 
 .empty-hint {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.5);
+  color: #94a3b8;
   margin: 0;
 }
 
@@ -1046,16 +1090,16 @@ const clearSearch = () => {
 }
 
 .layer-list::-webkit-scrollbar-track {
-  background: transparent;
+  background: #f8fafc;
 }
 
 .layer-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: #cbd5e1;
   border-radius: 3px;
 }
 
 .layer-list::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: #94a3b8;
 }
 
 /* 響應式 */

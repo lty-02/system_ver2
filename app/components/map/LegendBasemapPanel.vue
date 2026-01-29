@@ -1,1096 +1,347 @@
 <template>
-  <div class="layer-panel">
-    <!-- 面板標題 -->
-    <div class="panel-header">
-      <h3 class="panel-title">圖層管理</h3>
-      <div class="header-actions">
-        <span class="layer-count">{{ addedLayerCount }}/{{ allLayerCount }}</span>
+  <div class="legend-basemap-panel">
+    <!-- ========== 圖例區域 ========== -->
+    <section class="legend-section">
+      <div class="section-header">
+        <h3 class="section-title">圖例</h3>
       </div>
-    </div>
-
-    <!-- 搜尋欄 -->
-    <div class="search-section">
-      <div class="search-box">
-        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/>
-          <path d="M21 21l-4.35-4.35"/>
-        </svg>
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="搜尋圖層或類別..."
-          class="search-input"
-        />
-        <button
-          v-if="searchQuery"
-          class="clear-search"
-          @click="clearSearch"
-        >
-          ✕
-        </button>
+      <div class="legend-container" ref="legendContainer">
+        <!-- ArcGIS Legend 將會被掛載到這裡 -->
       </div>
-    </div>
+    </section>
 
-    <!-- 標籤頁 -->
-    <div class="tabs">
-      <button
-        class="tab"
-        :class="{ active: activeTab === 'added' }"
-        @click="activeTab = 'added'"
-      >
-        <span>已添加</span>
-        <span class="tab-badge">{{ addedLayerCount }}</span>
-      </button>
-      <button
-        class="tab"
-        :class="{ active: activeTab === 'available' }"
-        @click="activeTab = 'available'"
-      >
-        <span>可用圖層</span>
-        <span class="tab-badge">{{ availableLayerCount }}</span>
-      </button>
-    </div>
+    <!-- ========== 分隔線 ========== -->
+    <div class="divider"></div>
 
-    <!-- 圖層列表 -->
-    <div class="layer-list">
-      <!-- 已添加圖層 -->
-      <div v-if="activeTab === 'added'" class="layer-section">
-        <!-- 批次操作 -->
-        <div v-if="addedLayerCount > 0" class="batch-actions">
-          <button class="batch-btn" @click="showAllLayers">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-            全部顯示
-          </button>
-          <button class="batch-btn" @click="hideAllLayers">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-              <line x1="1" y1="1" x2="23" y2="23"/>
-            </svg>
-            全部隱藏
-          </button>
-          <button class="batch-btn danger" @click="removeAllLayers">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-            </svg>
-            全部移除
-          </button>
-        </div>
+    <!-- ========== 底圖切換區域 ========== -->
+    <section class="basemap-section">
+      <div class="section-header">
+        <h3 class="section-title">底圖切換</h3>
+      </div>
 
-        <!-- 已添加的圖層列表（按類別分組） -->
-        <div v-if="addedLayerCount > 0" class="layer-groups">
-          <div
-            v-for="group in addedLayerGroups"
-            :key="group.id"
-            class="layer-group"
+      <div class="basemap-content">
+        <!-- 底圖選擇網格 -->
+        <div class="basemap-grid">
+          <button
+            v-for="basemap in basemaps"
+            :key="basemap.id"
+            class="basemap-card"
+            :class="{ active: currentBasemapId === basemap.id }"
+            @click="changeBasemap(basemap.id)"
           >
-            <!-- 分組標題 -->
-            <div class="group-header" @click="toggleGroupExpanded(group.id)">
-              <div class="group-info">
-                <svg class="expand-icon" :class="{ expanded: group.expanded }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="9 18 15 12 9 6"/>
-                </svg>
-                <span class="group-title">{{ group.title }}</span>
-                <span class="group-count">{{ getGroupAddedCount(group.id) }}</span>
-              </div>
-              <button
-                class="group-remove-btn"
-                @click.stop="removeGroup(group.id)"
-                title="移除此類別所有圖層"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="18" y1="6" x2="6" y2="18"/>
-                  <line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-              </button>
+            <div class="basemap-thumbnail">
+              <img :src="basemap.thumbnail" :alt="basemap.title" />
             </div>
-
-            <!-- 分組圖層列表 -->
-            <transition name="expand">
-              <div v-if="group.expanded" class="group-layers">
-                <div
-                  v-for="layer in getGroupAddedLayers(group.id)"
-                  :key="layer.id"
-                  class="layer-item"
-                >
-                  <div class="layer-main">
-                    <button
-                      class="visibility-btn"
-                      :class="{ visible: layer.visible }"
-                      @click="toggleVisibility(layer.id)"
-                      :title="layer.visible ? '隱藏圖層' : '顯示圖層'"
-                    >
-                      <svg v-if="layer.visible" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                        <circle cx="12" cy="12" r="3"/>
-                      </svg>
-                      <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                        <line x1="1" y1="1" x2="23" y2="23"/>
-                      </svg>
-                    </button>
-
-                    <div class="layer-info">
-                      <div class="layer-title">{{ layer.title }}</div>
-                    </div>
-
-                    <button
-                      class="remove-btn"
-                      @click="removeLayer(layer.id)"
-                      title="從地圖移除"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"/>
-                        <line x1="6" y1="6" x2="18" y2="18"/>
-                      </svg>
-                    </button>
-                  </div>
-
-                  <!-- 透明度控制 -->
-                  <div v-if="layer.visible" class="layer-controls">
-                    <label class="opacity-label">
-                      透明度: {{ Math.round(layer.opacity * 100) }}%
-                    </label>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      :value="layer.opacity * 100"
-                      @input="updateOpacity(layer.id, $event)"
-                      class="opacity-slider"
-                    />
-                  </div>
-                </div>
-              </div>
-            </transition>
-          </div>
-        </div>
-
-        <!-- 空狀態 -->
-        <div v-else class="empty-state">
-          <div class="empty-icon">📂</div>
-          <p class="empty-text">尚未添加任何圖層</p>
-          <p class="empty-hint">從「可用圖層」頁籤選擇要顯示的圖層</p>
+            <div class="basemap-title">{{ basemap.title }}</div>
+          </button>
         </div>
       </div>
-
-      <!-- 可用圖層（按類別分組） -->
-      <div v-if="activeTab === 'available'" class="layer-section">
-        <div v-if="filteredLayerGroups.length > 0" class="layer-groups">
-          <div
-            v-for="group in filteredLayerGroups"
-            :key="group.id"
-            class="layer-group"
-          >
-            <!-- 分組標題 -->
-            <div class="group-header" @click="toggleGroupExpanded(group.id)">
-              <div class="group-info">
-                <svg class="expand-icon" :class="{ expanded: group.expanded }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="9 18 15 12 9 6"/>
-                </svg>
-                <span class="group-title">{{ group.title }}</span>
-                <span class="group-count">{{ getGroupAvailableCount(group.id) }}</span>
-              </div>
-              <button
-                v-if="getGroupAvailableCount(group.id) > 0"
-                class="group-add-btn"
-                @click.stop="addGroup(group.id)"
-                title="添加此類別所有圖層"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="12" y1="5" x2="12" y2="19"/>
-                  <line x1="5" y1="12" x2="19" y2="12"/>
-                </svg>
-              </button>
-            </div>
-
-            <!-- 分組圖層列表 -->
-            <transition name="expand">
-              <div v-if="group.expanded" class="group-layers">
-                <div
-                  v-for="layer in getGroupAvailableLayers(group.id)"
-                  :key="layer.id"
-                  class="layer-item available"
-                >
-                  <div class="layer-main">
-                    <div class="layer-icon">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                        <path d="M2 17l10 5 10-5"/>
-                        <path d="M2 12l10 5 10-5"/>
-                      </svg>
-                    </div>
-
-                    <div class="layer-info">
-                      <div class="layer-title">{{ layer.title }}</div>
-                    </div>
-
-                    <button
-                      class="add-btn"
-                      @click="addLayer(layer.id)"
-                      title="添加到地圖"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"/>
-                        <line x1="5" y1="12" x2="19" y2="12"/>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </transition>
-          </div>
-        </div>
-
-        <!-- 無搜尋結果 -->
-        <div v-else-if="searchQuery" class="empty-state">
-          <div class="empty-icon">🔍</div>
-          <p class="empty-text">找不到符合的圖層</p>
-          <p class="empty-hint">請嘗試其他搜尋關鍵字</p>
-        </div>
-
-        <!-- 無可用圖層 -->
-        <div v-else class="empty-state">
-          <div class="empty-icon">✅</div>
-          <p class="empty-text">所有圖層都已添加</p>
-        </div>
-      </div>
-    </div>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { storeToRefs } from 'pinia'
-import { useLayerStore, LayerCategory } from '@/stores/layerStore'
+import { ref, shallowRef, onMounted, onUnmounted } from 'vue'
 import { useMapStore } from '@/stores/mapStore'
+import Legend from '@arcgis/core/widgets/Legend'
 
-// ==================== Stores ====================
-const layerStore = useLayerStore()
+// ==================== Store ====================
 const mapStore = useMapStore()
 
-const {
-  addedLayers,
-  availableLayers,
-  filteredLayerGroups,
-  addedLayerCount,
-  searchQuery,
-  layerGroups,
-} = storeToRefs(layerStore)
+// ==================== 引用 ====================
+const legendContainer = ref<HTMLDivElement | null>(null)
+const legendWidget = shallowRef<Legend | null>(null)
+const currentBasemapId = ref('topo-vector')
 
-// ==================== 狀態 ====================
-const activeTab = ref<'added' | 'available'>('added')
+// ==================== 底圖列表 ====================
+const basemaps = [
+  {
+    id: 'topo-vector',
+    title: '地形圖',
+    thumbnail: 'https://js.arcgis.com/4.30/esri/images/basemap/topo.jpg'
+  },
+  {
+    id: 'streets-vector',
+    title: '街道圖',
+    thumbnail: 'https://js.arcgis.com/4.30/esri/images/basemap/streets.jpg'
+  },
+  {
+    id: 'satellite',
+    title: '衛星影像',
+    thumbnail: 'https://js.arcgis.com/4.30/esri/images/basemap/satellite.jpg'
+  },
+  {
+    id: 'hybrid',
+    title: '混合影像',
+    thumbnail: 'https://js.arcgis.com/4.30/esri/images/basemap/hybrid.jpg'
+  },
+  {
+    id: 'gray-vector',
+    title: '灰階',
+    thumbnail: 'https://js.arcgis.com/4.30/esri/images/basemap/gray.jpg'
+  },
+  {
+    id: 'dark-gray-vector',
+    title: '深灰',
+    thumbnail: 'https://js.arcgis.com/4.30/esri/images/basemap/dark-gray.jpg'
+  },
+  {
+    id: 'oceans',
+    title: '海洋',
+    thumbnail: 'https://js.arcgis.com/4.30/esri/images/basemap/oceans.jpg'
+  },
+  {
+    id: 'osm',
+    title: 'OpenStreetMap',
+    thumbnail: 'https://js.arcgis.com/4.30/esri/images/basemap/osm.jpg'
+  }
+]
 
-// ==================== 計算屬性 ====================
-const allLayerCount = computed(() => layerStore.allLayers.length)
-const availableLayerCount = computed(() => availableLayers.value.length)
+// ==================== 生命週期 ====================
 
-/**
- * 獲取已添加圖層的分組（只包含有已添加圖層的分組）
- */
-const addedLayerGroups = computed(() => {
-  return layerGroups.value.filter(group => 
-    group.layers.some(layer => layer.isAddedToMap)
-  )
+onMounted(() => {
+  initLegend()
+})
+
+onUnmounted(() => {
+  if (legendWidget.value) {
+    legendWidget.value.destroy()
+  }
 })
 
 // ==================== 方法 ====================
 
 /**
- * 獲取分組中已添加的圖層數量
+ * 初始化圖例 Widget
  */
-const getGroupAddedCount = (groupId: LayerCategory): number => {
-  return layerStore.getAddedLayerCountByCategory(groupId)
-}
-
-/**
- * 獲取分組中未添加的圖層數量
- */
-const getGroupAvailableCount = (groupId: LayerCategory): number => {
-  const group = layerGroups.value.find(g => g.id === groupId)
-  if (!group) return 0
-  return group.layers.filter(layer => !layer.isAddedToMap).length
-}
-
-/**
- * 獲取分組中已添加的圖層
- */
-const getGroupAddedLayers = (groupId: LayerCategory) => {
-  const group = layerGroups.value.find(g => g.id === groupId)
-  if (!group) return []
-  return group.layers.filter(layer => layer.isAddedToMap)
-}
-
-/**
- * 獲取分組中未添加的圖層
- */
-const getGroupAvailableLayers = (groupId: LayerCategory) => {
-  const group = layerGroups.value.find(g => g.id === groupId)
-  if (!group) return []
-  return group.layers.filter(layer => !layer.isAddedToMap)
-}
-
-/**
- * 切換分組展開/摺疊
- */
-const toggleGroupExpanded = (groupId: LayerCategory) => {
-  layerStore.toggleGroupExpanded(groupId)
-}
-
-/**
- * 添加整個分組
- */
-const addGroup = (groupId: LayerCategory) => {
-  layerStore.addGroupToMap(groupId)
-  
-  // 同步到地圖
+const initLegend = () => {
   const view = mapStore.getSceneView()
-  if (view && view.map) {
-    const group = layerGroups.value.find(g => g.id === groupId)
-    if (group) {
-      group.layers.forEach(layer => {
-        const mapLayer = view.map.findLayerById(layer.id)
-        if (mapLayer && layer.isAddedToMap) {
-          mapLayer.visible = true
-        }
-      })
-    }
+  
+  if (!view || !legendContainer.value) {
+    console.warn('⚠️ SceneView 或 Legend 容器未準備好')
+    return
   }
-}
 
-/**
- * 移除整個分組
- */
-const removeGroup = (groupId: LayerCategory) => {
-  layerStore.removeGroupFromMap(groupId)
-  
-  // 同步到地圖
-  const view = mapStore.getSceneView()
-  if (view && view.map) {
-    const group = layerGroups.value.find(g => g.id === groupId)
-    if (group) {
-      group.layers.forEach(layer => {
-        const mapLayer = view.map.findLayerById(layer.id)
-        if (mapLayer) {
-          mapLayer.visible = false
-        }
-      })
-    }
-  }
-}
-
-/**
- * 添加圖層到地圖
- */
-const addLayer = (layerId: string) => {
-  layerStore.addLayerToMap(layerId)
-  
-  // 更新實際地圖視圖
-  const view = mapStore.getSceneView()
-  if (view && view.map) {
-    const layer = view.map.findLayerById(layerId)
-    if (layer) {
-      layer.visible = true
-      console.log(`✅ 地圖上顯示圖層: ${layer.title}`)
-    }
-  }
-}
-
-/**
- * 從地圖移除圖層
- */
-const removeLayer = (layerId: string) => {
-  layerStore.removeLayerFromMap(layerId)
-  
-  // 更新實際地圖視圖
-  const view = mapStore.getSceneView()
-  if (view && view.map) {
-    const layer = view.map.findLayerById(layerId)
-    if (layer) {
-      layer.visible = false
-      console.log(`🗑️ 地圖上隱藏圖層: ${layer.title}`)
-    }
-  }
-}
-
-/**
- * 切換圖層可見性
- */
-const toggleVisibility = (layerId: string) => {
-  layerStore.toggleLayerVisibility(layerId)
-  
-  // 同步到地圖
-  const view = mapStore.getSceneView()
-  if (view && view.map) {
-    const layer = view.map.findLayerById(layerId)
-    const layerInfo = layerStore.getLayerById(layerId)
-    if (layer && layerInfo) {
-      layer.visible = layerInfo.visible
-    }
-  }
-}
-
-/**
- * 更新圖層透明度
- */
-const updateOpacity = (layerId: string, event: Event) => {
-  const target = event.target as HTMLInputElement
-  const opacity = parseInt(target.value) / 100
-  layerStore.setLayerOpacity(layerId, opacity)
-  
-  // 同步到地圖
-  const view = mapStore.getSceneView()
-  if (view && view.map) {
-    const layer = view.map.findLayerById(layerId)
-    if (layer) {
-      layer.opacity = opacity
-    }
-  }
-}
-
-/**
- * 顯示所有圖層
- */
-const showAllLayers = () => {
-  layerStore.showAllAddedLayers()
-  
-  const view = mapStore.getSceneView()
-  if (view && view.map) {
-    addedLayers.value.forEach(layer => {
-      const mapLayer = view.map.findLayerById(layer.id)
-      if (mapLayer) {
-        mapLayer.visible = true
-      }
+  try {
+    const legend = new Legend({
+      view: view,
+      container: legendContainer.value
     })
+
+    legendWidget.value = legend
+    console.log('✅ 圖例 Widget 初始化成功')
+  } catch (error) {
+    console.error('❌ 圖例初始化失敗:', error)
   }
 }
 
 /**
- * 隱藏所有圖層
+ * 切換底圖
  */
-const hideAllLayers = () => {
-  layerStore.hideAllAddedLayers()
-  
+const changeBasemap = (basemapId: string) => {
   const view = mapStore.getSceneView()
-  if (view && view.map) {
-    addedLayers.value.forEach(layer => {
-      const mapLayer = view.map.findLayerById(layer.id)
-      if (mapLayer) {
-        mapLayer.visible = false
-      }
-    })
+  if (!view || !view.map) {
+    console.warn('⚠️ SceneView 未準備好')
+    return
   }
-}
 
-/**
- * 移除所有圖層
- */
-const removeAllLayers = () => {
-  if (!confirm('確定要移除所有圖層嗎？')) return
-  
-  const view = mapStore.getSceneView()
-  if (view && view.map) {
-    addedLayers.value.forEach(layer => {
-      const mapLayer = view.map.findLayerById(layer.id)
-      if (mapLayer) {
-        mapLayer.visible = false
-      }
-    })
+  try {
+    view.map.basemap = basemapId as any
+    currentBasemapId.value = basemapId
+    console.log(`✅ 已切換底圖: ${basemapId}`)
+  } catch (error) {
+    console.error('❌ 切換底圖失敗:', error)
   }
-  
-  layerStore.removeAllLayers()
-}
-
-/**
- * 清空搜尋
- */
-const clearSearch = () => {
-  layerStore.clearSearch()
 }
 </script>
 
 <style scoped>
-.layer-panel {
+.legend-basemap-panel {
   height: 100%;
   display: flex;
   flex-direction: column;
   background: #ffffff;
+  overflow: hidden;
 }
 
-/* 面板標題 */
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
+/* ==================== 區域標題 ==================== */
+.section-header {
+  padding: 16px 24px;
   border-bottom: 1px solid #e2e8f0;
   background: #f8fafc;
+  flex-shrink: 0;
 }
 
-.panel-title {
-  font-size: 16px;
+.section-title {
+  font-size: 15px;
   font-weight: 600;
   color: #1e293b;
   margin: 0;
 }
 
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.layer-count {
-  font-size: 13px;
-  color: #64748b;
-  font-weight: 500;
-}
-
-/* 搜尋欄 */
-.search-section {
-  padding: 16px 24px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #ffffff;
-}
-
-.search-box {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.search-icon {
-  position: absolute;
-  left: 12px;
-  width: 18px;
-  height: 18px;
-  color: #94a3b8;
-}
-
-.search-input {
-  width: 100%;
-  padding: 10px 36px 10px 40px;
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  color: #1e293b;
-  font-size: 14px;
-  transition: all 0.2s;
-}
-
-.search-input:focus {
-  outline: none;
-  background: #ffffff;
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
-}
-
-.search-input::placeholder {
-  color: #94a3b8;
-}
-
-.clear-search {
-  position: absolute;
-  right: 8px;
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: #cbd5e1;
-  color: #475569;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.2s;
-}
-
-.clear-search:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: white;
-}
-
-/* 標籤頁 */
-.tabs {
-  display: flex;
-  border-bottom: 2px solid #e2e8f0;
-  background: #f8fafc;
-}
-
-.tab {
+/* ==================== 圖例區域 ==================== */
+.legend-section {
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 14px 16px;
-  border: none;
-  background: transparent;
-  color: #64748b;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  position: relative;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 200px;
 }
 
-.tab:hover {
-  background: #f1f5f9;
-  color: #1e293b;
-}
-
-.tab.active {
-  color: #60a5fa;
-  background: #ffffff;
-}
-
-.tab.active::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: #60a5fa;
-}
-
-.tab-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 24px;
-  height: 20px;
-  padding: 0 6px;
-  background: #e2e8f0;
-  color: #64748b;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.tab.active .tab-badge {
-  background: #dbeafe;
-  color: #60a5fa;
-}
-
-/* 圖層列表 */
-.layer-list {
+.legend-container {
   flex: 1;
   overflow-y: auto;
-}
-
-.layer-section {
-  padding: 16px 0;
-}
-
-/* 批次操作 */
-.batch-actions {
-  display: flex;
-  gap: 8px;
-  margin: 0 24px 16px;
-  padding: 12px;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-}
-
-.batch-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border: 1px solid #e2e8f0;
+  padding: 16px 24px;
   background: #ffffff;
-  color: #475569;
-  font-size: 12px;
-  font-weight: 500;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
 }
 
-.batch-btn:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+/* 圖例內部樣式覆蓋 */
+.legend-container :deep(.esri-legend) {
+  background: transparent;
   color: #1e293b;
 }
 
-.batch-btn svg {
-  width: 14px;
-  height: 14px;
+.legend-container :deep(.esri-legend__service) {
+  padding: 8px 0;
 }
 
-.batch-btn.danger:hover {
-  background: #fee2e2;
-  border-color: #fca5a5;
-  color: #dc2626;
-}
-
-/* 圖層分組 */
-.layer-groups {
-  display: flex;
-  flex-direction: column;
-}
-
-.layer-group {
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.group-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 24px;
-  cursor: pointer;
-  transition: all 0.2s;
-  background: #f8fafc;
-}
-
-.group-header:hover {
-  background: #f1f5f9;
-}
-
-.group-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-}
-
-.expand-icon {
-  width: 16px;
-  height: 16px;
-  color: #64748b;
-  transition: transform 0.2s;
-}
-
-.expand-icon.expanded {
-  transform: rotate(90deg);
-}
-
-.group-title {
+.legend-container :deep(.esri-legend__layer-caption) {
   font-size: 14px;
   font-weight: 600;
   color: #1e293b;
+  margin-bottom: 8px;
 }
 
-.group-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
-  background: #dbeafe;
-  color: #60a5fa;
-  border-radius: 11px;
-  font-size: 11px;
-  font-weight: 600;
+.legend-container :deep(.esri-legend__layer-cell) {
+  padding: 6px 0;
 }
 
-.group-add-btn,
-.group-remove-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
+.legend-container :deep(.esri-legend__symbol) {
+  margin-right: 12px;
 }
 
-.group-add-btn {
-  color: #22c55e;
-}
-
-.group-add-btn:hover {
-  background: #dcfce7;
-  border-color: #86efac;
-  color: #16a34a;
-}
-
-.group-remove-btn {
-  color: #ef4444;
-}
-
-.group-remove-btn:hover {
-  background: #fee2e2;
-  border-color: #fca5a5;
-  color: #dc2626;
-}
-
-.group-add-btn svg,
-.group-remove-btn svg {
-  width: 14px;
-  height: 14px;
-}
-
-/* 分組圖層列表 */
-.group-layers {
-  background: rgba(0, 0, 0, 0.15);
-}
-
-/* 展開動畫 */
-.expand-enter-active,
-.expand-leave-active {
-  transition: all 0.3s ease;
-  overflow: hidden;
-}
-
-.expand-enter-from,
-.expand-leave-to {
-  max-height: 0;
-  opacity: 0;
-}
-
-.expand-enter-to,
-.expand-leave-from {
-  max-height: 2000px;
-  opacity: 1;
-}
-
-/* 圖層項目 */
-.layer-item {
-  background: #ffffff;
-  transition: all 0.2s;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.layer-item:hover {
-  background: #f8fafc;
-}
-
-.layer-item:last-child {
-  border-bottom: none;
-}
-
-.layer-main {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 24px;
-}
-
-.visibility-btn,
-.layer-icon {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  flex-shrink: 0;
-}
-
-.visibility-btn {
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  color: #94a3b8;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.visibility-btn:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-}
-
-.visibility-btn.visible {
-  background: #dbeafe;
-  border-color: #93c5fd;
-  color: #60a5fa;
-}
-
-.visibility-btn svg,
-.layer-icon svg {
-  width: 16px;
-  height: 16px;
-}
-
-.layer-icon {
-  background: #fef3c7;
-  border: 1px solid #fde68a;
-  color: #f59e0b;
-}
-
-.layer-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.layer-title {
+.legend-container :deep(.esri-legend__layer-cell-info) {
   font-size: 13px;
-  font-weight: 500;
-  color: #1e293b;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: #475569;
 }
 
-.remove-btn,
-.add-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
+/* ==================== 分隔線 ==================== */
+.divider {
+  height: 8px;
+  background: #f1f5f9;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
   flex-shrink: 0;
 }
 
-.remove-btn {
-  color: #ef4444;
-}
-
-.remove-btn:hover {
-  background: #fee2e2;
-  border-color: #fca5a5;
-  color: #dc2626;
-}
-
-.add-btn {
-  color: #22c55e;
-}
-
-.add-btn:hover {
-  background: #dcfce7;
-  border-color: #86efac;
-  color: #16a34a;
-}
-
-.remove-btn svg,
-.add-btn svg {
-  width: 14px;
-  height: 14px;
-}
-
-/* 透明度控制 */
-.layer-controls {
-  padding: 8px 24px 10px;
-  border-top: 1px solid #f1f5f9;
-}
-
-.opacity-label {
-  display: block;
-  font-size: 11px;
-  color: #64748b;
-  margin-bottom: 6px;
-  font-weight: 500;
-}
-
-.opacity-slider {
-  width: 100%;
-  height: 4px;
-  border-radius: 2px;
-  background: #e2e8f0;
-  appearance: none;
-  cursor: pointer;
-}
-
-.opacity-slider::-webkit-slider-thumb {
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #60a5fa 0%, #93c5fd 100%);
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgba(96, 165, 250, 0.4);
-}
-
-.opacity-slider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #60a5fa 0%, #93c5fd 100%);
-  cursor: pointer;
-  border: none;
-}
-
-/* 空狀態 */
-.empty-state {
+/* ==================== 底圖區域 ==================== */
+.basemap-section {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
+  overflow: hidden;
+  min-height: 250px;
+}
+
+.basemap-content {
+  flex: 1;
+  padding: 20px 24px;
+  overflow-y: auto;
+  background: #ffffff;
+}
+
+/* 底圖網格 */
+.basemap-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.basemap-card {
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.basemap-card:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.basemap-card.active {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border-color: #60a5fa;
+  box-shadow: 0 0 12px rgba(96, 165, 250, 0.3);
+}
+
+.basemap-thumbnail {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f1f5f9;
+}
+
+.basemap-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.basemap-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: #475569;
   text-align: center;
 }
 
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-  opacity: 0.3;
-}
-
-.empty-text {
-  font-size: 15px;
-  font-weight: 500;
-  color: #475569;
-  margin: 0 0 8px 0;
-}
-
-.empty-hint {
-  font-size: 13px;
-  color: #94a3b8;
-  margin: 0;
+.basemap-card.active .basemap-title {
+  color: #1e40af;
+  font-weight: 600;
 }
 
 /* 滾動條 */
-.layer-list::-webkit-scrollbar {
+.legend-container::-webkit-scrollbar,
+.basemap-content::-webkit-scrollbar {
   width: 6px;
 }
 
-.layer-list::-webkit-scrollbar-track {
+.legend-container::-webkit-scrollbar-track,
+.basemap-content::-webkit-scrollbar-track {
   background: #f8fafc;
 }
 
-.layer-list::-webkit-scrollbar-thumb {
+.legend-container::-webkit-scrollbar-thumb,
+.basemap-content::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 3px;
 }
 
-.layer-list::-webkit-scrollbar-thumb:hover {
+.legend-container::-webkit-scrollbar-thumb:hover,
+.basemap-content::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
 
 /* 響應式 */
 @media (max-width: 768px) {
-  .panel-header,
-  .search-section {
+  .basemap-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .section-header,
+  .basemap-content,
+  .legend-container {
     padding-left: 16px;
     padding-right: 16px;
-  }
-
-  .batch-actions,
-  .layer-main,
-  .layer-controls {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
-  .group-header {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
-  .batch-actions {
-    flex-direction: column;
-    margin-left: 16px;
-    margin-right: 16px;
-  }
-
-  .batch-btn {
-    width: 100%;
   }
 }
 </style>

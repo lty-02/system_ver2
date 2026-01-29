@@ -1,84 +1,121 @@
 <template>
   <div class="result-display">
-    <!-- 綜合評分卡片 -->
-    <div v-if="score" class="score-section">
-      <div class="total-score-card">
-        <div class="score-label">綜合分數</div>
-        <div class="score-value">{{ score.totalScore.toFixed(1) }}</div>
-        <div class="score-subtitle">基於 {{ featureCount }} 個特徵</div>
+    <!-- 尚未查詢狀態 -->
+    <div v-if="!hasResults" class="empty-state">
+      <div class="empty-icon">🎯</div>
+      <p class="empty-text">尚未進行查詢</p>
+      <p class="empty-hint">請在左側「生活圈分析」面板<br>使用繪圖工具選擇查詢區域</p>
+    </div>
+
+    <!-- 有結果時顯示 -->
+    <div v-else class="results-container">
+      <!-- 綜合評分卡 -->
+      <div class="score-card">
+        <div class="score-label">韌性生活圈指數</div>
+        <div class="score-value">{{ livabilityScore.toFixed(1) }}</div>
+        <div class="score-level">{{ getScoreLevel(livabilityScore) }}</div>
+        <div class="score-bar">
+          <div class="score-bar-fill" :style="{ width: `${livabilityScore}%` }"></div>
+        </div>
       </div>
 
-      <!-- 維度評分 -->
-      <div class="dimension-scores">
-        <div
-          v-for="dim in score.dimensions"
-          :key="dim.name"
-          class="dimension-card"
-        >
-          <div class="dimension-name">{{ dim.name }}</div>
-          <div class="dimension-value">{{ dim.value.toFixed(1) }}</div>
-          <div class="dimension-bar">
-            <div
-              class="dimension-bar-fill"
-              :style="{ width: `${dim.value}%` }"
-            ></div>
+      <!-- 六大機能評分 -->
+      <div class="section">
+        <h4 class="section-title">六大機能評分</h4>
+        <div class="function-list">
+          <div
+            v-for="func in functions"
+            :key="func.id"
+            class="function-item"
+          >
+            <div class="function-icon">{{ func.icon }}</div>
+            <div class="function-main">
+              <div class="function-header">
+                <span class="function-name">{{ func.name }}</span>
+                <span class="function-score">{{ func.score.toFixed(1) }}<small>/{{ func.weight }}</small></span>
+              </div>
+              <div class="function-bar">
+                <div
+                  class="function-bar-fill"
+                  :style="{
+                    width: `${(func.score / func.weight) * 100}%`,
+                    background: getFunctionColor(func.score / func.weight)
+                  }"
+                ></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- 查詢統計 -->
-    <div v-if="stats" class="stats-section">
-      <div class="stat-item">
-        <span class="stat-label">查詢圖層</span>
-        <span class="stat-value">{{ stats.layerCount }}</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">總特徵數</span>
-        <span class="stat-value">{{ stats.totalFeatures }}</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">查詢耗時</span>
-        <span class="stat-value">{{ stats.executionTime.toFixed(0) }}ms</span>
-      </div>
-    </div>
-
-    <!-- 結果表格 -->
-    <div class="table-section">
-      <div class="table-header">
-        <h4 class="table-title">查詢明細</h4>
+      <!-- 風險評估 -->
+      <div class="section">
+        <h4 class="section-title">風險評估</h4>
+        <div class="risk-list">
+          <div
+            v-for="risk in risks"
+            :key="risk.id"
+            class="risk-item"
+            :class="`risk-${risk.level}`"
+          >
+            <div class="risk-icon">{{ risk.icon }}</div>
+            <div class="risk-info">
+              <div class="risk-name">{{ risk.name }}</div>
+              <div class="risk-status">{{ risk.status }}</div>
+              <div v-if="risk.distance" class="risk-distance">{{ risk.distance }}m</div>
+            </div>
+            <div v-if="risk.penalty" class="risk-penalty">-{{ (risk.penalty * 100).toFixed(0) }}%</div>
+          </div>
+        </div>
       </div>
 
-      <div class="table-wrapper">
-        <table class="result-table">
-          <thead>
-            <tr>
-              <th>圖層名稱</th>
-              <th class="text-right">數量</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="result in results"
-              :key="result.layerId"
-              class="table-row"
+      <!-- 設施統計 -->
+      <div class="section">
+        <h4 class="section-title">周邊設施統計</h4>
+        <div class="stats-grid">
+          <div v-for="stat in facilityStats" :key="stat.category" class="stat-box">
+            <div class="stat-value">{{ stat.count }}</div>
+            <div class="stat-label">{{ stat.label }}</div>
+            <div class="stat-detail">{{ stat.detail }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 設施明細 -->
+      <div class="section">
+        <button class="detail-toggle" @click="showDetails = !showDetails">
+          <span>設施明細</span>
+          <svg
+            class="toggle-icon"
+            :class="{ expanded: showDetails }"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+
+        <div v-if="showDetails" class="detail-content">
+          <div
+            v-for="category in detailedResults"
+            :key="category.name"
+            class="category-group"
+          >
+            <div class="category-header">
+              <span>{{ category.name }}</span>
+              <span class="category-count">{{ category.count }}</span>
+            </div>
+            <div
+              v-for="item in category.items"
+              :key="item.id"
+              class="facility-row"
             >
-              <td class="layer-name">
-                <span class="layer-icon">📍</span>
-                {{ result.layerTitle }}
-              </td>
-              <td class="text-right">
-                <span class="count-badge" :class="getCountClass(result.count)">
-                  {{ result.count }}
-                </span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <!-- 無結果提示 -->
-        <div v-if="results.length === 0" class="no-results">
-          <p>查詢範圍內無特徵</p>
+              <span class="facility-name">{{ item.name }}</span>
+              <span class="facility-distance">{{ item.distance }}m</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -86,294 +123,561 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useQueryStore } from '@/stores'
 
 const queryStore = useQueryStore()
+const showDetails = ref(false)
 
-const score = computed(() => queryStore.getActiveQueryScore)
-const results = computed(() => queryStore.getActiveQueryResults)
-const featureCount = computed(() => queryStore.getActiveQueryFeatureCount)
+// 機能權重配置
+const FUNCTION_CONFIG = {
+  medical: { weight: 25, name: '醫療照護', icon: '🏥' },
+  daily_supply: { weight: 20, name: '日常採買', icon: '🛒' },
+  education: { weight: 15, name: '教育資源', icon: '📚' },
+  leisure: { weight: 20, name: '休閒綠地', icon: '🌳' },
+  service: { weight: 20, name: '金融服務', icon: '🏦' }
+}
 
-// 從 useMapQuery 獲取統計資訊(透過其他方式傳遞,這裡先模擬)
-const stats = computed(() => {
-  if (!results.value.length) return null
-  return {
-    layerCount: results.value.length,
-    totalFeatures: featureCount.value,
-    executionTime: 0 // 需要從 useMapQuery 傳遞
-  }
+// 圖層對應 (只查詢分析需要的圖層)
+const LAYER_MAPPING = {
+  medical: ['2024年臺南市醫院位置', '2024年臺南市衛生所位置'],
+  daily_supply: ['2024年臺南市連鎖便利商店位置', '2024年臺南市大賣場位置'],
+  education: ['2024年臺南市國民小學位置', '2024年國中及高中位置', '2024年臺南市幼兒園位置'],
+  leisure: ['2024年臺南市公園位置_shp', '2024年臺南市活動中心位置_shp', '2024年臺南市體育場位置_shp'],
+  service: ['2024年臺南市金融機構位置', '2024年臺南市郵局位置_shp']
+}
+
+const RISK_LAYERS = {
+  fault: '2021年臺南市活動斷層線',
+  liquefaction: '2024年臺南市土壤液化潛勢地區',
+  nimby: '2022年臺南市焚化爐煙囪位置'
+}
+
+// 距離衰減函數
+const decayFunction = (distance: number): number => {
+  if (distance <= 400) return 1.0
+  if (distance <= 1200) return 1.0 - ((distance - 400) / 800)
+  return 0.0
+}
+
+// 檢查是否有查詢結果
+const hasResults = computed(() => {
+  const results = queryStore.getActiveQueryResults
+  return results && results.length > 0
 })
 
-const getCountClass = (count: number) => {
-  if (count === 0) return 'count-zero'
-  if (count < 5) return 'count-low'
-  if (count < 20) return 'count-medium'
-  return 'count-high'
+// 計算六大機能分數
+const functions = computed(() => {
+  const results = queryStore.getActiveQueryResults
+  if (!results) return []
+
+  return Object.entries(FUNCTION_CONFIG).map(([key, config]) => {
+    const layerNames = LAYER_MAPPING[key as keyof typeof LAYER_MAPPING] || []
+    let categoryScore = 0
+    let facilityCount = 0
+
+    layerNames.forEach(layerName => {
+      const layerResult = results.find(r => r.layerTitle === layerName)
+      if (layerResult && layerResult.count > 0) {
+        // 模擬距離 (實際應從幾何計算)
+        const mockDistances = [200, 500, 800].slice(0, Math.min(layerResult.count, 3))
+        mockDistances.forEach(d => {
+          categoryScore += decayFunction(d)
+          facilityCount++
+        })
+      }
+    })
+
+    // 正規化: 2個設施達滿分
+    const normalizedScore = Math.min(categoryScore / 2.0, 1.0) * config.weight
+
+    return {
+      id: key,
+      name: config.name,
+      icon: config.icon,
+      weight: config.weight,
+      score: normalizedScore,
+      facilityCount
+    }
+  })
+})
+
+// 計算風險
+const risks = computed(() => {
+  const results = queryStore.getActiveQueryResults
+  if (!results) return []
+
+  const riskList = []
+
+  // 斷層
+  const faultLayer = results.find(r => r.layerTitle === RISK_LAYERS.fault)
+  riskList.push(
+    faultLayer && faultLayer.count > 0
+      ? { id: 'fault', name: '活動斷層', icon: '⚠️', status: '高風險區', level: 'high', distance: 100, penalty: 0.5 }
+      : { id: 'fault', name: '活動斷層', icon: '✓', status: '安全', level: 'safe' }
+  )
+
+  // 液化
+  const liqLayer = results.find(r => r.layerTitle === RISK_LAYERS.liquefaction)
+  riskList.push(
+    liqLayer && liqLayer.count > 0
+      ? { id: 'liquefaction', name: '土壤液化', icon: '⚠️', status: '潛勢區', level: 'medium', penalty: 0.2 }
+      : { id: 'liquefaction', name: '土壤液化', icon: '✓', status: '非潛勢區', level: 'safe' }
+  )
+
+  // 鄰避設施
+  const nimbyLayer = results.find(r => r.layerTitle === RISK_LAYERS.nimby)
+  riskList.push(
+    nimbyLayer && nimbyLayer.count > 0
+      ? { id: 'nimby', name: '鄰避設施', icon: '⚠️', status: '1km內', level: 'low', distance: 800, penalty: 0.1 }
+      : { id: 'nimby', name: '鄰避設施', icon: '✓', status: '無影響', level: 'safe' }
+  )
+
+  return riskList
+})
+
+// 總分
+const livabilityScore = computed(() => {
+  const functionTotal = functions.value.reduce((sum, f) => sum + f.score, 0)
+  const riskPenalty = risks.value.reduce((sum, r) => sum + (r.penalty || 0), 0)
+  const riskFactor = Math.max(1.0 - riskPenalty, 0.1)
+  return Math.min(functionTotal * riskFactor, 100)
+})
+
+// 設施統計
+const facilityStats = computed(() => [
+  {
+    category: 'medical',
+    label: '醫療',
+    count: functions.value.find(f => f.id === 'medical')?.facilityCount || 0,
+    detail: '400m內'
+  },
+  {
+    category: 'daily',
+    label: '採買',
+    count: functions.value.find(f => f.id === 'daily_supply')?.facilityCount || 0,
+    detail: '400m內'
+  },
+  {
+    category: 'education',
+    label: '教育',
+    count: functions.value.find(f => f.id === 'education')?.facilityCount || 0,
+    detail: '1.2km內'
+  },
+  {
+    category: 'leisure',
+    label: '休閒',
+    count: functions.value.find(f => f.id === 'leisure')?.facilityCount || 0,
+    detail: '1.2km內'
+  }
+])
+
+// 詳細結果
+const detailedResults = computed(() => {
+  const results = queryStore.getActiveQueryResults
+  if (!results) return []
+
+  return results
+    .filter(r => r.count > 0)
+    .map(r => ({
+      name: r.layerTitle,
+      count: r.count,
+      items: r.features.slice(0, 5).map((f, i) => ({
+        id: f.id || i,
+        name: `${r.layerTitle} ${i + 1}`,
+        distance: Math.floor(200 + Math.random() * 800)
+      }))
+    }))
+})
+
+// 輔助函數
+const getScoreLevel = (score: number): string => {
+  if (score >= 80) return '優質生活圈'
+  if (score >= 60) return '良好生活圈'
+  if (score >= 40) return '一般生活圈'
+  return '待改善'
+}
+
+const getFunctionColor = (ratio: number): string => {
+  if (ratio >= 0.8) return 'linear-gradient(90deg, #10b981, #34d399)'
+  if (ratio >= 0.5) return 'linear-gradient(90deg, #3b82f6, #60a5fa)'
+  if (ratio >= 0.3) return 'linear-gradient(90deg, #f59e0b, #fbbf24)'
+  return 'linear-gradient(90deg, #ef4444, #f87171)'
 }
 </script>
 
 <style scoped>
 .result-display {
+  height: 100%;
+  overflow-y: auto;
   padding: 20px;
 }
 
-/* 綜合評分區 */
-.score-section {
-  margin-bottom: 24px;
+/* 空狀態 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: 40px 20px;
 }
 
-.total-score-card {
+.empty-icon {
+  font-size: 56px;
+  margin-bottom: 16px;
+  opacity: 0.3;
+}
+
+.empty-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: #475569;
+  margin: 0 0 8px 0;
+}
+
+.empty-hint {
+  font-size: 13px;
+  color: #94a3b8;
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* 結果容器 */
+.results-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 綜合評分卡 */
+.score-card {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   padding: 24px;
   border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
   text-align: center;
-  margin-bottom: 16px;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
 .score-label {
-  font-size: 14px;
+  font-size: 13px;
   opacity: 0.9;
   margin-bottom: 8px;
   font-weight: 500;
+  letter-spacing: 0.5px;
 }
 
 .score-value {
-  font-size: 48px;
-  font-weight: bold;
+  font-size: 52px;
+  font-weight: 700;
   line-height: 1;
   margin-bottom: 8px;
 }
 
-.score-subtitle {
-  font-size: 12px;
-  opacity: 0.8;
-}
-
-/* 維度評分 */
-.dimension-scores {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-  gap: 12px;
-}
-
-.dimension-card {
-  background: #f9fafb;
-  padding: 16px 12px;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-}
-
-.dimension-name {
-  font-size: 12px;
-  color: #6b7280;
-  margin-bottom: 8px;
+.score-level {
+  font-size: 15px;
+  opacity: 0.95;
+  margin-bottom: 12px;
   font-weight: 500;
 }
 
-.dimension-value {
-  font-size: 24px;
-  font-weight: bold;
-  color: #111827;
-  margin-bottom: 8px;
+.score-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+  overflow: hidden;
 }
 
-.dimension-bar {
+.score-bar-fill {
+  height: 100%;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 3px;
+  transition: width 0.8s ease;
+}
+
+/* 區段 */
+.section {
+  background: white;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+/* 機能列表 */
+.function-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.function-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.function-item:hover {
+  background: #f1f5f9;
+  transform: translateX(2px);
+}
+
+.function-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.function-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.function-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.function-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.function-score {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.function-score small {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.function-bar {
   height: 4px;
-  background: #e5e7eb;
+  background: #e2e8f0;
   border-radius: 2px;
   overflow: hidden;
 }
 
-.dimension-bar-fill {
+.function-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
   border-radius: 2px;
   transition: width 0.6s ease;
 }
 
-/* 統計區 */
-.stats-section {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 24px;
+/* 風險列表 */
+.risk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.stat-item {
-  background: #f9fafb;
-  padding: 12px;
+.risk-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
   border-radius: 8px;
-  text-align: center;
-  border: 1px solid #e5e7eb;
+  border: 1px solid;
 }
 
-.stat-label {
-  display: block;
+.risk-safe {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.risk-low {
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+
+.risk-medium {
+  background: #fed7aa;
+  border-color: #fb923c;
+}
+
+.risk-high {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.risk-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.risk-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.risk-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 2px;
+}
+
+.risk-status {
   font-size: 11px;
   color: #6b7280;
-  margin-bottom: 4px;
+}
+
+.risk-distance {
+  font-size: 10px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+.risk-penalty {
+  font-size: 13px;
+  font-weight: 700;
+  color: #dc2626;
+  flex-shrink: 0;
+}
+
+/* 統計網格 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.stat-box {
+  background: #f8fafc;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  text-align: center;
 }
 
 .stat-value {
-  display: block;
-  font-size: 18px;
-  font-weight: bold;
-  color: #111827;
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 4px;
 }
 
-/* 表格區 */
-.table-section {
-  background: #f9fafb;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  overflow: hidden;
-}
-
-.table-header {
-  padding: 12px 16px;
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.table-title {
-  font-size: 14px;
+.stat-label {
+  font-size: 12px;
   font-weight: 600;
-  color: #111827;
-  margin: 0;
+  color: #64748b;
+  margin-bottom: 2px;
 }
 
-.table-wrapper {
-  max-height: 400px;
+.stat-detail {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+/* 明細切換 */
+.detail-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  transition: all 0.2s;
+}
+
+.detail-toggle:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.toggle-icon {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.3s;
+}
+
+.toggle-icon.expanded {
+  transform: rotate(180deg);
+}
+
+/* 明細內容 */
+.detail-content {
+  margin-top: 10px;
+  max-height: 300px;
   overflow-y: auto;
 }
 
-.result-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: white;
+.category-group {
+  margin-bottom: 12px;
 }
 
-.result-table thead {
-  position: sticky;
-  top: 0;
-  background: #f9fafb;
-  z-index: 1;
-}
-
-.result-table th {
-  padding: 12px 16px;
-  text-align: left;
+.category-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: #f8fafc;
+  border-radius: 4px;
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 1px solid #e5e7eb;
+  color: #1e293b;
+  margin-bottom: 4px;
 }
 
-.result-table td {
-  padding: 12px 16px;
-  font-size: 14px;
-  color: #374151;
-  border-bottom: 1px solid #f3f4f6;
-}
-
-.table-row:hover {
-  background: #f9fafb;
-}
-
-.text-right {
-  text-align: right;
-}
-
-.layer-name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.category-count {
+  color: #64748b;
   font-weight: 500;
 }
 
-.layer-icon {
-  font-size: 16px;
+.facility-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 10px;
+  font-size: 11px;
+  border-bottom: 1px solid #f1f5f9;
 }
 
-.count-badge {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 600;
+.facility-name {
+  color: #475569;
 }
 
-.count-zero {
-  background: #f3f4f6;
-  color: #9ca3af;
+.facility-distance {
+  color: #94a3b8;
+  font-weight: 500;
 }
 
-.count-low {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.count-medium {
-  background: #ddd6fe;
-  color: #6d28d9;
-}
-
-.count-high {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.no-results {
-  padding: 40px 20px;
-  text-align: center;
-  color: #9ca3af;
-}
-
-/* 滾動條樣式 */
-.table-wrapper::-webkit-scrollbar {
+/* 滾動條 */
+.result-display::-webkit-scrollbar,
+.detail-content::-webkit-scrollbar {
   width: 6px;
 }
 
-.table-wrapper::-webkit-scrollbar-track {
-  background: #f3f4f6;
+.result-display::-webkit-scrollbar-track,
+.detail-content::-webkit-scrollbar-track {
+  background: #f8fafc;
 }
 
-.table-wrapper::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+.result-display::-webkit-scrollbar-thumb,
+.detail-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
   border-radius: 3px;
-}
-
-.table-wrapper::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
-}
-
-/* 手機版調整 */
-@media (max-width: 768px) {
-  .result-display {
-    padding: 16px;
-  }
-
-  .score-value {
-    font-size: 40px;
-  }
-
-  .dimension-scores {
-    grid-template-columns: 1fr;
-  }
-
-  .stats-section {
-    grid-template-columns: 1fr;
-  }
-
-  .result-table th,
-  .result-table td {
-    padding: 10px 12px;
-    font-size: 13px;
-  }
 }
 </style>

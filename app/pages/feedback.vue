@@ -5,7 +5,7 @@
         提交回饋
       </h2>
       <p style="color: '#757575'" class="text-lg">
-        回饋表單內容待實裝
+        回饋表單內容待設計
       </p>
     </div>
   </div>

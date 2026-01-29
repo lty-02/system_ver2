@@ -5,7 +5,7 @@
         儀表板
       </h2>
       <p style="color: '#757575'" class="text-lg">
-        儀表板內容待實裝
+        儀表板內容待設計
       </p>
     </div>
   </div>
