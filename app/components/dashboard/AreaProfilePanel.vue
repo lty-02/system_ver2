@@ -24,7 +24,6 @@
             disabled
           />
           <span class="option-text">鄉鎮市區</span>
-          <span class="badge">即將推出</span>
         </label>
         
         <label class="option-label disabled">
@@ -36,7 +35,6 @@
             disabled
           />
           <span class="option-text">最小統計區</span>
-          <span class="badge">即將推出</span>
         </label>
       </div>
     </section>
@@ -45,30 +43,37 @@
     <section class="panel-section">
       <h4 class="section-title">欲查看行政區</h4>
       
-      <div class="search-container">
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="搜尋村里名稱..."
-          class="search-input"
-          @input="filterVillages"
-        />
+      <div v-if="loadingVillages" class="loading-villages">
+        <div class="mini-spinner"></div>
+        <span>載入村里列表中...</span>
       </div>
 
-      <div class="village-list">
-        <div
-          v-for="village in filteredVillages"
-          :key="village"
-          class="village-item"
-          :class="{ selected: selectedVillage === village }"
-          @click="selectVillage(village)"
-        >
-          {{ village }}
+      <div v-else>
+        <div class="search-container">
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="搜尋村里名稱..."
+            class="search-input"
+            @input="filterVillages"
+          />
         </div>
-      </div>
 
-      <div v-if="selectedVillage" class="selected-info">
-        已選擇：<strong>{{ selectedVillage }}</strong>
+        <div class="village-list">
+          <div
+            v-for="village in filteredVillages"
+            :key="village"
+            class="village-item"
+            :class="{ selected: selectedVillage === village }"
+            @click="selectVillage(village)"
+          >
+            {{ village }}
+          </div>
+        </div>
+
+        <div v-if="selectedVillage" class="selected-info">
+          已選擇：<strong>{{ selectedVillage }}</strong>
+        </div>
       </div>
     </section>
 
@@ -96,7 +101,6 @@
             disabled
           />
           <span class="option-text">銀髮族群指數</span>
-          <span class="badge">即將推出</span>
         </label>
       </div>
     </section>
@@ -142,6 +146,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import esriRequest from '@arcgis/core/request'
 
 // ==================== Emits ====================
 const emit = defineEmits<{
@@ -162,6 +167,10 @@ const searchQuery = ref('')
 
 const allVillages = ref<string[]>([])
 const filteredVillages = ref<string[]>([])
+const loadingVillages = ref(false)
+
+// ArcGIS Feature Service URL（成功大學 Portal）
+const FEATURE_SERVICE_URL = 'https://igisportal.geomatics.ncku.edu.tw/server/rest/services/Hosted/104至113年臺南市村里人口指標/FeatureServer/0'
 
 // ==================== 指標列表 ====================
 const indicators = [
@@ -181,34 +190,61 @@ onMounted(() => {
 
 // ==================== 方法 ====================
 const loadVillageList = async () => {
+  loadingVillages.value = true
+  
   try {
-    // 從 CSV 載入村里列表
-    const response = await fetch('/104_113年臺南市村里人口指標.csv')
-    const text = await response.text()
+    console.log('📋 載入村里列表...')
     
-    const lines = text.split('\n')
-    const villages = new Set<string>()
+    // 使用 esriRequest 進行查詢，會自動處理認證
+    const queryUrl = `${FEATURE_SERVICE_URL}/query`
     
-    // 跳過標題行
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i]?.trim()
-      if (!line) continue
-      
-      const parts = line.split(',')
-      if (parts.length >= 6) {
-        const villageName = parts[5]
-        if (villageName && villageName !== '村里名稱') {
-          villages.add(villageName)
-        }
-      }
+    const response = await esriRequest(queryUrl, {
+      query: {
+        where: '1=1',
+        returnDistinctValues: true,
+        outFields: '村里名稱',
+        returnGeometry: false,
+        f: 'json'
+      },
+      responseType: 'json'
+    })
+
+    console.log('✅ 查詢成功')
+
+    const data = response.data
+
+    if (data.error) {
+      throw new Error(data.error.message || '查詢失敗')
     }
-    
-    allVillages.value = Array.from(villages).sort((a, b) => a.localeCompare(b, 'zh-TW'))
+
+    if (!data.features || data.features.length === 0) {
+      throw new Error('查無村里資料')
+    }
+
+    // 提取村里名稱
+    const villages = data.features
+      .map((f: any) => f.attributes['村里名稱'] as string)
+      .filter((v: string | undefined) => v && v.trim())
+      .sort((a: string, b: string) => a.localeCompare(b, 'zh-TW'))
+
+    // 去除重複
+    allVillages.value = [...new Set(villages)] as string[]
     filteredVillages.value = allVillages.value
     
     console.log(`✅ 已載入 ${allVillages.value.length} 個村里`)
-  } catch (error) {
+    
+    loadingVillages.value = false
+    
+  } catch (error: any) {
     console.error('❌ 載入村里列表失敗:', error)
+    loadingVillages.value = false
+    
+    // 如果是認證錯誤，提示使用者
+    if (error.message?.includes('Token Required') || error.message?.includes('401')) {
+      alert('需要登入才能存取資料。請先在「多時期展示」或地圖頁面登入。')
+    } else {
+      alert(`載入村里列表失敗: ${error.message}`)
+    }
   }
 }
 
@@ -247,6 +283,7 @@ const applySettings = () => {
 </script>
 
 <style scoped>
+/* ... 保持原有樣式 ... */
 .area-panel {
   display: flex;
   flex-direction: column;
@@ -255,7 +292,6 @@ const applySettings = () => {
   overflow-y: auto;
 }
 
-/* ==================== 區段 ==================== */
 .panel-section {
   padding: 20px 24px;
   border-bottom: 1px solid #e2e8f0;
@@ -268,7 +304,6 @@ const applySettings = () => {
   margin: 0 0 16px 0;
 }
 
-/* ==================== 選項組 ==================== */
 .option-group {
   display: flex;
   flex-direction: column;
@@ -319,7 +354,29 @@ const applySettings = () => {
   border-radius: 4px;
 }
 
-/* ==================== 村里搜尋 ==================== */
+.loading-villages {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.mini-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #e2e8f0;
+  border-top-color: #60a5fa;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .search-container {
   margin-bottom: 12px;
 }
@@ -385,7 +442,6 @@ const applySettings = () => {
   color: #15803d;
 }
 
-/* 滾動條 */
 .village-list::-webkit-scrollbar {
   width: 6px;
 }
@@ -399,7 +455,6 @@ const applySettings = () => {
   border-radius: 3px;
 }
 
-/* ==================== 指標網格 ==================== */
 .indicator-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -448,7 +503,6 @@ const applySettings = () => {
   color: #1e40af;
 }
 
-/* ==================== 動作按鈕 ==================== */
 .panel-actions {
   padding: 20px 24px;
   border-top: 1px solid #e2e8f0;

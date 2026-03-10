@@ -1,17 +1,21 @@
 <template>
   <div class="area-profile-view">
+    <!-- 載入狀態 -->
     <div v-if="isLoading" class="loading-state">
       <div class="spinner"></div>
       <p>載入資料中...</p>
     </div>
 
+    <!-- 錯誤狀態 -->
     <div v-else-if="error" class="error-state">
       <div class="error-icon">!</div>
       <p class="error-text">{{ error }}</p>
       <button class="retry-btn" @click="loadData">重試</button>
     </div>
 
+    <!-- 主要內容 -->
     <div v-else class="content-container">
+      <!-- 資訊卡片 -->
       <div class="info-card">
         <div class="info-header">
           <h3 class="village-name">{{ selectedVillage }}</h3>
@@ -37,10 +41,12 @@
         </div>
       </div>
 
+      <!-- 圖表容器 -->
       <div class="chart-container">
         <div ref="chartRef" class="chart"></div>
       </div>
 
+      <!-- 操作按鈕 -->
       <div class="actions">
         <button class="action-btn" @click="downloadCSV">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -66,12 +72,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
-
-// ==================== 常數設定 ====================
-// 使用 ArcGIS Portal Item ID 取得 CSV 資料
-// 如果是企業版 Portal，請將 www.arcgis.com 替換為您的 Portal 網域
-const CSV_ITEM_ID = '1954025df09d44c78f1f7c6e894c8c6c'
-const DATA_URL = `https://www.arcgis.com/sharing/rest/content/items/${CSV_ITEM_ID}/data`
+import esriRequest from '@arcgis/core/request'
 
 // ==================== Props ====================
 interface Props {
@@ -99,7 +100,7 @@ const latestValue = ref('')
 const changeRate = ref('')
 const changeClass = ref('')
 
-// 指標欄位映射
+// 指標欄位映射（對應 Feature Service 欄位名稱）
 const INDICATOR_FIELD_MAP: Record<string, string> = {
   '老化指數': '老化指數',
   '人口密度': '人口密度',
@@ -109,6 +110,9 @@ const INDICATOR_FIELD_MAP: Record<string, string> = {
   '性比例': '性比例',
   '戶量': '戶量'
 }
+
+// ArcGIS Feature Service URL（成功大學 Portal）
+const FEATURE_SERVICE_URL = 'https://igisportal.geomatics.ncku.edu.tw/server/rest/services/Hosted/104至113年臺南市村里人口指標/FeatureServer/0'
 
 // ==================== 生命週期 ====================
 onMounted(() => {
@@ -129,107 +133,100 @@ const loadData = async () => {
   error.value = null
 
   try {
-    console.log(`載入資料: URL=${DATA_URL}`)
+    console.log(`📊 載入資料: 村里=${props.village}, 指標=${props.indicator}`)
 
-    const response = await fetch(DATA_URL)
-    
-    // 檢查 HTTP 狀態
-    if (!response.ok) {
-      if (response.status === 403) {
-        throw new Error('存取被拒絕 (403)。請確認 ArcGIS Portal 上的 CSV 項目已設定為「公開」。')
-      }
-      throw new Error(`無法載入資料 (HTTP ${response.status})`)
-    }
-
-    // 檢查回傳內容類型，防止讀到 HTML 錯誤頁面
-    const contentType = response.headers.get('content-type')
-    if (contentType && contentType.includes('text/html')) {
-      throw new Error('讀取到網頁而非 CSV，請檢查 Portal 連結或權限設定。')
-    }
-
-    const text = await response.text()
-    
-    // 二次檢查內容開頭，防止解析 <!DOCTYPE html>
-    if (text.trim().startsWith('<')) {
-      throw new Error('資料格式錯誤 (看起來像 HTML)，請確認檔案連結正確。')
-    }
-
-    const lines = text.split('\n')
-
-    // 解析標題行
-    if (!lines[0]) {
-      throw new Error('CSV 檔案為空')
-    }
-    const headerLine = lines[0].replace(/^\uFEFF/, '').trim()
-    const headers = headerLine.split(',')
-
-    // 找到指標欄位索引
+    // 構建查詢參數
     const indicatorFieldName = INDICATOR_FIELD_MAP[props.indicator]
     if (!indicatorFieldName) {
       throw new Error(`未知指標: ${props.indicator}`)
     }
-    
-    const indicatorIndex = headers.findIndex(h => h.trim() === indicatorFieldName)
-    const villageNameIndex = headers.findIndex(h => h.trim() === '村里名稱')
-    const timeIndex = headers.findIndex(h => h.trim() === '資料時間')
 
-    if (indicatorIndex === -1 || villageNameIndex === -1 || timeIndex === -1) {
-      console.error('Available headers:', headers)
-      throw new Error(`找不到必要欄位: ${indicatorFieldName}。請檢查 CSV 標題。`)
+    // 使用 esriRequest 進行查詢，會自動處理認證
+    const queryUrl = `${FEATURE_SERVICE_URL}/query`
+    
+    const response = await esriRequest(queryUrl, {
+      query: {
+        where: `村里名稱='${props.village}'`,
+        outFields: `村里名稱,${indicatorFieldName},資料時間`,
+        orderByFields: '資料時間 ASC',
+        returnGeometry: false,
+        f: 'json'
+      },
+      responseType: 'json'
+    })
+
+    console.log(`✅ 查詢成功`)
+
+    const data = response.data
+
+    if (data.error) {
+      throw new Error(data.error.message || '查詢失敗')
     }
 
-    // 篩選該村里的所有資料
+    if (!data.features || data.features.length === 0) {
+      throw new Error(`查無 ${props.village} 的資料`)
+    }
+
+    console.log(`✅ 找到 ${data.features.length} 筆資料`)
+
+    // 解析資料
     const villageData: Array<{ time: string; value: number }> = []
 
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i]?.trim()
-      if (!line) continue
+    for (const feature of data.features) {
+      const attributes = feature.attributes
+      const timeStr = attributes['資料時間']
+      const value = parseFloat(attributes[indicatorFieldName])
 
-      const parts = line.split(',')
-      // 簡單的 CSV 解析，如果不夠強大可改用 PapaParse
-      if (parts.length <= Math.max(villageNameIndex, indicatorIndex, timeIndex)) {
-        continue
-      }
-
-      const villageName = parts[villageNameIndex]
-      if (villageName === props.village) {
-        const timeStr = parts[timeIndex]
-        const valueStr = parts[indicatorIndex]
-        
-        if (!timeStr || !valueStr) continue
-        
-        const value = parseFloat(valueStr)
-
-        if (!isNaN(value)) {
-          villageData.push({
-            time: timeStr,
-            value: value
-          })
-        }
+      if (timeStr && !isNaN(value)) {
+        villageData.push({
+          time: timeStr,
+          value: value
+        })
       }
     }
 
-    // 按時間排序
+    // 按時間排序（以防萬一）
     villageData.sort((a, b) => a.time.localeCompare(b.time))
-
-    if (villageData.length === 0) {
-      throw new Error(`查無 ${props.village} 的資料 (或 CSV 解析失敗)`)
-    }
 
     chartData.value = villageData
 
     // 計算統計資料
     calculateStats()
 
-    // 繪製圖表
-    await nextTick()
-    renderChart()
-
+    // 先設定 loading 為 false，讓 DOM 顯示
     isLoading.value = false
 
+    // 等待 DOM 更新後繪製圖表
+    await nextTick()
+    
+    // 再次等待確保 ref 可用
+    setTimeout(() => {
+      if (chartRef.value) {
+        console.log('✅ chartRef 已準備好，開始渲染圖表')
+        renderChart()
+      } else {
+        console.error('❌ chartRef 仍然不存在，再等一下...')
+        setTimeout(() => {
+          if (chartRef.value) {
+            renderChart()
+          } else {
+            console.error('❌ chartRef 始終無法取得，請檢查模板')
+          }
+        }, 200)
+      }
+    }, 100)
+
   } catch (err: any) {
-    console.error('載入資料失敗:', err)
-    error.value = err.message || '載入資料失敗'
+    console.error('❌ 載入資料失敗:', err)
+    
+    let errorMessage = err.message || '載入資料失敗'
+    
+    // 如果是 token 錯誤，提供更清楚的說明
+    if (errorMessage.includes('Token Required') || errorMessage.includes('Invalid token')) {
+      errorMessage = '此 Feature Service 需要認證。請聯絡管理員取得存取權限，或確認服務已設為公開存取。'
+    }
+    
+    error.value = errorMessage
     isLoading.value = false
   }
 }
@@ -267,16 +264,28 @@ const calculateStats = () => {
 }
 
 const renderChart = () => {
-  if (!chartRef.value) return
+  if (!chartRef.value) {
+    console.error('❌ chartRef 不存在')
+    return
+  }
+
+  console.log('📊 開始渲染圖表')
+  console.log('圖表容器:', chartRef.value)
+  console.log('容器尺寸:', chartRef.value.offsetWidth, 'x', chartRef.value.offsetHeight)
+  console.log('資料點數:', chartData.value.length)
 
   if (chartInstance) {
     chartInstance.dispose()
   }
 
   chartInstance = echarts.init(chartRef.value)
+  console.log('✅ ECharts 實例已創建')
 
   const timeLabels = chartData.value.map(d => d.time)
   const values = chartData.value.map(d => d.value)
+
+  console.log('時間標籤:', timeLabels.slice(0, 3), '...')
+  console.log('數值:', values.slice(0, 3), '...')
 
   const option: echarts.EChartsOption = {
     title: {
@@ -410,7 +419,17 @@ const renderChart = () => {
   }
 
   chartInstance.setOption(option)
+  console.log('✅ 圖表配置已設定')
 
+  // 強制 resize 確保圖表顯示
+  setTimeout(() => {
+    if (chartInstance) {
+      chartInstance.resize()
+      console.log('✅ 圖表已 resize')
+    }
+  }, 100)
+
+  // 響應式
   window.addEventListener('resize', () => {
     chartInstance?.resize()
   })
@@ -432,6 +451,8 @@ const downloadCSV = () => {
   link.download = `${selectedVillage.value}_${selectedIndicator.value}.csv`
   link.click()
   URL.revokeObjectURL(url)
+
+  console.log('✅ CSV 已下載')
 }
 
 const downloadChart = () => {
@@ -447,6 +468,8 @@ const downloadChart = () => {
   link.href = url
   link.download = `${selectedVillage.value}_${selectedIndicator.value}.png`
   link.click()
+
+  console.log('✅ 圖表已下載')
 }
 </script>
 
@@ -607,13 +630,18 @@ const downloadChart = () => {
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  min-height: 0;
+  min-height: 400px;
+  max-height: 600px;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .chart {
   width: 100%;
   height: 100%;
+  min-height: 350px;
+  flex: 1;
 }
 
 /* 操作按鈕 */
@@ -652,16 +680,20 @@ const downloadChart = () => {
   height: 18px;
 }
 
+/* 響應式 */
 @media (max-width: 768px) {
   .content-container {
     padding: 16px;
   }
+
   .stats-row {
     grid-template-columns: repeat(2, 1fr);
   }
+
   .actions {
     flex-direction: column;
   }
+
   .village-name {
     font-size: 18px;
   }
