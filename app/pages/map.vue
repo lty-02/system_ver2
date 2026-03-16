@@ -71,10 +71,8 @@
             <!-- 生活圈分析模組 -->
             <BufferAnalysisPanel v-else-if="activeModule === 'buffer-analysis'" />
             
-            <!-- 防災專區模組 -->
-            <div v-else-if="activeModule === 'disaster'" class="module-placeholder">
-              <p>防災專區功能開發中...</p>
-            </div>
+            <!-- tdx動態資訊模組 -->
+            <TdxPanel v-else-if="activeModule === 'disaster'" />
             
             <!-- 其他模組 -->
             <div v-else class="module-placeholder">
@@ -99,6 +97,7 @@
 <script setup lang="ts">
 // 🔧 修復：使用 shallowRef 代替 ref 來存儲 ArcGIS 物件
 import { ref, shallowRef, onMounted, onUnmounted, computed, markRaw } from 'vue'
+import TdxPanel from '@/components/map/TdxPanel.vue'
 
 // ==================== 版面配置 ====================
 
@@ -121,7 +120,7 @@ const modules = [
   },
   {
     id: 'disaster',
-    label: '防災專區',
+    label: '交通資料專區',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
   }
 ]
