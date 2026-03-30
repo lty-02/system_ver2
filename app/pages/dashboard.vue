@@ -65,10 +65,7 @@
       <div class="main-view" :class="{ 'with-sidebar': activeModule }">
         <TemporalAnalysisView
           v-if="activeModule === 'temporal'"
-          :key="temporalKey"
-          :webscene-id="websceneId"
-          :layer="temporalLayer"
-          :method="temporalMethod"
+            :webscene-id="websceneId"
         />
 
         <AreaProfileView
@@ -176,9 +173,6 @@ const toggleModule = (moduleId: string) => {
 
 const applyTemporalSettings = (settings: any) => {
   console.log('📝 [多時期] 收到設定:', settings)
-  temporalLayer.value = settings.layer
-  temporalMethod.value = settings.method
-  temporalKey.value++
 }
 
 const applyAreaProfileSettings = (settings: any) => {
