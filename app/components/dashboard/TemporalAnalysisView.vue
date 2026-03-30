@@ -45,7 +45,7 @@
       </div>
       <div class="single-body">
         <div class="single-map-col">
-          <div class="map-wrapper" style="height:100%">
+          <div class="map-wrapper" style="height:100%; overflow:hidden">
             <div ref="singleMapDiv" class="map-div"></div>
             <div class="map-badge">{{ getPeriodLabel(selectedSingle) }}・{{ getFieldLabel(selectedField) }}</div>
             <div v-if="isRendering" class="map-spinner"><div class="spinner"></div></div>
@@ -370,6 +370,12 @@ async function createSceneView(container: HTMLDivElement): Promise<SceneView> {
   const webScene = new WebScene({ portalItem: { id: WEBSCENE_ID, portal } })
   const view     = new SceneView({ container, map: webScene, qualityProfile: 'medium' })
   await view.when()
+
+  view.ui.move('zoom', 'top-left')
+  view.ui.move('navigation-toggle', 'top-left')
+  view.ui.move('compass', 'top-left')
+  view.ui.remove('attribution')
+
   await (webScene as any).loadAll()
   // ── DEBUG：印出所有圖層標題，確認名稱吻合後可移除 ──
   console.log('[TemporalAnalysis] WebScene 圖層清單:',
@@ -458,10 +464,13 @@ async function queryFeatureRows(layer: FeatureLayer, fieldKey: string): Promise<
     k => k.toUpperCase() === fieldKey.toUpperCase()
   ) ?? fieldKey
 
-  return result.features.map(f => ({
+  const rows = result.features.map(f => ({
     name:  String(f.attributes[actualLabelField] ?? '未知'),
     value: Number(f.attributes[actualFieldKey]   ?? 0),
   }))
+  const seen = new Map<string, number>()
+  rows.forEach(r => { if (!seen.has(r.name)) seen.set(r.name, r.value) })
+  return Array.from(seen.entries()).map(([name, value]) => ({ name, value }))
 }
 
 // ==================== 模式一：單時期 ====================
@@ -749,6 +758,9 @@ const modes = [
 </script>
 
 <style scoped>
+:deep(.esri-ui-bottom-left) {
+  display: none;
+}
 .temporal-view {
   width:100%; height:100%; display:flex; flex-direction:column;
   overflow:hidden; font-family:var(--font-sans,system-ui,sans-serif);
@@ -808,7 +820,7 @@ const modes = [
 .field-chip.sm { font-size:10px; padding:2px 7px; }
 .field-chip:hover { border-color:#3B5BDB; color:#3B5BDB; }
 .field-chip.active { background:#3B5BDB; border-color:#3B5BDB; color:#fff; font-weight:500; }
-.map-wrapper { position:relative; flex-shrink:0; background:#e0e8f0; }
+.map-wrapper { position:relative; flex-shrink:0; background:#e0e8f0; overflow: hidden;}
 .single-map  { height:280px; }
 .multi-map   { height:220px; }
 .map-div     { width:100%; height:100%; }
