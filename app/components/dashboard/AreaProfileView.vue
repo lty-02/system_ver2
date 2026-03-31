@@ -1,701 +1,548 @@
 <template>
-  <div class="area-profile-view">
-    <!-- 載入狀態 -->
-    <div v-if="isLoading" class="loading-state">
-      <div class="spinner"></div>
-      <p>載入資料中...</p>
-    </div>
+  <div class="ap-root">
 
-    <!-- 錯誤狀態 -->
-    <div v-else-if="error" class="error-state">
-      <div class="error-icon">!</div>
-      <p class="error-text">{{ error }}</p>
-      <button class="retry-btn" @click="loadData">重試</button>
-    </div>
+    <!-- 地圖：全螢幕底層 -->
+    <div ref="mapDiv" class="map-bg"></div>
 
-    <!-- 主要內容 -->
-    <div v-else class="content-container">
-      <!-- 資訊卡片 -->
-      <div class="info-card">
-        <div class="info-header">
-          <h3 class="village-name">{{ selectedVillage }}</h3>
-          <span class="indicator-badge">{{ selectedIndicator }}</span>
+    <!-- 頂部 overlay 列：標題 + KPI -->
+    <div class="overlay-top">
+      <div class="top-header">
+        <span class="map-title">{{ villageLabel }}</span>
+        <span class="map-badge">{{ activeLayerLabel }}</span>
+      </div>
+      <div class="kpi-row">
+        <div class="kpi-card blue">
+          <div class="kpi-val">{{ fmt(kpi?.bornTotal) }}</div>
+          <div class="kpi-label">出生人數</div>
         </div>
-        <div class="stats-row">
-          <div class="stat-item">
-            <span class="stat-label">資料期間</span>
-            <span class="stat-value">{{ dataRange }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">資料點數</span>
-            <span class="stat-value">{{ dataPoints }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">最新數值</span>
-            <span class="stat-value">{{ latestValue }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">變化幅度</span>
-            <span class="stat-value" :class="changeClass">{{ changeRate }}</span>
-          </div>
+        <div class="kpi-card red">
+          <div class="kpi-val">{{ fmt(kpi?.deadTotal) }}</div>
+          <div class="kpi-label">死亡人數</div>
+        </div>
+        <div class="kpi-card" :class="growClass">
+          <div class="kpi-val">{{ growSign }}{{ fmt(Math.abs(kpi?.naturalGrow ?? 0)) }}</div>
+          <div class="kpi-label">自然增減</div>
+        </div>
+        <div class="kpi-card purple">
+          <div class="kpi-val">{{ fmtN(ageStruct?.agingIndex) }}</div>
+          <div class="kpi-label">老化指數</div>
         </div>
       </div>
+    </div>
 
-      <!-- 圖表容器 -->
-      <div class="chart-container">
-        <div ref="chartRef" class="chart"></div>
+    <!-- 右側 overlay：年齡結構 + 銀髮指數 -->
+    <div class="overlay-right">
+
+      <!-- 年齡結構 -->
+      <div class="panel-card">
+        <div class="panel-title">人口年齡結構 <span class="panel-sub">新市區 2024</span></div>
+        <div class="age-chips">
+          <div class="age-chip youth">
+            <div class="chip-val">{{ fmtN(ageStruct?.youthPct) }}%</div>
+            <div class="chip-label">幼年 0–14</div>
+            <div class="chip-abs">{{ fmt(ageStruct?.youth) }} 人</div>
+          </div>
+          <div class="age-chip work">
+            <div class="chip-val">{{ fmtN(ageStruct?.workAgePct) }}%</div>
+            <div class="chip-label">青壯年 15–64</div>
+            <div class="chip-abs">{{ fmt(ageStruct?.workAge) }} 人</div>
+          </div>
+          <div class="age-chip elder">
+            <div class="chip-val">{{ fmtN(ageStruct?.elderlyPct) }}%</div>
+            <div class="chip-label">老年 65+</div>
+            <div class="chip-abs">{{ fmt(ageStruct?.elderly) }} 人</div>
+          </div>
+        </div>
+        <div class="age-bar-wrap">
+          <div class="age-seg youth-seg" :style="{ flex: ageStruct?.youthPct ?? 10 }"></div>
+          <div class="age-seg work-seg"  :style="{ flex: ageStruct?.workAgePct ?? 65 }"></div>
+          <div class="age-seg elder-seg" :style="{ flex: ageStruct?.elderlyPct ?? 25 }"></div>
+        </div>
+        <div class="dep-row">
+          <span class="dep-item">扶養比 <strong>{{ fmtN(ageStruct?.dependencyRatio) }}</strong></span>
+          <span class="dep-item">老化指數 <strong>{{ fmtN(ageStruct?.agingIndex) }}</strong></span>
+        </div>
       </div>
 
-      <!-- 操作按鈕 -->
-      <div class="actions">
-        <button class="action-btn" @click="downloadCSV">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          下載 CSV
-        </button>
-        <button class="action-btn" @click="downloadChart">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-            <circle cx="8.5" cy="8.5" r="1.5"/>
-            <polyline points="21 15 16 10 5 21"/>
-          </svg>
-          下載圖片
-        </button>
+      <!-- 銀髮安居指數 -->
+      <div class="panel-card">
+        <div class="panel-title">銀髮安居需求指數 <span class="panel-sub">{{ villageLabel }}</span></div>
+        <div v-if="isLoading" class="loading-state"><div class="spinner"></div>載入中…</div>
+        <div v-else class="index-list">
+          <div v-for="idx in elderlyIndexList" :key="idx.key" class="idx-row">
+            <div class="idx-meta">
+              <span class="idx-dot" :style="{ background: idx.color }"></span>
+              <span class="idx-name">{{ idx.label }}</span>
+              <span class="idx-val">{{ fmtN(idx.pct) }}%</span>
+            </div>
+            <div class="idx-track">
+              <div class="idx-fill" :style="{ width: Math.min(idx.pct, 100) + '%', background: idx.color }"></div>
+            </div>
+            <div class="idx-desc">{{ idx.desc }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 色階圖例 -->
+      <div class="panel-card legend-panel">
+        <div class="panel-title">色階圖例</div>
+        <div class="map-legend-row">
+          <span class="legend-label">低</span>
+          <div class="legend-bar" :style="{ background: legendGradient }"></div>
+          <span class="legend-label">高</span>
+        </div>
       </div>
     </div>
+
+    <!-- 底部 overlay：長條圖（完整橫跨） -->
+    <div class="overlay-bottom">
+      <div class="panel-card bar-panel">
+        <div class="panel-title">各村里出生 vs 死亡 <span class="panel-sub">2024 年</span></div>
+        <div class="bar-chart">
+          <div v-for="row in topVillsBorn" :key="row.villCode" class="bc-group">
+            <div class="bc-label">{{ shortVill(row.villName) }}</div>
+            <div class="bc-bars">
+              <div class="bc-bar born" :style="{ height: barH(row.born, maxBorn) }"></div>
+              <div class="bc-bar dead" :style="{ height: barH(row.dead, maxBorn) }"></div>
+            </div>
+            <div class="bc-val">{{ row.born }}</div>
+          </div>
+        </div>
+        <div class="bar-legend">
+          <span class="bl born">出生</span>
+          <span class="bl dead">死亡</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 載入蓋板 -->
+    <transition name="fade">
+      <div v-if="initLoading" class="loading-overlay">
+        <div class="loading-box">
+          <div class="spinner lg"></div>
+          <div>載入地圖與資料中…</div>
+        </div>
+      </div>
+    </transition>
+
   </div>
 </template>
 
+
+
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick } from 'vue'
-import * as echarts from 'echarts'
-import esriRequest from '@arcgis/core/request'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import WebScene from '@arcgis/core/WebScene'
+import SceneView from '@arcgis/core/views/SceneView'
+import Portal from '@arcgis/core/portal/Portal'
+import type FeatureLayer from '@arcgis/core/layers/FeatureLayer'
+import ClassBreaksRenderer from '@arcgis/core/renderers/ClassBreaksRenderer'
+import SimpleFillSymbol from '@arcgis/core/symbols/SimpleFillSymbol'
+import Color from '@arcgis/core/Color'
+import { useDashboardData } from '~/composables/useDashboardData'
 
-// ==================== Props ====================
-interface Props {
-  village: string
-  indicator: string
+// ── Props ──
+const props = withDefaults(defineProps<{
+  village?:       string
+  activeLayerKey?: string
+}>(), { village: '全區', activeLayerKey: 'born' })
+
+// ── Composable ──
+const { isLoading, kpi, ageStruct, elderlyPcts, bornDeadRows, topVillsBorn, init, selectVillage } = useDashboardData()
+
+// ── 地圖常數 ──
+const PORTAL_URL  = 'https://igisportal.geomatics.ncku.edu.tw/portal'
+const WEBSCENE_ID = '85502d8e84934fef9412dce360fc7165'
+const XINSHI_CODE = '67000200'
+
+const LAYER_TITLES: Record<string, string> = {
+  born:      '2024年臺南市村里出生統計',
+  dead:      '2024年臺南市村里死亡統計',
+  housing:   '2024年臺南市村里銀髮安居資料之住宅狀況需求指數',
+  careLabor: '2024年臺南市村里銀髮安居資料之照護人力需求指數',
+  economy:   '2024年臺南市村里銀髮安居資料之經濟狀況需求指數',
+  envSafety: '2024年臺南市村里銀髮安居資料之環境安全需求指數',
+  mobility:  '2023年臺南市村里銀髮安居資料之行動健康需求指數',
 }
 
-const props = defineProps<Props>()
-
-// ==================== 狀態 ====================
-const chartRef = ref<HTMLDivElement | null>(null)
-let chartInstance: echarts.ECharts | null = null
-
-const isLoading = ref(false)
-const error = ref<string | null>(null)
-
-const selectedVillage = ref('')
-const selectedIndicator = ref('')
-const chartData = ref<Array<{ time: string; value: number }>>([])
-
-// 統計資料
-const dataRange = ref('')
-const dataPoints = ref(0)
-const latestValue = ref('')
-const changeRate = ref('')
-const changeClass = ref('')
-
-// 指標欄位映射（對應 Feature Service 欄位名稱）
-const INDICATOR_FIELD_MAP: Record<string, string> = {
-  '老化指數': '老化指數',
-  '人口密度': '人口密度',
-  '扶養比': '扶養比',
-  '扶幼比': '扶幼比',
-  '扶老比': '扶老比',
-  '性比例': '性比例',
-  '戶量': '戶量'
+const LAYER_FIELDS: Record<string, string> = {
+  born:      'BORN_CNT',
+  dead:      'DEAD_CNT',
+  housing:   'E12E22E32',
+  careLabor: 'N13N22N32',
+  economy:   'G13G23G33',
+  envSafety: 'S13S22S33',
+  mobility:  'A12A22A33',
 }
 
-// ArcGIS Feature Service URL（成功大學 Portal）
-const FEATURE_SERVICE_URL = 'https://igisportal.geomatics.ncku.edu.tw/server/rest/services/Hosted/104至113年臺南市村里人口指標/FeatureServer/0'
+const LAYER_COLORS: Record<string, string[]> = {
+  born:      ['#dbeafe','#93c5fd','#3b82f6','#1d4ed8','#1e3a8a'],
+  dead:      ['#fee2e2','#fca5a5','#f87171','#dc2626','#7f1d1d'],
+  housing:   ['#fff7ed','#fed7aa','#fb923c','#ea580c','#7c2d12'],
+  careLabor: ['#f5f3ff','#ddd6fe','#a78bfa','#7c3aed','#3b0764'],
+  economy:   ['#ecfdf5','#6ee7b7','#10b981','#059669','#064e3b'],
+  envSafety: ['#fefce8','#fde68a','#fbbf24','#d97706','#78350f'],
+  mobility:  ['#fdf2f8','#fbcfe8','#f472b6','#db2777','#831843'],
+}
 
-// ==================== 生命週期 ====================
-onMounted(() => {
-  selectedVillage.value = props.village
-  selectedIndicator.value = props.indicator
-  loadData()
-})
+// ── 地圖 ──
+const mapDiv      = ref<HTMLDivElement | null>(null)
+const initLoading = ref(true)
+let sceneView: SceneView | null = null
+const layerCache: Record<string, FeatureLayer> = {}
 
-watch(() => [props.village, props.indicator], () => {
-  selectedVillage.value = props.village
-  selectedIndicator.value = props.indicator
-  loadData()
-})
-
-// ==================== 方法 ====================
-const loadData = async () => {
-  isLoading.value = true
-  error.value = null
-
+onMounted(async () => {
+  if (!mapDiv.value) return
   try {
-    console.log(`📊 載入資料: 村里=${props.village}, 指標=${props.indicator}`)
+    const portal   = new Portal({ url: PORTAL_URL })
+    const webScene = new WebScene({ portalItem: { id: WEBSCENE_ID, portal } })
+    sceneView = new SceneView({ container: mapDiv.value, map: webScene, qualityProfile: 'medium', ui: { components: ['zoom'] } })
+    await sceneView.when()
+    await (webScene as unknown as { loadAll: () => Promise<void> }).loadAll()
 
-    // 構建查詢參數
-    const indicatorFieldName = INDICATOR_FIELD_MAP[props.indicator]
-    if (!indicatorFieldName) {
-      throw new Error(`未知指標: ${props.indicator}`)
-    }
-
-    // 使用 esriRequest 進行查詢，會自動處理認證
-    const queryUrl = `${FEATURE_SERVICE_URL}/query`
-    
-    const response = await esriRequest(queryUrl, {
-      query: {
-        where: `村里名稱='${props.village}'`,
-        outFields: `村里名稱,${indicatorFieldName},資料時間`,
-        orderByFields: '資料時間 ASC',
-        returnGeometry: false,
-        f: 'json'
-      },
-      responseType: 'json'
+    // ── DEBUG：列出所有圖層，確認標題與類型 ──
+    const allLayers = sceneView.map?.allLayers.toArray() ?? []
+    console.group('📋 WebScene 全部圖層')
+    allLayers.forEach((l: __esri.Layer) => {
+      console.log(`[${l.type}] "${l.title}"  id=${l.id}`)
     })
+    console.groupEnd()
 
-    console.log(`✅ 查詢成功`)
-
-    const data = response.data
-
-    if (data.error) {
-      throw new Error(data.error.message || '查詢失敗')
-    }
-
-    if (!data.features || data.features.length === 0) {
-      throw new Error(`查無 ${props.village} 的資料`)
-    }
-
-    console.log(`✅ 找到 ${data.features.length} 筆資料`)
-
-    // 解析資料
-    const villageData: Array<{ time: string; value: number }> = []
-
-    for (const feature of data.features) {
-      const attributes = feature.attributes
-      const timeStr = attributes['資料時間']
-      const value = parseFloat(attributes[indicatorFieldName])
-
-      if (timeStr && !isNaN(value)) {
-        villageData.push({
-          time: timeStr,
-          value: value
-        })
+    // 建立 cache（所有 feature layer）
+    allLayers.forEach((l: __esri.Layer) => {
+      if (l.type === 'feature') {
+        layerCache[l.title ?? ''] = l as FeatureLayer
       }
-    }
+    })
+    console.log('📦 layerCache keys:', Object.keys(layerCache))
 
-    // 按時間排序（以防萬一）
-    villageData.sort((a, b) => a.time.localeCompare(b.time))
-
-    chartData.value = villageData
-
-    // 計算統計資料
-    calculateStats()
-
-    // 先設定 loading 為 false，讓 DOM 顯示
-    isLoading.value = false
-
-    // 等待 DOM 更新後繪製圖表
-    await nextTick()
-    
-    // 再次等待確保 ref 可用
-    setTimeout(() => {
-      if (chartRef.value) {
-        console.log('✅ chartRef 已準備好，開始渲染圖表')
-        renderChart()
-      } else {
-        console.error('❌ chartRef 仍然不存在，再等一下...')
-        setTimeout(() => {
-          if (chartRef.value) {
-            renderChart()
-          } else {
-            console.error('❌ chartRef 始終無法取得，請檢查模板')
-          }
-        }, 200)
+    // ── DEBUG：對出生圖層印出第一筆 feature 的所有欄位 ──
+    const bornLayerKey = Object.keys(layerCache).find(k => k.includes('出生'))
+    if (bornLayerKey) {
+      const bornLayer = layerCache[bornLayerKey]
+      console.log('✅ 找到出生圖層:', bornLayerKey)
+      if (bornLayer) {
+        try {
+          const sample = await bornLayer.queryFeatures({
+            where: '1=1', outFields: ['*'], returnGeometry: false, num: 1, start: 0,
+          })
+          console.log('🔑 出生圖層欄位:', Object.keys(sample.features[0]?.attributes ?? {}))
+          console.log('📄 第一筆資料:', sample.features[0]?.attributes)
+        } catch (e) { console.warn('出生圖層查詢失敗', e) }
       }
-    }, 100)
-
-  } catch (err: any) {
-    console.error('❌ 載入資料失敗:', err)
-    
-    let errorMessage = err.message || '載入資料失敗'
-    
-    // 如果是 token 錯誤，提供更清楚的說明
-    if (errorMessage.includes('Token Required') || errorMessage.includes('Invalid token')) {
-      errorMessage = '此 Feature Service 需要認證。請聯絡管理員取得存取權限，或確認服務已設為公開存取。'
+    } else {
+      console.warn('❌ 找不到含「出生」的圖層，請確認圖層標題')
     }
-    
-    error.value = errorMessage
-    isLoading.value = false
+
+    await init(sceneView)
+    await applyRenderer(props.activeLayerKey ?? 'born')
+    initLoading.value = false
+  } catch (e) {
+    console.error('地圖初始化失敗', e)
+    initLoading.value = false
   }
+})
+
+onUnmounted(() => { sceneView?.destroy() })
+
+/** 模糊比對：從 layerCache 中找含關鍵字的圖層 */
+function findLayer(keywords: string[]): FeatureLayer | null {
+  const keys = Object.keys(layerCache)
+  for (const kw of keywords) {
+    const found = keys.find(k => k.includes(kw))
+    if (found) return layerCache[found] ?? null
+  }
+  return null
 }
 
-const calculateStats = () => {
-  if (chartData.value.length === 0) return
-
-  const firstData = chartData.value[0]
-  const lastData = chartData.value[chartData.value.length - 1]
-  
-  if (!firstData || !lastData) return
-
-  const firstTime = firstData.time
-  const lastTime = lastData.time
-  dataRange.value = `${firstTime} ~ ${lastTime}`
-
-  dataPoints.value = chartData.value.length
-
-  const lastValue = lastData.value
-  latestValue.value = lastValue.toFixed(2)
-
-  const firstValue = firstData.value
-  const change = ((lastValue - firstValue) / firstValue) * 100
-
-  if (change > 0) {
-    changeRate.value = `+${change.toFixed(2)}%`
-    changeClass.value = 'positive'
-  } else if (change < 0) {
-    changeRate.value = `${change.toFixed(2)}%`
-    changeClass.value = 'negative'
-  } else {
-    changeRate.value = '0.00%'
-    changeClass.value = 'neutral'
+/** 從第一筆 feature attributes 中找欄位（不分大小寫） */
+function resolveField(attrs: Record<string, unknown>, candidates: string[]): string | null {
+  const attrKeys = Object.keys(attrs)
+  for (const c of candidates) {
+    const found = attrKeys.find(k => k.toUpperCase() === c.toUpperCase())
+    if (found !== undefined) return found
   }
+  return null
 }
 
-const renderChart = () => {
-  if (!chartRef.value) {
-    console.error('❌ chartRef 不存在')
+async function applyRenderer(key: string) {
+  if (!sceneView?.map) return
+  const colors: string[] = LAYER_COLORS[key] ?? LAYER_COLORS['born'] ?? []
+
+  // 模糊找圖層
+  const LAYER_KEYWORDS: Record<string, string[]> = {
+    born:      ['出生'],
+    dead:      ['死亡'],
+    housing:   ['住宅狀況'],
+    careLabor: ['照護人力'],
+    economy:   ['經濟狀況'],
+    envSafety: ['環境安全'],
+    mobility:  ['行動健康'],
+  }
+  const FIELD_CANDIDATES: Record<string, string[]> = {
+    born:      ['BORN_CNT', 'born_cnt'],
+    dead:      ['DEAD_CNT', 'dead_cnt'],
+    housing:   ['E12E21E31', 'E12E22E32', 'E12E23E31', 'E12E23E32'],
+    careLabor: ['N13N21N31', 'N13N21N32', 'N13N22N31', 'N13N22N32', 'N13N23N31', 'N13N23N32'],
+    economy:   ['G13G21G31', 'G13G22G31', 'G13G23G31', 'G12G21G31', 'G12G22G31'],
+    envSafety: ['S13S21S31', 'S13S22S31', 'S12S21S31', 'S12S22S31'],
+    mobility:  ['A12A22A33', 'A12A21A33', 'A11A22A33', 'A11A21A33'],
+  }
+
+  // 先隱藏所有 feature layer，再顯示目標
+  Object.values(layerCache).forEach(l => { if (l) l.visible = false })
+
+  const layer = findLayer(LAYER_KEYWORDS[key] ?? [])
+  if (!layer) {
+    console.warn(`❌ 找不到圖層 [${key}]，可用 keys:`, Object.keys(layerCache))
     return
   }
+  console.log(`✅ applyRenderer [${key}] → 圖層: "${layer.title}"`)
 
-  console.log('📊 開始渲染圖表')
-  console.log('圖表容器:', chartRef.value)
-  console.log('容器尺寸:', chartRef.value.offsetWidth, 'x', chartRef.value.offsetHeight)
-  console.log('資料點數:', chartData.value.length)
+  layer.visible = true
 
-  if (chartInstance) {
-    chartInstance.dispose()
+  // 偵測 TOWNCODE/VILLCODE 欄位實際名稱（全小寫）
+  const sampleRes = await layer.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: false, num: 1 })
+  const sampleAttrs = sampleRes.features[0]?.attributes ?? {}
+  console.log('📄 圖層欄位:', Object.keys(sampleAttrs))
+
+  const tcKey = Object.keys(sampleAttrs).find(k => k.toUpperCase() === 'TOWNCODE')
+  const whereClause = tcKey ? `${tcKey} = '${XINSHI_CODE}'` : '1=1'
+  console.log('🔍 where:', whereClause)
+
+  // definitionExpression 用 SQL，欄位必須用實際名稱
+  layer.definitionExpression = whereClause
+
+  // 偵測數值欄位
+  const field = resolveField(sampleAttrs, FIELD_CANDIDATES[key] ?? [])
+  if (!field) {
+    console.warn(`❌ 找不到數值欄位 [${key}]，候選欄位:`, FIELD_CANDIDATES[key], '，實際欄位:', Object.keys(sampleAttrs))
+    // 仍顯示圖層，只是不做 ClassBreaks
+    return
   }
+  console.log(`✅ 數值欄位: "${field}"`)
 
-  chartInstance = echarts.init(chartRef.value)
-  console.log('✅ ECharts 實例已創建')
+  try {
+    const stats = await layer.queryFeatures({
+      where: whereClause,
+      outStatistics: [
+        { statisticType: 'min', onStatisticField: field, outStatisticFieldName: 'SMIN' } as __esri.StatisticDefinitionProperties,
+        { statisticType: 'max', onStatisticField: field, outStatisticFieldName: 'SMAX' } as __esri.StatisticDefinitionProperties,
+      ],
+      returnGeometry: false,
+    })
+    const a    = stats.features[0]?.attributes ?? {}
+    const min  = Number(a['SMIN'] ?? 0)
+    const max  = Number(a['SMAX'] ?? 1)
+    const step = Math.max((max - min) / colors.length, 1)
+    console.log(`📊 min=${min} max=${max} step=${step}`)
 
-  const timeLabels = chartData.value.map(d => d.time)
-  const values = chartData.value.map(d => d.value)
-
-  console.log('時間標籤:', timeLabels.slice(0, 3), '...')
-  console.log('數值:', values.slice(0, 3), '...')
-
-  const option: echarts.EChartsOption = {
-    title: {
-      text: `${selectedVillage.value} - ${selectedIndicator.value} 趨勢圖`,
-      left: 'center',
-      textStyle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#1e293b'
-      }
-    },
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-      borderColor: '#e2e8f0',
-      borderWidth: 1,
-      textStyle: {
-        color: '#1e293b'
-      },
-      formatter: (params: any) => {
-        const param = params[0]
-        return `
-          <div style="padding: 4px;">
-            <div style="font-weight: 600; margin-bottom: 4px;">${param.name}</div>
-            <div style="color: #60a5fa;">
-              ${selectedIndicator.value}: <strong>${param.value.toFixed(2)}</strong>
-            </div>
-          </div>
-        `
-      }
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '15%',
-      top: '15%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      data: timeLabels,
-      axisLabel: {
-        rotate: 45,
-        fontSize: 11,
-        color: '#64748b'
-      },
-      axisLine: {
-        lineStyle: {
-          color: '#cbd5e1'
-        }
-      }
-    },
-    yAxis: {
-      type: 'value',
-      name: selectedIndicator.value,
-      nameTextStyle: {
-        fontSize: 12,
-        color: '#475569'
-      },
-      axisLabel: {
-        fontSize: 11,
-        color: '#64748b'
-      },
-      splitLine: {
-        lineStyle: {
-          color: '#f1f5f9',
-          type: 'dashed'
-        }
-      }
-    },
-    dataZoom: [
-      {
-        type: 'slider',
-        start: 0,
-        end: 100,
-        height: 25,
-        bottom: 30,
-        borderColor: '#cbd5e1',
-        fillerColor: 'rgba(96, 165, 250, 0.2)',
-        handleStyle: {
-          color: '#60a5fa'
-        },
-        textStyle: {
-          color: '#64748b',
-          fontSize: 11
-        }
-      }
-    ],
-    series: [
-      {
-        name: selectedIndicator.value,
-        type: 'line',
-        data: values,
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 6,
-        lineStyle: {
-          width: 3,
-          color: {
-            type: 'linear',
-            x: 0,
-            y: 0,
-            x2: 1,
-            y2: 0,
-            colorStops: [
-              { offset: 0, color: '#60a5fa' },
-              { offset: 1, color: '#3b82f6' }
-            ]
-          }
-        },
-        itemStyle: {
-          color: '#60a5fa',
-          borderColor: '#fff',
-          borderWidth: 2
-        },
-        areaStyle: {
-          color: {
-            type: 'linear',
-            x: 0,
-            y: 0,
-            x2: 0,
-            y2: 1,
-            colorStops: [
-              { offset: 0, color: 'rgba(96, 165, 250, 0.3)' },
-              { offset: 1, color: 'rgba(96, 165, 250, 0.05)' }
-            ]
-          }
-        }
-      }
-    ]
+    layer.renderer = new ClassBreaksRenderer({
+      field,
+      classBreakInfos: colors.map((hex: string, i: number) => ({
+        minValue: i === 0 ? min - 1 : min + step * i,
+        maxValue: min + step * (i + 1),
+        symbol: new SimpleFillSymbol({
+          color: new Color(hex),
+          outline: { color: new Color([255, 255, 255, 0.7]), width: 0.5 },
+        }),
+      })) as __esri.ClassBreakInfoProperties[],
+      defaultSymbol: new SimpleFillSymbol({
+        color: new Color('#e5e7eb'),
+        outline: { color: new Color([200, 200, 200, 0.5]), width: 0.3 },
+      }),
+    })
+    console.log('🎨 渲染器套用完成')
+  } catch (e) {
+    console.warn('渲染器建立失敗', e)
   }
-
-  chartInstance.setOption(option)
-  console.log('✅ 圖表配置已設定')
-
-  // 強制 resize 確保圖表顯示
-  setTimeout(() => {
-    if (chartInstance) {
-      chartInstance.resize()
-      console.log('✅ 圖表已 resize')
-    }
-  }, 100)
-
-  // 響應式
-  window.addEventListener('resize', () => {
-    chartInstance?.resize()
-  })
 }
 
-const downloadCSV = () => {
-  if (chartData.value.length === 0) return
+watch(() => props.activeLayerKey, (k) => { if (k) applyRenderer(k) })
 
-  const headers = ['資料時間', selectedIndicator.value]
-  const rows = chartData.value.map(d => [d.time, d.value.toString()])
+watch(() => props.village, async (v) => {
+  if (!v) return
+  const found = bornDeadRows.value.find((r) => r.villName === v)
+  await selectVillage(found ? { villCode: found.villCode, villName: v } : { villCode: '', villName: '全區' })
+})
 
-  let csv = headers.join(',') + '\n'
-  csv += rows.map(row => row.join(',')).join('\n')
+// ── Computed ──
+const villageLabel = computed(() => props.village === '全區' ? '新市區全區' : props.village)
 
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `${selectedVillage.value}_${selectedIndicator.value}.csv`
-  link.click()
-  URL.revokeObjectURL(url)
+const activeLayerLabel = computed(() => ({
+  born: '出生分布', dead: '死亡分布', housing: '老屋需求',
+  careLabor: '獨居照護', economy: '經濟弱勢', envSafety: '環境風險', mobility: '行動健康',
+}[props.activeLayerKey ?? 'born'] ?? ''))
 
-  console.log('✅ CSV 已下載')
-}
+const legendGradient = computed(() => {
+  const c: string[] = LAYER_COLORS[props.activeLayerKey ?? 'born'] ?? LAYER_COLORS['born'] ?? []
+  return `linear-gradient(to right, ${c.join(',')})`
+})
 
-const downloadChart = () => {
-  if (!chartInstance) return
+const growClass = computed(() => (kpi.value?.naturalGrow ?? 0) >= 0 ? 'green' : 'orange')
+const growSign  = computed(() => (kpi.value?.naturalGrow ?? 0) >= 0 ? '+' : '')
 
-  const url = chartInstance.getDataURL({
-    type: 'png',
-    pixelRatio: 2,
-    backgroundColor: '#fff'
-  })
+const elderlyIndexList = computed(() => [
+  { key: 'housing',   label: '老屋居住',  color: '#fb923c', pct: elderlyPcts.value?.housing   ?? 0, desc: '居住屋齡≥30年老人比例' },
+  { key: 'careLabor', label: '獨居照護',  color: '#a78bfa', pct: elderlyPcts.value?.careLabor ?? 0, desc: '獨居老人佔全體老人比例' },
+  { key: 'economy',   label: '經濟弱勢',  color: '#34d399', pct: elderlyPcts.value?.economy   ?? 0, desc: '低/中低收入戶老人比例' },
+  { key: 'envSafety', label: '環境風險',  color: '#fbbf24', pct: elderlyPcts.value?.envSafety ?? 0, desc: '位於土壤液化潛勢區老人比例' },
+  { key: 'mobility',  label: '行動障礙',  color: '#f472b6', pct: elderlyPcts.value?.mobility  ?? 0, desc: '需協助行走/無法坐姿老人比例（2023）' },
+])
 
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `${selectedVillage.value}_${selectedIndicator.value}.png`
-  link.click()
+const maxBorn = computed(() => Math.max(...topVillsBorn.value.map((r) => r.born), 1))
 
-  console.log('✅ 圖表已下載')
-}
+const fmt    = (n?: number) => n != null ? n.toLocaleString() : '—'
+const fmtN   = (n?: number) => n != null ? n.toFixed(1) : '—'
+const shortVill = (name: string) => name.replace(/里$/, '')
+const barH = (val: number, max: number) => Math.max(4, Math.round((val / max) * 80)) + 'px'
 </script>
 
 <style scoped>
-.area-profile-view {
-  width: 100%;
-  height: 100%;
-  background: #f8fafc;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+/* ── 根容器：相對定位，地圖在底層 ── */
+.ap-root { position:relative; width:100%; height:100%; overflow:hidden; }
+
+/* 地圖填滿整個容器 */
+.map-bg { position:absolute; inset:0; z-index:0; }
+
+/* ── overlay 通用 ── */
+.overlay-top,
+.overlay-right,
+.overlay-bottom { position:absolute; z-index:10; pointer-events:none; }
+.overlay-top    > *, .overlay-right > *, .overlay-bottom > * { pointer-events:auto; }
+
+/* 頂部：標題列 + KPI，貼頂 */
+.overlay-top {
+  top:0; left:0; right:0;
+  padding:10px 12px 0;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
 }
 
-/* 載入和錯誤狀態 */
-.loading-state,
-.error-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  gap: 16px;
+.top-header {
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.map-title { font-size:14px; font-weight:700; color:#fff; text-shadow:0 1px 4px rgba(0,0,0,.6); }
+.map-badge { font-size:11px; padding:3px 10px; border-radius:20px; background:rgba(30,64,175,.85); color:#bfdbfe; backdrop-filter:blur(4px); }
+
+/* KPI 列 */
+.kpi-row { display:flex; gap:8px; }
+.kpi-card {
+  flex:1;
+  background:rgba(255,255,255,.88);
+  backdrop-filter:blur(8px);
+  border-radius:10px;
+  padding:10px 14px;
+  border-left:3px solid #e2e8f0;
+}
+.kpi-card.blue   { border-color:#3b82f6; }
+.kpi-card.red    { border-color:#f87171; }
+.kpi-card.green  { border-color:#34d399; }
+.kpi-card.orange { border-color:#fb923c; }
+.kpi-card.purple { border-color:#a78bfa; }
+.kpi-val   { font-size:20px; font-weight:700; color:#1e293b; line-height:1.1; }
+.kpi-label { font-size:10px; color:#64748b; margin-top:3px; }
+
+/* 右側：年齡結構 + 銀髮指數，貼右，留頂部 KPI 高度 */
+.overlay-right {
+  top:110px; right:0; bottom:0;
+  width:260px;
+  padding:0 10px 10px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  overflow:hidden;
 }
 
-.spinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid #e2e8f0;
-  border-top-color: #60a5fa;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+/* 底部：長條圖 + 圖例，貼底 */
+.overlay-bottom {
+  bottom:0; left:0; right:0;
+  padding:0 10px 10px;
+  display:flex;
+  gap:8px;
+  align-items:stretch;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+/* ── 半透明卡片 ── */
+.panel-card {
+  background:rgba(255,255,255,.90);
+  backdrop-filter:blur(10px);
+  border-radius:12px;
+  padding:12px 14px;
+  overflow:hidden;
 }
-
-.loading-state p,
-.error-state .error-text {
-  font-size: 14px;
-  color: #64748b;
+.panel-title {
+  font-size:12px;
+  font-weight:600;
+  color:#1e293b;
+  margin-bottom:6px;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  white-space:nowrap;
 }
+.panel-sub { font-size:10px; color:#94a3b8; font-weight:400; }
 
-.error-icon {
-  width: 64px;
-  height: 64px;
-  background: #fee2e2;
-  color: #dc2626;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32px;
-  font-weight: bold;
-}
+/* 年齡結構 */
+.age-chips { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-bottom:8px; }
+.age-chip  { border-radius:6px; padding:7px 4px; text-align:center; }
+.age-chip.youth  { background:#eff6ff; }
+.age-chip.work   { background:#f0fdf4; }
+.age-chip.elder  { background:#fff7ed; }
+.chip-val   { font-size:14px; font-weight:700; color:#1e293b; }
+.chip-label { font-size:9px; color:#64748b; margin-top:1px; }
+.chip-abs   { font-size:9px; color:#94a3b8; }
+.age-bar-wrap { display:flex; height:6px; border-radius:3px; overflow:hidden; margin-bottom:6px; }
+.age-seg { transition:flex .4s; }
+.youth-seg { background:#60a5fa; }
+.work-seg  { background:#34d399; }
+.elder-seg { background:#fb923c; }
+.dep-row { display:flex; gap:12px; }
+.dep-item { font-size:11px; color:#64748b; }
+.dep-item strong { color:#1e293b; }
 
-.retry-btn {
-  padding: 10px 24px;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
+/* 銀髮指數 */
+.index-list { display:flex; flex-direction:column; gap:7px; overflow-y:auto; flex:1; }
+.idx-meta { display:flex; align-items:center; gap:5px; margin-bottom:3px; }
+.idx-dot  { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.idx-name { font-size:11px; font-weight:500; color:#374151; flex:1; }
+.idx-val  { font-size:12px; font-weight:600; color:#1e293b; }
+.idx-track { height:5px; border-radius:3px; background:#f1f5f9; overflow:hidden; margin-bottom:2px; }
+.idx-fill  { height:100%; border-radius:3px; transition:width .5s ease; }
+.idx-desc  { font-size:9px; color:#94a3b8; }
 
-.retry-btn:hover {
-  background: #2563eb;
-  transform: translateY(-2px);
-}
+/* 長條圖 */
+.bar-panel { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:flex-end; max-height:130px; }
+.bar-chart { display:flex; align-items:flex-end; gap:5px; height:55px; overflow-x:auto; padding-bottom:4px; flex:1; }
+.bc-group { display:flex; flex-direction:column; align-items:center; flex-shrink:0; min-width:32px; }
+.bc-label { font-size:9px; color:#94a3b8; margin-bottom:2px; }
+.bc-bars  { display:flex; gap:2px; align-items:flex-end; }
+.bc-bar   { width:9px; border-radius:2px 2px 0 0; transition:height .4s; }
+.bc-bar.born { background:#60a5fa; }
+.bc-bar.dead { background:#f87171; }
+.bc-val { font-size:9px; color:#64748b; margin-top:1px; }
+.bar-legend { display:flex; gap:10px; margin-top:4px; }
+.bl { font-size:10px; color:#64748b; display:flex; align-items:center; gap:3px; }
+.bl::before { content:''; display:inline-block; width:8px; height:7px; border-radius:2px; }
+.bl.born::before { background:#60a5fa; }
+.bl.dead::before { background:#f87171; }
 
-/* 內容容器 */
-.content-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 24px;
-  gap: 20px;
-  overflow: hidden;
-}
+/* 圖例卡片 */
+.legend-panel { flex-shrink:0; }
+.map-legend-row { display:flex; align-items:center; gap:6px; }
+.legend-label { font-size:10px; color:#64748b; }
+.legend-bar { flex:1; height:6px; border-radius:3px; }
 
-/* 資訊卡片 */
-.info-card {
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  flex-shrink: 0;
-}
-
-.info-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 2px solid #e2e8f0;
-}
-
-.village-name {
-  font-size: 20px;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0;
-}
-
-.indicator-badge {
-  padding: 6px 14px;
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-  color: #1e40af;
-  font-size: 13px;
-  font-weight: 600;
-  border-radius: 6px;
-}
-
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-}
-
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.stat-label {
-  font-size: 12px;
-  color: #64748b;
-  font-weight: 500;
-}
-
-.stat-value {
-  font-size: 18px;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-.stat-value.positive {
-  color: #10b981;
-}
-
-.stat-value.negative {
-  color: #ef4444;
-}
-
-.stat-value.neutral {
-  color: #64748b;
-}
-
-/* 圖表容器 */
-.chart-container {
-  flex: 1;
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  min-height: 400px;
-  max-height: 600px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.chart {
-  width: 100%;
-  height: 100%;
-  min-height: 350px;
-  flex: 1;
-}
-
-/* 操作按鈕 */
-.actions {
-  display: flex;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.action-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 20px;
-  background: white;
-  color: #475569;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.action-btn:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-
-.action-btn svg {
-  width: 18px;
-  height: 18px;
-}
-
-/* 響應式 */
-@media (max-width: 768px) {
-  .content-container {
-    padding: 16px;
-  }
-
-  .stats-row {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .actions {
-    flex-direction: column;
-  }
-
-  .village-name {
-    font-size: 18px;
-  }
-}
+/* loading */
+.loading-state { display:flex; align-items:center; gap:8px; font-size:11px; color:#94a3b8; padding:8px 0; }
+.loading-overlay { position:absolute; inset:0; background:rgba(15,23,42,.55); display:flex; align-items:center; justify-content:center; z-index:50; }
+.loading-box { background:#fff; border-radius:16px; padding:28px 36px; display:flex; flex-direction:column; align-items:center; gap:14px; font-size:14px; color:#475569; }
+.spinner { width:22px; height:22px; border:2px solid #e2e8f0; border-top-color:#3b82f6; border-radius:50%; animation:spin .7s linear infinite; }
+.spinner.lg { width:32px; height:32px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.fade-enter-active, .fade-leave-active { transition:opacity .3s; }
+.fade-enter-from, .fade-leave-to { opacity:0; }
 </style>
