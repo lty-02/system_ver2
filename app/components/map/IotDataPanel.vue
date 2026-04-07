@@ -139,13 +139,6 @@
           <button class="load-btn" @click="loadWeather">載入資料</button>
         </div>
       </div>
-
-      <div v-if="activeTab === 'traffic'" class="tab-pane">
-        <div class="empty-content">
-          <p class="placeholder-text">路況資訊</p>
-          <p class="placeholder-hint">即將接入</p>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -161,8 +154,7 @@ interface Tab {
 
 const tabs: Tab[] = [
   { id: 'air', label: 'PM2.5', icon: '🌫️' },
-  { id: 'weather', label: '天氣', icon: '🌤️' },
-  { id: 'traffic', label: '路況', icon: '🚗' }
+  { id: 'weather', label: '天氣', icon: '🌤️' }
 ]
 
 const activeTab = ref<string>('air')
