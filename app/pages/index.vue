@@ -1,318 +1,317 @@
 <template>
-  <div style="width: 100%; background-color: white;">
-    <!-- Navigation Header -->
-    <nav style="position: sticky; top: 0; z-index: 50; background-color: white; border-bottom: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-      <div style="max-width: 80rem; margin: 0 auto; padding: 0 1rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; height: 4rem;">
-          <div style="display: flex; align-items: center;">
-            <h1 style="font-size: 1.25rem; font-weight: bold; color: #023058;">
-              SCIENCE PARK
-            </h1>
-            <p style="margin-left: 0.5rem; font-size: 0.875rem; color: #4b5563;">數位孿生系統</p>
-          </div>
-          <div style="display: flex; gap: 1rem;">
-            <NuxtLink 
-              to="/map"
-              style="font-size: 0.875rem; font-weight: 500; color: #374151; text-decoration: none; transition: color 0.3s;"
-              @mouseenter="handleLinkHover($event, '#111827')"
-              @mouseleave="handleLinkHover($event, '#374151')"
-            >
-              地圖
-            </NuxtLink>
-            <NuxtLink 
-              to="/dashboard"
-              style="font-size: 0.875rem; font-weight: 500; color: #374151; text-decoration: none; transition: color 0.3s;"
-              @mouseenter="handleLinkHover($event, '#111827')"
-              @mouseleave="handleLinkHover($event, '#374151')"
-            >
-              儀表板
-            </NuxtLink>
-            <NuxtLink 
-              to="/feedback"
-              style="font-size: 0.875rem; font-weight: 500; color: #374151; text-decoration: none; transition: color 0.3s;"
-              @mouseenter="handleLinkHover($event, '#111827')"
-              @mouseleave="handleLinkHover($event, '#374151')"
-            >
-              民眾回饋
-            </NuxtLink>
-          </div>
+  <div class="home">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
         </div>
+        <span class="brand-text">科學園區數位孿生示範系統</span>
       </div>
-    </nav>
+    </header>
 
-    <!-- Hero Section -->
-    <section style="width: 100%; padding: 5rem 1rem; background: linear-gradient(135deg, #023058 0%, #1a4d7a 100%);">
-      <div style="max-width: 56rem; margin: 0 auto; text-align: center;">
-        <h2 style="font-size: 3.5rem; font-weight: bold; color: white; margin-bottom: 1.5rem;">
-          以人為本
-        </h2>
-        <p style="font-size: 1.5rem; font-weight: 600; color: #f3f4f6; margin-bottom: 2rem;">
-          科學園區數位孿生示範系統
-        </p>
-        <p style="font-size: 1.125rem; color: #d1d5db; margin-bottom: 3rem; max-width: 42rem; margin-left: auto; margin-right: auto;">
-          透過數位孿生技術，掌握科學園區情形，提供智能化的管理和決策支持。
-        </p>
-        
-        <div style="display: flex; flex-direction: column; gap: 1rem; justify-content: center; align-items: center;">
-          <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;">
-            <NuxtLink
-              to="/map"
-              style="padding: 0.75rem 2rem; background-color: white; color: #111827; font-weight: bold; border-radius: 0.5rem; text-decoration: none; transition: all 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer;"
-              @mouseenter="handleButtonHover($event, true)"
-              @mouseleave="handleButtonHover($event, false)"
-            >
-              進入地圖
-            </NuxtLink>
-            <button
-              @click="scrollToFeatures"
-              style="padding: 0.75rem 2rem; border: 2px solid white; color: white; font-weight: bold; border-radius: 0.5rem; background-color: transparent; cursor: pointer; transition: all 0.3s;"
-              @mouseenter="handleCTAHover($event, true)"
-              @mouseleave="handleCTAHover($event, false)"
-            >
-              瞭解更多
-            </button>
-          </div>
-        </div>
+    <!-- Main -->
+    <main class="main">
+
+      <!-- Left: Title block -->
+      <div class="title-block">
+        <span class="eyebrow">SCIENCE PARK DIGITAL TWIN PLATFORM</span>
+        <h1 class="title">科學園區<br/>數位孿生系統</h1>
+        <div class="title-line"></div>
       </div>
-    </section>
 
-    <!-- Features Grid -->
-    <section ref="featuresSection" style="width: 100%; padding: 5rem 1rem; background-color: #f9fafb;">
-      <div style="max-width: 72rem; margin: 0 auto;">
-        <h3 style="font-size: 2.25rem; font-weight: bold; text-align: center; margin-bottom: 4rem; color: #023058;">
-          核心功能
-        </h3>
-        
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem;">
-          <!-- Feature 1 -->
-          <div style="background-color: white; padding: 2rem; border-radius: 0.75rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: all 0.3s; cursor: pointer;"
-            @mouseenter="handleCardHover($event, true)"
-            @mouseleave="handleCardHover($event, false)"
-          >
-            <div style="font-size: 3.5rem; margin-bottom: 1rem;">🗺️</div>
-            <h4 style="font-size: 1.25rem; font-weight: bold; margin-bottom: 0.75rem; color: #023058;">
-              3D 地圖視圖
-            </h4>
-            <p style="color: #4b5563; margin-bottom: 1rem;">
-              沉浸式的 3D 數位孿生場景，直觀展示園區全貌和實時狀態
-            </p>
-            <NuxtLink
-              to="/map"
-              style="display: inline-block; margin-top: 1rem; font-size: 0.875rem; font-weight: bold; color: #f2cb52; text-decoration: none; transition: opacity 0.3s;"
-              @mouseenter="handleLinkOpacity($event, 0.8)"
-              @mouseleave="handleLinkOpacity($event, 1)"
-            >
-              探索地圖 →
-            </NuxtLink>
+      <!-- Right: Entry cards -->
+      <div class="entries">
+        <NuxtLink to="/map" class="entry-card">
+          <div class="entry-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+            </svg>
           </div>
+          <div class="entry-body">
+            <h2 class="entry-title">3D 地圖</h2>
+            <p class="entry-desc">空間場景瀏覽與即時分析</p>
+          </div>
+          <div class="entry-arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M7 17L17 7M17 7H7M17 7v10"/>
+            </svg>
+          </div>
+        </NuxtLink>
 
-          <!-- Feature 2 -->
-          <div style="background-color: white; padding: 2rem; border-radius: 0.75rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: all 0.3s; cursor: pointer;"
-            @mouseenter="handleCardHover($event, true)"
-            @mouseleave="handleCardHover($event, false)"
-          >
-            <div style="font-size: 3.5rem; margin-bottom: 1rem;">📊</div>
-            <h4 style="font-size: 1.25rem; font-weight: bold; margin-bottom: 0.75rem; color: #023058;">
-              數據分析
-            </h4>
-            <p style="color: #4b5563; margin-bottom: 1rem;">
-              深入分析空間數據，提供智能化的管理決策支持
-            </p>
-            <NuxtLink
-              to="/dashboard"
-              style="display: inline-block; margin-top: 1rem; font-size: 0.875rem; font-weight: bold; color: #a69f41; text-decoration: none; transition: opacity 0.3s;"
-              @mouseenter="handleLinkOpacity($event, 0.8)"
-              @mouseleave="handleLinkOpacity($event, 1)"
-            >
-              查看儀表板 →
-            </NuxtLink>
+        <NuxtLink to="/dashboard" class="entry-card">
+          <div class="entry-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+              <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+              <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+              <path d="M14 17.5h7M17.5 14v7"/>
+            </svg>
           </div>
-
-          <!-- Feature 3 -->
-          <div style="background-color: white; padding: 2rem; border-radius: 0.75rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: all 0.3s; cursor: pointer;"
-            @mouseenter="handleCardHover($event, true)"
-            @mouseleave="handleCardHover($event, false)"
-          >
-            <div style="font-size: 3.5rem; margin-bottom: 1rem;">💬</div>
-            <h4 style="font-size: 1.25rem; font-weight: bold; margin-bottom: 0.75rem; color: #023058;">
-              用戶反饋
-            </h4>
-            <p style="color: #4b5563; margin-bottom: 1rem;">
-              我們重視您的建議，幫助我們持續改進系統和服務
-            </p>
-            <NuxtLink
-              to="/feedback"
-              style="display: inline-block; margin-top: 1rem; font-size: 0.875rem; font-weight: bold; color: #757575; text-decoration: none; transition: opacity 0.3s;"
-              @mouseenter="handleLinkOpacity($event, 0.8)"
-              @mouseleave="handleLinkOpacity($event, 1)"
-            >
-              提交反饋 →
-            </NuxtLink>
+          <div class="entry-body">
+            <h2 class="entry-title">儀表板</h2>
+            <p class="entry-desc">數據視覺化與統計報表</p>
           </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Benefits Section -->
-    <section style="width: 100%; padding: 5rem 1rem; background-color: white;">
-      <div style="max-width: 72rem; margin: 0 auto;">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center;">
-          <div>
-            <h3 style="font-size: 2.25rem; font-weight: bold; margin-bottom: 1.5rem; color: #023058;">
-              進階資訊
-            </h3>
-            <div style="display: flex; flex-direction: column; gap: 1rem;">
-              <div style="display: flex; gap: 1rem;">
-                <div style="font-size: 1.5rem;">✓</div>
-                <div>
-                  <h4 style="font-weight: bold; color: #111827;">實時監控</h4>
-                  <p style="color: #4b5563; font-size: 0.875rem;">實時掌握園區各區域的運營狀態</p>
-                </div>
-              </div>
-              <div style="display: flex; gap: 1rem;">
-                <div style="font-size: 1.5rem;">✓</div>
-                <div>
-                  <h4 style="font-weight: bold; color: #111827;">智能分析</h4>
-                  <p style="color: #4b5563; font-size: 0.875rem;">基於大數據的智能決策支持</p>
-                </div>
-              </div>
-              <div style="display: flex; gap: 1rem;">
-                <div style="font-size: 1.5rem;">✓</div>
-                <div>
-                  <h4 style="font-weight: bold; color: #111827;">易用界面</h4>
-                  <p style="color: #4b5563; font-size: 0.875rem;">直觀的操作體驗，快速上手</p>
-                </div>
-              </div>
-              <div style="display: flex; gap: 1rem;">
-                <div style="font-size: 1.5rem;">✓</div>
-                <div>
-                  <h4 style="font-weight: bold; color: #111827;">24/7 </h4>
-                  <p style="color: #4b5563; font-size: 0.875rem;">全天候的技術支援和服務</p>
-                </div>
-              </div>
-            </div>
+          <div class="entry-arrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M7 17L17 7M17 7H7M17 7v10"/>
+            </svg>
           </div>
-          <div style="background-color: #f3f4f6; border-radius: 1.5rem; padding: 2rem; text-align: center;">
-            <div style="font-size: 4rem; margin-bottom: 1rem;">🚀</div>
-            <h4 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem; color: #023058;">
-              其他資訊
-            </h4>
-            <p style="color: #4b5563; margin-bottom: 1.5rem;">
-              其他連結
-            </p>
-            <NuxtLink
-              to="/map"
-              style="display: inline-block; padding: 0.75rem 2rem; background-color: #f2cb52; color: #023058; font-weight: bold; border-radius: 0.5rem; text-decoration: none; transition: all 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"
-              @mouseenter="handleButtonHover($event, true)"
-              @mouseleave="handleButtonHover($event, false)"
-            >
-              其他連結
-            </NuxtLink>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- CTA Section -->
-    <section style="width: 100%; padding: 4rem 1rem; background-color: #023058;">
-      <div style="max-width: 56rem; margin: 0 auto; text-align: center;">
-        <h3 style="font-size: 2rem; font-weight: bold; color: white; margin-bottom: 1rem;">
-          關於
-        </h3>
-        <p style="color: #d1d5db; margin-bottom: 2rem;">
-          資訊
-        </p>
-        <NuxtLink
-          to="/map"
-          style="display: inline-block; padding: 0.75rem 2rem; background-color: white; color: #023058; font-weight: bold; border-radius: 0.5rem; text-decoration: none; transition: all 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"
-          @mouseenter="handleButtonHover($event, true)"
-          @mouseleave="handleButtonHover($event, false)"
-        >
-          連結
         </NuxtLink>
       </div>
-    </section>
+
+    </main>
 
     <!-- Footer -->
-    <footer style="width: 100%; padding: 2rem 1rem; background-color: #111827; color: #9ca3af; font-size: 0.875rem;">
-      <div style="max-width: 72rem; margin: 0 auto; text-align: center;">
-        <p>© 2025 科學園區數位孿生示範系統。保留所有權利。</p>
-      </div>
+    <footer class="footer">
+      <span>© 2025 科學園區數位孿生示範系統</span>
     </footer>
+
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-
 definePageMeta({
   layout: 'blank'
 })
-
-const featuresSection = ref<HTMLElement | null>(null)
-
-const scrollToFeatures = () => {
-  if (featuresSection.value) {
-    featuresSection.value.scrollIntoView({ behavior: 'smooth' })
-  }
-}
-
-// 處理導航鏈接 hover
-const handleLinkHover = (event: Event, color: string) => {
-  const target = event.target as HTMLElement
-  if (target) {
-    target.style.color = color
-  }
-}
-
-// 處理按鈕 hover
-const handleButtonHover = (event: Event, isEnter: boolean) => {
-  const target = event.target as HTMLElement
-  if (target) {
-    if (isEnter) {
-      target.style.boxShadow = '0 10px 15px rgba(0,0,0,0.2)'
-    } else {
-      target.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)'
-    }
-  }
-}
-
-// 處理 CTA 按鈕 hover
-const handleCTAHover = (event: Event, isEnter: boolean) => {
-  const target = event.target as HTMLElement
-  if (target) {
-    if (isEnter) {
-      target.style.backgroundColor = 'white'
-      target.style.color = '#111827'
-    } else {
-      target.style.backgroundColor = 'transparent'
-      target.style.color = 'white'
-    }
-  }
-}
-
-// 處理卡片 hover
-const handleCardHover = (event: Event, isEnter: boolean) => {
-  const target = event.currentTarget as HTMLElement
-  if (target) {
-    if (isEnter) {
-      target.style.boxShadow = '0 10px 15px rgba(0,0,0,0.2)'
-      target.style.transform = 'translateY(-4px)'
-    } else {
-      target.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)'
-      target.style.transform = 'translateY(0)'
-    }
-  }
-}
-
-// 處理鏈接不透明度
-const handleLinkOpacity = (event: Event, opacity: number) => {
-  const target = event.target as HTMLElement
-  if (target) {
-    target.style.opacity = opacity.toString()
-  }
-}
 </script>
 
 <style scoped>
+* { box-sizing: border-box; }
+
+.home {
+  min-height: 100vh;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* ── Header ── */
+.header {
+  height: 64px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  padding: 0 40px;
+  flex-shrink: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-icon {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #60a5fa 0%, #93c5fd 100%);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  box-shadow: 0 2px 8px rgba(96, 165, 250, 0.25);
+  flex-shrink: 0;
+}
+
+.brand-icon svg {
+  width: 100%;
+  height: 100%;
+  color: white;
+}
+
+.brand-text {
+  font-size: 17px;
+  font-weight: 600;
+  color: #1e293b;
+  letter-spacing: 0.3px;
+}
+
+/* ── Main ── */
+.main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  max-width: 1080px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 64px 40px;
+  gap: 80px;
+}
+
+/* ── Title Block ── */
+.title-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: #60a5fa;
+  margin-bottom: 20px;
+  display: block;
+}
+
+.title {
+  font-size: clamp(40px, 4.5vw, 58px);
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  margin: 0 0 28px 0;
+}
+
+.title-line {
+  width: 48px;
+  height: 4px;
+  background: linear-gradient(90deg, #60a5fa, #93c5fd);
+  border-radius: 2px;
+}
+
+/* ── Entry Cards ── */
+.entries {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.entry-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 24px 28px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  text-decoration: none;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.entry-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #60a5fa, #93c5fd);
+  border-radius: 3px 0 0 3px;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+
+.entry-card:hover {
+  border-color: #bfdbfe;
+  box-shadow: 0 6px 24px rgba(96, 165, 250, 0.1);
+  transform: translateY(-2px);
+}
+
+.entry-card:hover::before {
+  opacity: 1;
+}
+
+.entry-icon {
+  width: 52px;
+  height: 52px;
+  background: #eff6ff;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.22s ease;
+}
+
+.entry-card:hover .entry-icon {
+  background: #dbeafe;
+}
+
+.entry-icon svg {
+  width: 24px;
+  height: 24px;
+  stroke: #3b82f6;
+}
+
+.entry-body {
+  flex: 1;
+}
+
+.entry-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 5px 0;
+  letter-spacing: -0.01em;
+}
+
+.entry-desc {
+  font-size: 13px;
+  color: #94a3b8;
+  margin: 0;
+  font-weight: 400;
+}
+
+.entry-arrow {
+  width: 36px;
+  height: 36px;
+  background: #f1f5f9;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.22s ease;
+}
+
+.entry-arrow svg {
+  width: 15px;
+  height: 15px;
+  stroke: #94a3b8;
+  transition: stroke 0.22s ease;
+}
+
+.entry-card:hover .entry-arrow {
+  background: #dbeafe;
+}
+
+.entry-card:hover .entry-arrow svg {
+  stroke: #3b82f6;
+}
+
+/* ── Footer ── */
+.footer {
+  padding: 20px 40px;
+  text-align: center;
+  font-size: 12px;
+  color: #cbd5e1;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .header { padding: 0 24px; }
+  .brand-text { font-size: 14px; }
+
+  .main {
+    grid-template-columns: 1fr;
+    padding: 48px 24px 32px;
+    gap: 40px;
+  }
+
+  .title { font-size: 38px; }
+  .footer { padding: 16px 24px; }
+}
 </style>
