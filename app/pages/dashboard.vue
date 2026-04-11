@@ -72,7 +72,7 @@
         <div v-else class="welcome-view">
           <div class="welcome-content">
             <h2>數據儀表板</h2>
-            <p class="welcome-desc">探索台南市村里人口與環境指標的時空變化</p>
+            <p class="welcome-desc">選擇左上角模組開始探索</p>
             <div class="feature-cards">
               <div class="feature-card" @click="activeModule = 'temporal'">
                 <div class="card-icon">
@@ -81,7 +81,6 @@
                   </svg>
                 </div>
                 <h4>多時期展示</h4>
-                <p>透過 TimeSlider 查看歷史變化</p>
               </div>
               <div class="feature-card" @click="activeModule = 'area-profile'">
                 <div class="card-icon">
@@ -90,16 +89,15 @@
                   </svg>
                 </div>
                 <h4>行政區概覽</h4>
-                <p>新市區人口與銀髮安居城市儀表板</p>
               </div>
-              <div class="feature-card">
+              <div class="feature-card" @click="activeModule = 'thematic'">
                 <div class="card-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20"/>
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
                   </svg>
                 </div>
-                <h4>主題圖專區</h4>
-                <p>即將推出…</p>
+                <h4>南科發展歷程</h4>
+                <p></p>
               </div>
             </div>
           </div>
@@ -131,10 +129,10 @@ const modules = [
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
   },
   {
-    id: 'thematic',
-    label: '主題圖專區',
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20"/></svg>',
-  },
+  id: 'thematic',
+  label: '南科發展歷程',
+  icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>'
+  } 
 ]
 
 const activeModule  = ref<string | null>(null)
