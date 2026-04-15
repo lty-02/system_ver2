@@ -2,23 +2,6 @@
  * @file stores/sensorStore.ts
  * @description 感測器和物聯網數據狀態管理
  * 
- * 職責：
- * - 管理空氣品質數據
- * - 管理氣象數據
- * - 管理 CCTV 攝像頭列表
- * - 管理數據更新狀態
- * 
- * 設計原則：
- * - 集中管理所有感測器數據
- * - 記錄最後更新時間
- * - 支持自動更新機制
- * - 為實時推送（WebSocket）預留空間
- * 
- * 擴展計劃：
- * - WebSocket 實時推送
- * - 數據歷史記錄
- * - 數據校驗和異常檢測
- * - 多感測站支持
  */
 
 import { defineStore } from 'pinia'

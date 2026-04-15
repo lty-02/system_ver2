@@ -52,6 +52,11 @@
               @select-village="(v: string) => { selectedVillage = v }"
               @layer-change="(k: string) => { activeLayerKey = k }"
             />
+            <!-- ★ 南科發展歷程側欄 -->
+            <NankeHistoryPanel
+              v-else-if="activeModule === 'nanke-history'"
+              @apply-settings="applyNankeSettings"
+            />
           </div>
         </aside>
       </transition>
@@ -69,10 +74,21 @@
           :active-layer-key="activeLayerKey"
         />
 
+        <!-- ★ 南科發展歷程主內容 -->
+        <NankeHistoryView
+          v-else-if="activeModule === 'nanke-history'"
+          :key="nankeKey"
+          :mode="nankeSettings.mode"
+          :swipe-left="nankeSettings.swipeLeft"
+          :swipe-right="nankeSettings.swipeRight"
+          :era-key="nankeSettings.eraKey"
+        />
+
+        <!-- 歡迎畫面 -->
         <div v-else class="welcome-view">
           <div class="welcome-content">
             <h2>數據儀表板</h2>
-            <p class="welcome-desc">選擇左上角模組開始探索</p>
+            <p class="welcome-desc">探索南科園區主題指標</p>
             <div class="feature-cards">
               <div class="feature-card" @click="activeModule = 'temporal'">
                 <div class="card-icon">
@@ -81,6 +97,7 @@
                   </svg>
                 </div>
                 <h4>多時期展示</h4>
+                <p>透過 TimeSlider 查看歷史變化</p>
               </div>
               <div class="feature-card" @click="activeModule = 'area-profile'">
                 <div class="card-icon">
@@ -89,15 +106,17 @@
                   </svg>
                 </div>
                 <h4>行政區概覽</h4>
+                <p>新市區儀表板</p>
               </div>
-              <div class="feature-card" @click="activeModule = 'thematic'">
+              <div class="feature-card" @click="activeModule = 'nanke-history'">
                 <div class="card-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    <path d="M3 3v18h18"/><path d="M18 17l-5-5-4 4-4-4"/>
+                    <circle cx="19" cy="5" r="2"/>
                   </svg>
                 </div>
                 <h4>南科發展歷程</h4>
-                <p></p>
+                <p>由衛星影像看產業變遷</p>
               </div>
             </div>
           </div>
@@ -116,7 +135,10 @@ import TemporalAnalysisPanel from '@/components/dashboard/TemporalAnalysisPanel.
 import TemporalAnalysisView  from '@/components/dashboard/TemporalAnalysisView.vue'
 import AreaProfilePanel      from '@/components/dashboard/AreaProfilePanel.vue'
 import AreaProfileView       from '@/components/dashboard/AreaProfileView.vue'
+import NankeHistoryPanel     from '@/components/dashboard/NankeHistoryPanel.vue'
+import NankeHistoryView      from '@/components/dashboard/NankeHistoryView.vue'
 
+// ── 模組定義 ──
 const modules = [
   {
     id: 'temporal',
@@ -129,25 +151,37 @@ const modules = [
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
   },
   {
-  id: 'thematic',
-  label: '南科發展歷程',
-  icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>'
-  } 
+    id: 'nanke-history',
+    label: '南科發展歷程',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17l-5-5-4 4-4-4"/><circle cx="19" cy="5" r="2"/></svg>',
+  },
 ]
 
-const activeModule  = ref<string | null>(null)
-const websceneId    = ref('826c9dda39d941808528c80e1c0e9c07')
+// ── State ──
+const activeModule    = ref<string | null>(null)
+const websceneId      = ref('826c9dda39d941808528c80e1c0e9c07')
 const selectedVillage = ref('全區')
 const activeLayerKey  = ref('born')
 
+// ── 南科設定 ──
+const nankeSettings = ref({ mode: 'story', swipeLeft: '2000', swipeRight: '2025', eraKey: '2000' })
+const nankeKey      = ref(0)
+
+// ── Computed ──
 const currentModuleLabel = computed(() => modules.find(m => m.id === activeModule.value)?.label ?? '')
 
+// ── Actions ──
 function toggleModule(id: string) {
   activeModule.value = activeModule.value === id ? null : id
 }
 
 function applyTemporalSettings(_settings: unknown) {
   // 保留原有多時期邏輯
+}
+
+function applyNankeSettings(settings: { mode: string; swipeLeft: string; swipeRight: string; eraKey: string }) {
+  nankeSettings.value = { ...settings }
+  nankeKey.value++
 }
 </script>
 
@@ -166,8 +200,8 @@ function applyTemporalSettings(_settings: unknown) {
 .nav-link:hover { background:#f1f5f9; color:#1e293b; }
 .nav-link svg { width:16px; height:16px; }
 
-.module-bar { display:flex; gap:12px; padding:12px 24px; background:#fff; border-bottom:1px solid #e2e8f0; flex-shrink:0; height:68px; }
-.module-btn { display:flex; align-items:center; gap:10px; padding:12px 20px; border:1px solid #e2e8f0; border-radius:12px; background:#fff; color:#64748b; font-size:14px; font-weight:500; cursor:pointer; transition:all .3s; }
+.module-bar { display:flex; gap:12px; padding:12px 24px; background:#fff; border-bottom:1px solid #e2e8f0; flex-shrink:0; height:68px; overflow-x:auto; }
+.module-btn { display:flex; align-items:center; gap:10px; padding:10px 18px; border:1px solid #e2e8f0; border-radius:12px; background:#fff; color:#64748b; font-size:14px; font-weight:500; cursor:pointer; transition:all .3s; white-space:nowrap; flex-shrink:0; }
 .module-btn:hover { background:#f8fafc; border-color:#cbd5e1; color:#1e293b; }
 .module-btn.active { background:linear-gradient(135deg,#60a5fa,#93c5fd); border-color:transparent; color:#fff; box-shadow:0 4px 16px rgba(96,165,250,.3); }
 .module-icon { width:20px; height:20px; display:flex; align-items:center; }
@@ -182,22 +216,22 @@ function applyTemporalSettings(_settings: unknown) {
 .panel-close:hover { background:#e2e8f0; }
 .panel-body { flex:1; overflow-y:auto; }
 
-.main-view { flex:1; overflow:hidden; }
+.main-view { flex:1; overflow:hidden; min-width:0; }
 
-/* welcome */
-.welcome-view { width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#f8fafc,#e0e7ff); }
-.welcome-content { text-align:center; max-width:800px; padding:60px 40px; }
-.welcome-content h2 { font-size:36px; font-weight:700; color:#1e293b; margin:0 0 16px; }
-.welcome-desc { font-size:18px; color:#64748b; margin:0 0 48px; }
-.feature-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:24px; }
-.feature-card { background:#fff; padding:32px 24px; border-radius:16px; box-shadow:0 4px 12px rgba(0,0,0,.05); cursor:pointer; transition:all .3s; }
-.feature-card:hover { transform:translateY(-4px); box-shadow:0 8px 24px rgba(96,165,250,.15); }
-.card-icon { width:64px; height:64px; margin:0 auto 16px; background:linear-gradient(135deg,#dbeafe,#bfdbfe); border-radius:16px; display:flex; align-items:center; justify-content:center; }
-.card-icon svg { width:32px; height:32px; color:#1e40af; }
-.feature-card h4 { font-size:18px; font-weight:600; color:#1e293b; margin:0 0 8px; }
-.feature-card p  { font-size:14px; color:#64748b; margin:0; }
+/* ── Welcome ── */
+.welcome-view { width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:#f8fafc; }
+.welcome-content { max-width:700px; text-align:center; padding:40px 24px; }
+.welcome-content h2 { font-size:28px; font-weight:700; color:#1e293b; margin:0 0 12px; }
+.welcome-desc { font-size:16px; color:#64748b; margin:0 0 40px; line-height:1.6; }
+.feature-cards { display:grid; grid-template-columns:1fr 1fr; gap:16px; text-align:left; }
+.feature-card { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:24px; cursor:pointer; transition:all .3s; }
+.feature-card:hover { border-color:#93c5fd; box-shadow:0 4px 20px rgba(96,165,250,.15); transform:translateY(-2px); }
+.card-icon { width:44px; height:44px; background:linear-gradient(135deg,#eff6ff,#dbeafe); border-radius:12px; display:flex; align-items:center; justify-content:center; margin-bottom:14px; }
+.card-icon svg { width:22px; height:22px; stroke:#3b82f6; }
+.feature-card h4 { font-size:15px; font-weight:600; color:#1e293b; margin:0 0 6px; }
+.feature-card p  { font-size:13px; color:#64748b; margin:0; line-height:1.5; }
 
-/* transition */
-.slide-left-enter-active, .slide-left-leave-active { transition:all .3s; }
-.slide-left-enter-from, .slide-left-leave-to { transform:translateX(-100%); opacity:0; }
+/* ── Slide transition ── */
+.slide-left-enter-active, .slide-left-leave-active { transition: transform .25s ease, opacity .25s ease; }
+.slide-left-enter-from, .slide-left-leave-to { transform: translateX(-100%); opacity: 0; }
 </style>
