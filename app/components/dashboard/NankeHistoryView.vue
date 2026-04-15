@@ -100,16 +100,47 @@
 
     <!-- ═══════ Swipe 對比 ═══════ -->
     <div v-else-if="activeMode === 'swipe'" class="swipe-layout">
-      <div class="swipe-map-wrap">
+      <!-- 地圖區 -->
+      <div class="swipe-maps" ref="swipeMapsRef">
+        <!-- 底層地圖（右側影像，全寬顯示） -->
         <div ref="swipeMapDivRef" class="map-div"></div>
-        <div class="map-loading" v-if="isLoading"><div class="spinner"></div><span>載入影像中…</span></div>
-        <div class="swipe-badge-l">{{ getEraByKey(swipeLeft)?.year }}</div>
-        <div class="swipe-badge-r">{{ getEraByKey(swipeRight)?.year }}</div>
-        <div class="swipe-hint" v-if="!hintDismissed" @click="hintDismissed = true">
-          ← 拖曳分隔線對比影像 ✕
+
+        <!-- 上層 canvas clip（左側影像，clip-path 裁切） -->
+        <div
+          ref="swipeClipRef"
+          class="swipe-clip"
+          :style="{ clipPath: `inset(0 ${100 - swipePct}% 0 0)` }"
+        >
+          <div ref="swipeMapOverlayRef" class="map-div"></div>
         </div>
+
+        <!-- 拖曳線 -->
+        <div
+          class="swipe-divider"
+          :style="{ left: swipePct + '%' }"
+          @mousedown.prevent="startDrag"
+          @touchstart.prevent="startDragTouch"
+        >
+          <div class="divider-line"></div>
+          <div class="divider-handle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
+              <path d="M9 18l-6-6 6-6M15 6l6 6-6 6"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- 年份徽章 -->
+        <div class="swipe-badge-l" :style="{ opacity: swipePct > 10 ? 1 : 0 }">
+          {{ getEraByKey(swipeLeft)?.year }}
+        </div>
+        <div class="swipe-badge-r" :style="{ opacity: swipePct < 90 ? 1 : 0 }">
+          {{ getEraByKey(swipeRight)?.year }}
+        </div>
+
+        <div class="map-loading" v-if="isLoading"><div class="spinner"></div><span>載入影像中…</span></div>
       </div>
-      <!-- Swipe 統計比較 -->
+
+      <!-- 統計比較 -->
       <div class="swipe-stats">
         <div class="swipe-stat-col">
           <div class="ssc-year">{{ getEraByKey(swipeLeft)?.year }}</div>
@@ -121,7 +152,9 @@
           </div>
         </div>
         <div class="swipe-arrow">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
         </div>
         <div class="swipe-stat-col">
           <div class="ssc-year">{{ getEraByKey(swipeRight)?.year }}</div>
@@ -198,24 +231,30 @@ const isPlaying    = ref(false)
 const hintDismissed = ref(false)
 
 // DOM refs
-const mapDivRef      = ref<HTMLDivElement | null>(null)
-const swipeMapDivRef = ref<HTMLDivElement | null>(null)
-const animMapDivRef  = ref<HTMLDivElement | null>(null)
-const storyColRef    = ref<HTMLElement | null>(null)
-const eraBlockRefs   = ref<HTMLElement[]>([])
-const tsTrackRef     = ref<HTMLElement | null>(null)
-const chartRef       = ref<HTMLCanvasElement | null>(null)
+const mapDivRef         = ref<HTMLDivElement | null>(null)
+const swipeMapsRef      = ref<HTMLDivElement | null>(null)
+const swipeMapDivRef    = ref<HTMLDivElement | null>(null)   // 底層（右側影像）
+const swipeMapOverlayRef= ref<HTMLDivElement | null>(null)   // 上層（左側影像，clip）
+const swipeClipRef      = ref<HTMLDivElement | null>(null)
+const animMapDivRef     = ref<HTMLDivElement | null>(null)
+const storyColRef       = ref<HTMLElement | null>(null)
+const eraBlockRefs      = ref<HTMLElement[]>([])
+const tsTrackRef        = ref<HTMLElement | null>(null)
+const chartRef          = ref<HTMLCanvasElement | null>(null)
 
 // ArcGIS instances
-let mapView: any      = null
-let swipeView: any    = null
-let animView: any     = null
-let currentLayer: any = null
-let baseLayer: any    = null
-let swipeWidget: any  = null
+let mapView: any        = null
+let swipeViewBase: any  = null   // 底層 MapView（右側 / 近期影像）
+let swipeViewOver: any  = null   // 上層 MapView（左側 / 早期影像，clip-path 裁切）
+let animView: any       = null
+let currentLayer: any   = null
 let playTimer: ReturnType<typeof setInterval> | null = null
-let chartInstance: any = null
+let chartInstance: any  = null
 let observer: IntersectionObserver | null = null
+
+// swipe 拖曳狀態
+const swipePct = ref(50)
+let isDragging = false
 
 // ── Computed ──
 const activeEra = computed(() => ERAS.find((e: EraData) => e.id === activeEraId.value) ?? ERAS[0])
@@ -329,66 +368,107 @@ async function loadEraLayer(era: EraData, MapImageLayer: any, portal: any, map: 
 }
 
 // ──────────────────────────────────────────────
-// Swipe 模式
+// Swipe 模式（clip-path 疊加，單視角）
 // ──────────────────────────────────────────────
 async function initSwipeMap() {
-  if (!swipeMapDivRef.value) return
+  if (!swipeMapDivRef.value || !swipeMapOverlayRef.value) return
   isLoading.value = true
 
-  const { MapView, Map, MapImageLayer, Portal, Swipe } = await getArcGIS()
+  const { MapView, Map, MapImageLayer, Portal } = await getArcGIS()
   const portal = makePortal(Portal)
   await ensurePortalAuth(portal)
-  const map = new Map({ basemap: 'satellite' })
 
-  if (swipeView) { swipeView.destroy(); swipeView = null }
-  swipeView = markRaw(new MapView({
+  const CENTER = [120.28370671141899, 23.100996752910074]
+  const ZOOM   = 14
+
+  // ── 底層 MapView（右側 / 近期影像）──
+  if (swipeViewBase) { swipeViewBase.destroy(); swipeViewBase = null }
+  const mapBase = new Map({ basemap: 'satellite' })
+  swipeViewBase = markRaw(new MapView({
     container: swipeMapDivRef.value,
-    map,
-    center: [120.28370671141899, 23.100996752910074],
-    zoom: 14,
+    map: mapBase,
+    center: CENTER,
+    zoom: ZOOM,
     ui: { components: ['zoom'] },
   }))
-  await swipeView.when()
 
-  await buildSwipeLayers(MapImageLayer, portal, map, Swipe)
-  isLoading.value = false
-}
-
-async function buildSwipeLayers(MapImageLayer: any, portal: any, map: any, Swipe: any) {
-  const leftId  = IMAGE_LAYERS[swipeLeft.value]
-  const rightId = IMAGE_LAYERS[swipeRight.value]
-  if (!leftId || !rightId) return
-
-  // lLayer 在下（leading/左側），rLayer 在上（trailing/右側）
-  // Swipe widget 會用分隔線裁切：左側只顯示 lLayer，右側只顯示 rLayer
-  const lLayer = markRaw(new MapImageLayer({ portalItem: { id: leftId,  portal }, opacity: 1 }))
-  const rLayer = markRaw(new MapImageLayer({ portalItem: { id: rightId, portal }, opacity: 1 }))
-
-  // 先加 lLayer，再加 rLayer（z-order：rLayer 在上）
-  map.add(lLayer)
-  map.add(rLayer)
-
-  if (swipeWidget) { swipeWidget.destroy() }
-  swipeWidget = markRaw(new Swipe({
-    view:           swipeView,
-    leadingLayers:  [lLayer],   // 分隔線左側顯示 lLayer（早期）
-    trailingLayers: [rLayer],   // 分隔線右側顯示 rLayer（近期）
-    position:       50,
-    direction:      'horizontal',
+  // ── 上層 MapView（左側 / 早期影像，clip-path 裁切）──
+  if (swipeViewOver) { swipeViewOver.destroy(); swipeViewOver = null }
+  const mapOver = new Map({ basemap: 'satellite' })
+  swipeViewOver = markRaw(new MapView({
+    container: swipeMapOverlayRef.value,
+    map: mapOver,
+    center: CENTER,
+    zoom: ZOOM,
+    ui: { components: [] },  // 不顯示任何 UI 控件
   }))
-  swipeView.ui.add(swipeWidget)
+
+  await Promise.all([swipeViewBase.when(), swipeViewOver.when()])
+
+  // ── 視角同步：底層操作帶動上層（上層禁止直接操作）──
+  swipeViewBase.watch('extent', (ext: any) => {
+    if (ext && swipeViewOver) swipeViewOver.extent = ext
+  })
+  // 上層停用所有互動，避免搶奪事件
+  swipeViewOver.on('drag',       (e: any) => e.stopPropagation())
+  swipeViewOver.on('mouse-wheel',(e: any) => e.stopPropagation())
+  swipeViewOver.on('key-down',   (e: any) => e.stopPropagation())
+
+  // ── 載入影像 ──
+  const rightId = IMAGE_LAYERS[swipeRight.value]
+  const leftId  = IMAGE_LAYERS[swipeLeft.value]
+
+  if (rightId) {
+    const rLayer = markRaw(new MapImageLayer({ portalItem: { id: rightId, portal }, opacity: 1 }))
+    mapBase.add(rLayer)
+    try { await rLayer.load() } catch (e) { console.error('[Swipe Base]', e) }
+  }
+  if (leftId) {
+    const lLayer = markRaw(new MapImageLayer({ portalItem: { id: leftId, portal }, opacity: 1 }))
+    mapOver.add(lLayer)
+    try { await lLayer.load() } catch (e) { console.error('[Swipe Over]', e) }
+  }
+
+  isLoading.value = false
 }
 
 async function rebuildSwipe() {
-  if (!swipeView) return
-  isLoading.value = true
-  swipeView.map.removeAll()
-  if (swipeWidget) { swipeWidget.destroy(); swipeWidget = null }
+  if (swipeViewBase) { swipeViewBase.destroy(); swipeViewBase = null }
+  if (swipeViewOver) { swipeViewOver.destroy(); swipeViewOver = null }
+  await nextTick()
+  await initSwipeMap()
+}
 
-  const { MapImageLayer, Portal, Swipe } = await getArcGIS()
-  const portal = makePortal(Portal)
-  await buildSwipeLayers(MapImageLayer, portal, swipeView.map, Swipe)
-  isLoading.value = false
+// ── 拖曳線邏輯 ──
+function startDrag(_e: MouseEvent) {
+  isDragging = true
+  document.addEventListener('mousemove', onDragMove)
+  document.addEventListener('mouseup',   onDragEnd)
+}
+function startDragTouch(_e: TouchEvent) {
+  isDragging = true
+  document.addEventListener('touchmove', onDragMoveTouch, { passive: false })
+  document.addEventListener('touchend',  onDragEnd)
+}
+function onDragMove(e: MouseEvent) {
+  if (!isDragging || !swipeMapsRef.value) return
+  const rect = swipeMapsRef.value.getBoundingClientRect()
+  swipePct.value = Math.min(Math.max((e.clientX - rect.left) / rect.width * 100, 2), 98)
+}
+function onDragMoveTouch(e: TouchEvent) {
+  if (!isDragging || !swipeMapsRef.value) return
+  e.preventDefault()
+  const touch = e.touches[0]
+  if (!touch) return
+  const rect = swipeMapsRef.value.getBoundingClientRect()
+  swipePct.value = Math.min(Math.max((touch.clientX - rect.left) / rect.width * 100, 2), 98)
+}
+function onDragEnd() {
+  isDragging = false
+  document.removeEventListener('mousemove',  onDragMove)
+  document.removeEventListener('mouseup',    onDragEnd)
+  document.removeEventListener('touchmove',  onDragMoveTouch)
+  document.removeEventListener('touchend',   onDragEnd)
 }
 
 // ──────────────────────────────────────────────
@@ -596,10 +676,14 @@ onMounted(async () => {
 onUnmounted(() => {
   stopPlay()
   observer?.disconnect()
+  document.removeEventListener('mousemove', onDragMove)
+  document.removeEventListener('mouseup',   onDragEnd)
+  document.removeEventListener('touchmove', onDragMoveTouch)
+  document.removeEventListener('touchend',  onDragEnd)
   mapView?.destroy()
-  swipeView?.destroy()
+  swipeViewBase?.destroy()
+  swipeViewOver?.destroy()
   animView?.destroy()
-  swipeWidget?.destroy()
   chartInstance?.destroy()
 })
 </script>
@@ -791,30 +875,87 @@ onUnmounted(() => {
 /* ══════════════════════════════
    Swipe 模式
 ══════════════════════════════ */
+/* ══════════════════════════════
+   Swipe 模式
+══════════════════════════════ */
 .swipe-layout { display: flex; flex-direction: column; height: 100%; gap: 10px; padding: 12px; }
-.swipe-map-wrap {
+
+.swipe-maps {
   flex: 1; min-height: 0;
-  border-radius: 10px; overflow: hidden;
   position: relative;
+  border-radius: 10px; overflow: hidden;
   border: 0.5px solid var(--color-border-tertiary);
+  user-select: none;
 }
+
+/* 底層地圖（近期影像）全滿 */
+.swipe-maps > .map-div {
+  position: absolute;
+  inset: 0;
+}
+
+/* 上層地圖（早期影像），clip-path 控制顯示範圍 */
+.swipe-clip {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;   /* 上層不攔截滑鼠，讓底層地圖可操作 */
+  will-change: clip-path;
+}
+.swipe-clip .map-div {
+  pointer-events: none;
+}
+
+/* 拖曳分隔線 */
+.swipe-divider {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 40px;
+  transform: translateX(-50%);
+  z-index: 20;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+}
+.divider-line {
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 50%;
+  width: 2px;
+  background: #fff;
+  box-shadow: 0 0 8px rgba(0,0,0,0.5);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.divider-handle {
+  position: relative;
+  z-index: 1;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center;
+  color: #334155;
+  transition: transform 0.12s, box-shadow 0.12s;
+  pointer-events: none;
+}
+.swipe-divider:hover .divider-handle {
+  transform: scale(1.12);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+}
+.swipe-divider:active .divider-handle { transform: scale(0.94); }
+
 .swipe-badge-l, .swipe-badge-r {
   position: absolute; top: 10px;
   font-size: 11px; font-weight: 600;
   padding: 4px 9px; border-radius: 6px;
   background: rgba(15,23,42,0.75); color: #e2e8f0;
-  backdrop-filter: blur(6px); z-index: 5; pointer-events: none;
+  backdrop-filter: blur(6px); z-index: 10; pointer-events: none;
+  transition: opacity 0.2s;
 }
 .swipe-badge-l { left: 12px; }
 .swipe-badge-r { right: 12px; }
-.swipe-hint {
-  position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
-  font-size: 11px; color: var(--color-text-secondary);
-  background: var(--color-background-secondary);
-  padding: 5px 12px; border-radius: 20px;
-  border: 0.5px solid var(--color-border-secondary);
-  cursor: pointer; white-space: nowrap; z-index: 5;
-}
 
 .swipe-stats {
   display: flex; align-items: center; gap: 12px;
