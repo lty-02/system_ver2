@@ -1,5 +1,13 @@
 <template>
   <div class="temporal-view">
+    <!-- 自訂 Popup -->
+    <MapPopup
+      :visible="popupVisible"
+      :data="popupData"
+      :screen-x="popupScreenX"
+      :screen-y="popupScreenY"
+      @close="closePopup"
+    />
 
     <!-- 圖層名稱標題列 -->
     <div class="layer-title-bar" v-if="activeTheme">
@@ -101,8 +109,8 @@
       </div>
     </div>
 
-    <!-- ═══════════════ 模式二：雙時期比較 ═══════════════ -->
-    <div v-else-if="activeMode === 'dual'" class="mode-panel">
+    <!-- ═══════════════ 模式二：雙時期差異 ═══════════════ -->
+    <div v-else-if="activeMode === 'dual'" class="mode-panel dual-panel">
       <div class="dual-controls">
         <div class="dual-period-row">
           <div class="dual-period-group">
@@ -111,7 +119,7 @@
               <option v-for="p in activeTheme?.periods ?? []" :key="p.value" :value="p.value">{{ p.label }}</option>
             </select>
           </div>
-          <span class="dual-vs">vs</span>
+          <span class="dual-vs">→</span>
           <div class="dual-period-group">
             <span class="period-dot dot-b"></span>
             <select v-model="selectedDualB" class="period-select" @change="onDualChange">
@@ -128,35 +136,32 @@
             @click="selectField(f.key)"
           >{{ f.shortLabel }}</button>
         </div>
+        <!-- 色階說明 -->
+        <div class="diff-scale-bar">
+          <span class="diff-scale-label neg">減少</span>
+          <div class="diff-scale-gradient"></div>
+          <span class="diff-scale-label pos">增加</span>
+        </div>
       </div>
-      <div class="dual-maps">
-        <div class="dual-map-wrap">
+      <div class="dual-body">
+        <div class="dual-map-full">
           <div ref="dualMapDivA" class="map-div"></div>
-          <div class="map-badge badge-a">{{ getPeriodLabel(selectedDualA) }}</div>
+          <div class="map-badge">{{ getPeriodLabel(selectedDualA) }} → {{ getPeriodLabel(selectedDualB) }}・{{ getFieldLabel(selectedField) }}</div>
+          <div v-if="isRendering" class="map-spinner"><div class="spinner"></div></div>
         </div>
-        <div class="dual-divider"></div>
-        <div class="dual-map-wrap">
-          <div ref="dualMapDivB" class="map-div"></div>
-          <div class="map-badge badge-b">{{ getPeriodLabel(selectedDualB) }}</div>
-        </div>
-      </div>
-      <div class="data-section">
+        <!-- 差異數據表 -->
+        <div class="data-section">
         <div v-if="isLoadingData" class="data-loading">
-          <div class="spinner sm"></div><span>查詢資料中...</span>
+          <div class="spinner sm"></div><span>計算差異中...</span>
         </div>
         <template v-else-if="dualRows.length > 0">
-          <div class="diff-legend">
-            <span class="dot dot-a"></span><span>{{ getPeriodLabel(selectedDualA) }}</span>
-            <span class="dot dot-b" style="margin-left:12px"></span><span>{{ getPeriodLabel(selectedDualB) }}</span>
-            <span style="margin-left:auto;font-size:10px;color:var(--color-text-tertiary)">依差異絕對值排序</span>
-          </div>
           <div class="table-wrapper">
             <table class="data-table">
               <thead>
                 <tr>
                   <th class="left">行政區</th>
-                  <th style="color:#3B5BDB">期A（{{ getFieldUnit(selectedField) }}）</th>
-                  <th style="color:#12B886">期B（{{ getFieldUnit(selectedField) }}）</th>
+                  <th>{{ getPeriodLabel(selectedDualA) }}</th>
+                  <th>{{ getPeriodLabel(selectedDualB) }}</th>
                   <th>差異</th>
                   <th>變動%</th>
                 </tr>
@@ -164,8 +169,8 @@
               <tbody>
                 <tr v-for="row in dualRows" :key="row.name">
                   <td class="left name-cell">{{ row.name }}</td>
-                  <td class="num-cell" style="color:#3B5BDB">{{ formatValue(row.valA, selectedField) }}</td>
-                  <td class="num-cell" style="color:#12B886">{{ formatValue(row.valB, selectedField) }}</td>
+                  <td class="num-cell">{{ formatValue(row.valA, selectedField) }}</td>
+                  <td class="num-cell">{{ formatValue(row.valB, selectedField) }}</td>
                   <td class="num-cell" :class="row.delta >= 0 ? 'pos' : 'neg'">
                     {{ row.delta >= 0 ? '+' : '' }}{{ formatValue(row.delta, selectedField) }}
                   </td>
@@ -177,59 +182,74 @@
             </table>
           </div>
         </template>
-        <div v-else class="data-empty">選擇兩個時期與指標後顯示比較</div>
-      </div>
-    </div>
+        <div v-else class="data-empty">選擇兩個時期與指標後顯示差異</div>
+        </div><!-- end data-section -->
+      </div><!-- end dual-body -->
+    </div><!-- end dual-panel -->
 
     <!-- ═══════════════ 模式三：多時期趨勢 ═══════════════ -->
     <div v-else-if="activeMode === 'multi'" class="mode-panel multi-panel">
-      <div class="multi-top">
-        <div class="map-wrapper" style="flex:1;min-height:0">
+
+      <!-- 指標選擇列（頂部，固定） -->
+      <div class="multi-field-bar">
+        <span class="selector-label">指標</span>
+        <div class="field-chips">
+          <button
+            v-for="f in activeTheme?.fields ?? []"
+            :key="f.key"
+            class="field-chip"
+            :class="{ active: selectedField === f.key }"
+            @click="selectField(f.key)"
+          >{{ f.shortLabel }}</button>
+        </div>
+      </div>
+
+      <!-- 中段：左欄行政區 + 右側地圖 -->
+      <div class="multi-mid">
+
+        <!-- 左側地圖 -->
+        <div class="multi-map-col">
           <div ref="multiMapDiv" class="map-div"></div>
           <div class="map-badge">{{ getPeriodLabel(latestPeriod) }}・{{ getFieldLabel(selectedField) }}</div>
           <div v-if="isRendering" class="map-spinner"><div class="spinner"></div></div>
         </div>
-        <div class="multi-controls">
-          <div class="field-selector" style="border-bottom:0.5px solid var(--color-border-tertiary)">
-            <span class="selector-label">指標</span>
-            <div class="field-chips">
-              <button
-                v-for="f in activeTheme?.fields ?? []"
-                :key="f.key"
-                class="field-chip"
-                :class="{ active: selectedField === f.key }"
-                @click="selectField(f.key)"
-              >{{ f.shortLabel }}</button>
-            </div>
+
+        <!-- 右側行政區列表 -->
+        <div class="multi-area-col">
+          <div class="multi-area-header">
+            <span class="selector-label" style="padding:0">行政區</span>
+            <span class="multi-area-count">{{ areaNames.length }} 個</span>
           </div>
-          <div class="field-selector" style="border-bottom:none">
-            <span class="selector-label">行政區</span>
-            <div class="field-chips">
-              <button
-                v-for="name in areaNames"
-                :key="name"
-                class="field-chip sm"
-                :class="{ active: selectedArea === name }"
-                @click="selectArea(name)"
-              >{{ name }}</button>
-            </div>
+          <div class="multi-area-list">
+            <button
+              v-for="name in areaNames"
+              :key="name"
+              class="multi-area-item"
+              :class="{ active: selectedArea === name }"
+              @click="selectArea(name)"
+            >{{ name }}</button>
           </div>
         </div>
+
       </div>
+
+      <!-- 下方：趨勢圖 + 數據表 -->
       <div class="multi-bottom">
-        <div v-if="isLoadingData" class="data-loading" style="padding:20px 12px">
+        <div v-if="isLoadingData" class="data-loading" style="padding:16px 12px">
           <div class="spinner sm"></div><span>載入趨勢資料中...</span>
         </div>
         <template v-else-if="multiRows.length > 0">
+          <!-- 折線圖 -->
           <div class="trend-section">
             <div class="trend-title">
               {{ selectedArea }} ・ {{ getFieldLabel(selectedField) }} 趨勢
             </div>
-            <div style="height:160px; position:relative;">
+            <div style="height:140px; position:relative;">
               <canvas id="trendChart"></canvas>
             </div>
           </div>
-          <div class="data-section" style="padding-top:0">
+          <!-- 數據表 -->
+          <div class="data-section" style="padding-top:0; flex:1; overflow-y:auto;">
             <div class="table-wrapper">
               <table class="data-table">
                 <thead>
@@ -257,8 +277,9 @@
             </div>
           </div>
         </template>
-        <div v-else class="data-empty">尚無資料</div>
+        <div v-else class="data-empty">選擇行政區後顯示趨勢</div>
       </div>
+
     </div>
 
   </div>
@@ -277,6 +298,8 @@ import {
   getLayerDef,
   scanPeriodsFromLayers,
 } from '~/composables/temporalLayerConfig'
+import MapPopup from '~/components/common/MapPopup.vue'
+import type { PopupData } from '~/components/common/MapPopup.vue'
 import type { TemporalPeriod } from '~/composables/temporalLayerConfig'
 
 // ==================== 型別 ====================
@@ -307,6 +330,21 @@ const selectedDualA  = ref<string>('')
 const selectedDualB  = ref<string>('')
 const selectedArea   = ref<string>('')
 const isLoadingData  = ref(false)
+
+// Popup 狀態
+const popupVisible   = ref(false)
+const popupData      = ref<PopupData | null>(null)
+const popupScreenX   = ref(0)
+const popupScreenY   = ref(0)
+
+function closePopup() { popupVisible.value = false }
+
+function openPopup(data: PopupData, screenX: number, screenY: number) {
+  popupData.value    = data
+  popupScreenX.value = screenX
+  popupScreenY.value = screenY
+  popupVisible.value = true
+}
 const isRendering    = ref(false)
 const isScanning     = ref(false)
 const singleFeatures = ref<FeatureRow[]>([])
@@ -326,7 +364,7 @@ const multiMapDiv  = ref<HTMLDivElement | null>(null)
 // ArcGIS objects
 let singleView: MapView | null = null
 let dualViewA:  MapView | null = null
-let dualViewB:  MapView | null = null
+let dualViewB:  MapView | null = null  // 保留但不使用（雙時期改單圖差異渲染）
 let multiView:  MapView | null = null
 let singleLayer: FeatureLayer | null = null
 let dualLayerA:  FeatureLayer | null = null
@@ -472,16 +510,26 @@ async function createMapView(container: HTMLDivElement): Promise<MapView> {
   // 先載入 WebScene catalog（只做一次，後續走快取）
   await loadWebSceneCatalog()
 
-  const portal = new Portal({ url: PORTAL_URL })
-  const webMap = new WebMap({ portalItem: { id: WEBMAP_ID, portal } })
-  const view   = new MapView({ container, map: webMap })
+  const portal  = new Portal({ url: PORTAL_URL })
+  // 用 WebMap 只取底圖設定，建立後立即移除所有業務圖層
+  const webMap  = new WebMap({ portalItem: { id: WEBMAP_ID, portal } })
+  await webMap.load()
+  // 取得底圖 ID 後用乾淨的 Map 重建，只保留 basemap
+  const basemap = webMap.basemap
+  const { default: Map } = await import('@arcgis/core/Map')
+  const cleanMap = new Map({ basemap })
+  const view = new MapView({
+    container,
+    map: cleanMap,
+    center: [120.25, 23.0],
+    zoom: 10,
+  })
   await view.when()
 
   view.ui.move('zoom', 'top-left')
   view.ui.remove('attribution')
-
-  // 隱藏 WebMap 原有圖層（只保留底圖）
-  webMap.allLayers.forEach((l: any) => { l.visible = false })
+  // 停用 esri 內建 popup，改用自訂元件
+  view.popupEnabled = false
 
   // 從 WebScene catalog 掃描時期
   const def = activeLayerDef.value
@@ -507,6 +555,55 @@ async function createMapView(container: HTMLDivElement): Promise<MapView> {
   }
 
   console.log('[TemporalAnalysis]', def?.label, '| 時期數:', scannedPeriods.value.length)
+
+  // 點擊地圖：顯示自訂 popup
+  view.on('click', async (event) => {
+    const theme = activeTheme.value
+    if (!theme) return
+    const hitResult = await view.hitTest(event)
+    const graphicHit = hitResult.results.find(
+      (r: any) => r.type === 'graphic' && r.graphic?.attributes
+    ) as any
+    if (!graphicHit) { closePopup(); return }
+
+    const attrs  = graphicHit.graphic.attributes ?? {}
+    const isDiff = graphicHit.graphic?.layer?.id === 'diff-layer'
+
+    // 取螢幕座標（用於 popup 定位）
+    const sx = event.native?.clientX ?? event.x ?? popupScreenX.value
+    const sy = event.native?.clientY ?? event.y ?? popupScreenY.value
+
+    if (isDiff) {
+      const { name, valA, valB, delta, pct } = attrs
+      const pctNum = parseFloat(String(pct ?? 0))
+      openPopup({
+        title:      String(name ?? ''),
+        mode:       'diff',
+        fieldLabel: getFieldLabel(selectedField.value),
+        periodA:    getPeriodLabel(selectedDualA.value),
+        periodB:    getPeriodLabel(selectedDualB.value),
+        valA:       formatValue(Number(valA), selectedField.value),
+        valB:       formatValue(Number(valB), selectedField.value),
+        delta:      formatValue(Number(delta), selectedField.value),
+        pctNum,
+        pct:        isNaN(pctNum) ? '—' : pctNum.toFixed(1),
+      }, sx, sy)
+    } else {
+      const labelFld = resolveLabelField(attrs)
+      const title    = String(attrs[labelFld] ?? '')
+      const rows = theme.fields
+        .map(f => {
+          const actualKey = resolveKey(attrs, f.key)
+          const val       = attrs[actualKey]
+          return (val !== undefined && val !== null)
+            ? { key: f.key, label: f.shortLabel, value: formatValue(Number(val), f.key), unit: f.unit }
+            : null
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null)
+      openPopup({ title, mode: 'fields', rows }, sx, sy)
+    }
+  })
+
   return view
 }
 
@@ -566,6 +663,117 @@ async function showOnlyPeriod(view: MapView, targetValue: string): Promise<Featu
   layer.visible = true
   view.map?.add(layer)
   return layer
+}
+
+// ==================== 雙時期差異渲染（RdBu 發散色盤）====================
+/**
+ * 計算 A→B 差異，套用 RdBu 發散色盤到 dualViewA 的虛擬圖層。
+ * 正值（增加）→ 紅色，負值（減少）→ 藍色，零 → 白色。
+ * 使用 GraphicsLayer 繪製多邊形，避免再依賴 FeatureLayer renderer 限制。
+ */
+async function applyDiffRenderer(): Promise<void> {
+  if (!dualViewA || !dualLayerA || !dualLayerB) return
+  isRendering.value = true
+
+  try {
+    const fieldKey = selectedField.value
+    const isRatio  = isRatioField(fieldKey)
+
+    // 取兩個時期的全部 feature（含幾何）
+    const [resultA, resultB] = await Promise.all([
+      dualLayerA.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true }),
+      dualLayerB.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: false }),
+    ])
+    if (!resultA.features.length) return
+
+    const sampleAttrs  = resultA.features[0]?.attributes ?? {}
+    const actualKey    = resolveKey(sampleAttrs, fieldKey)
+    const actualLabel  = resolveLabelField(sampleAttrs)
+
+    // 建立 B 的 name→value Map
+    const mapB = new Map<string, number>()
+    for (const f of resultB.features) {
+      const aB = f.attributes ?? {}
+      const actualKeyB = resolveKey(aB, fieldKey)
+      const actualLabelB = resolveLabelField(aB)
+      mapB.set(String(aB[actualLabelB] ?? ''), Number(aB[actualKeyB] ?? 0))
+    }
+
+    // 計算所有差異值
+    const deltas = resultA.features.map(f => {
+      const a   = f.attributes ?? {}
+      const name = String(a[actualLabel] ?? '')
+      const vA  = Number(a[actualKey] ?? 0)
+      const vB  = mapB.get(name) ?? 0
+      return vB - vA
+    })
+
+    const maxAbs = Math.max(...deltas.map(Math.abs), 1)
+
+    // RdBu 發散色盤（9色）
+    const RD_COLORS = ['#b2182b','#d6604d','#f4a582','#fddbc7','#f7f7f7','#d1e5f0','#92c5de','#4393c3','#2166ac']
+    // 正值 → 紅(index 0~3)，負值 → 藍(index 5~8)，零 → 白(index 4)
+    function deltaToColor(d: number): number[] {
+      const norm = d / maxAbs  // -1 ~ +1
+      // map norm to index: +1→0(red), 0→4(white), -1→8(blue)
+      const idx  = Math.round((1 - norm) / 2 * 8)
+      const hex  = RD_COLORS[Math.max(0, Math.min(8, idx))] ?? '#f7f7f7'
+      const r = parseInt(hex.slice(1,3), 16)
+      const g = parseInt(hex.slice(3,5), 16)
+      const b = parseInt(hex.slice(5,7), 16)
+      return [r, g, b, 220]
+    }
+
+    // 移除舊的差異 GraphicsLayer
+    const oldGL = (dualViewA.map as any)?.findLayerById?.('diff-layer')
+    if (oldGL) dualViewA.map?.remove(oldGL)
+
+    // 建立 GraphicsLayer 繪製差異多邊形
+    const { default: GraphicsLayer } = await import('@arcgis/core/layers/GraphicsLayer')
+    const { default: Graphic }       = await import('@arcgis/core/Graphic')
+
+    const gl = new GraphicsLayer({ id: 'diff-layer', title: 'diff-layer' })
+
+    for (let i = 0; i < resultA.features.length; i++) {
+      const f     = resultA.features[i]
+      if (!f) continue
+      const delta = deltas[i] ?? 0
+      const color = deltaToColor(delta)
+      const name  = String((f.attributes ?? {})[actualLabel] ?? '')
+      const vA    = Number((f.attributes ?? {})[actualKey] ?? 0)
+      const vB    = mapB.get(name) ?? 0
+
+      gl.add(new Graphic({
+        geometry: f.geometry,
+        symbol: {
+          type: 'simple-fill',
+          color,
+          outline: { color: [255,255,255,140], width: 0.4 },
+        } as any,
+        attributes: { name, valA: vA, valB: vB, delta, pct: vA !== 0 ? ((vB-vA)/vA*100).toFixed(1) : '—', fieldLabel: getFieldLabel(fieldKey) },
+        popupTemplate: {
+          title: '{name}',
+          content: [{
+            type: 'fields',
+            fieldInfos: [
+              { fieldName: 'fieldLabel', label: '指標' },
+              { fieldName: 'valA', label: getPeriodLabel(selectedDualA.value), format: { digitSeparator: true, places: isRatio ? 2 : 0 } },
+              { fieldName: 'valB', label: getPeriodLabel(selectedDualB.value), format: { digitSeparator: true, places: isRatio ? 2 : 0 } },
+              { fieldName: 'delta', label: '差異', format: { digitSeparator: true, places: isRatio ? 2 : 0 } },
+              { fieldName: 'pct', label: '變動%' },
+            ],
+          }],
+        } as any,
+      }))
+    }
+
+    dualViewA.map?.add(gl)
+
+  } catch (e) {
+    console.warn('[TemporalAnalysis] applyDiffRenderer 失敗:', e)
+  } finally {
+    isRendering.value = false
+  }
 }
 
 // ==================== 面量圖渲染（log1p/gamma + ClassBreaks）====================
@@ -751,40 +959,30 @@ const selectField = async (key: string): Promise<void> => {
   if (activeMode.value === 'single' && singleLayer) {
     await Promise.all([applyChoroRenderer(singleLayer, key), loadSingleData()])
   } else if (activeMode.value === 'dual') {
-    const tasks: Promise<void>[] = []
-    if (dualLayerA) tasks.push(applyChoroRenderer(dualLayerA, key))
-    if (dualLayerB) tasks.push(applyChoroRenderer(dualLayerB, key))
-    await Promise.all([...tasks, loadDualData()])
+    await Promise.all([loadDualData(), applyDiffRenderer()])
   } else if (activeMode.value === 'multi' && multiLayer) {
     await Promise.all([applyChoroRenderer(multiLayer, key), loadMultiData()])
   }
 }
 
-// ==================== 模式二：雙時期 ====================
+// ==================== 模式二：雙時期差異 ====================
 async function loadDualMode(): Promise<void> {
-  if (!dualMapDivA.value || !dualMapDivB.value) return
+  if (!dualMapDivA.value) return
   dualViewA?.destroy(); dualViewA = null
   dualViewB?.destroy(); dualViewB = null
 
-  ;[dualViewA, dualViewB] = await Promise.all([
-    createMapView(dualMapDivA.value),
-    createMapView(dualMapDivB.value),
-  ])
+  dualViewA = await createMapView(dualMapDivA.value)
 
   // 初始時期
   const periods = activeTheme.value?.periods ?? []
   if (!selectedDualA.value) selectedDualA.value = periods[0]?.value ?? ''
   if (!selectedDualB.value) selectedDualB.value = periods[periods.length - 1]?.value ?? ''
 
-  dualLayerA = await showOnlyPeriod(dualViewA, selectedDualA.value)
-  dualLayerB = await showOnlyPeriod(dualViewB, selectedDualB.value)
+  // 同時載入兩個時期圖層（不顯示，只取資料計算差異）
+  dualLayerA = await getOrCreateLayer(dualViewA, activeTheme.value?.periods.find(p => p.value === selectedDualA.value)?.layerName ?? '')
+  dualLayerB = await getOrCreateLayer(dualViewA, activeTheme.value?.periods.find(p => p.value === selectedDualB.value)?.layerName ?? '')
 
-  const tasks: Promise<void>[] = [loadDualData()]
-  if (dualLayerA) tasks.push(applyChoroRenderer(dualLayerA, selectedField.value))
-  if (dualLayerB) tasks.push(applyChoroRenderer(dualLayerB, selectedField.value))
-  await Promise.all(tasks)
-
-  if (dualViewA && dualViewB) syncViews(dualViewA, dualViewB)
+  await Promise.all([loadDualData(), applyDiffRenderer()])
 }
 
 async function loadDualData(): Promise<void> {
@@ -810,13 +1008,12 @@ async function loadDualData(): Promise<void> {
 }
 
 const onDualChange = async (): Promise<void> => {
-  if (!dualViewA || !dualViewB) return
-  dualLayerA = await showOnlyPeriod(dualViewA, selectedDualA.value)
-  dualLayerB = await showOnlyPeriod(dualViewB, selectedDualB.value)
-  const tasks: Promise<void>[] = [loadDualData()]
-  if (dualLayerA) tasks.push(applyChoroRenderer(dualLayerA, selectedField.value))
-  if (dualLayerB) tasks.push(applyChoroRenderer(dualLayerB, selectedField.value))
-  await Promise.all(tasks)
+  if (!dualViewA) return
+  const theme = activeTheme.value
+  if (!theme) return
+  dualLayerA = await getOrCreateLayer(dualViewA, theme.periods.find(p => p.value === selectedDualA.value)?.layerName ?? '')
+  dualLayerB = await getOrCreateLayer(dualViewA, theme.periods.find(p => p.value === selectedDualB.value)?.layerName ?? '')
+  await Promise.all([loadDualData(), applyDiffRenderer()])
 }
 
 // ==================== 模式三：多時期 ====================
@@ -1159,18 +1356,92 @@ const modes = [
 .neg { color:#E03131; }
 
 /* ── 多時期 ── */
-.multi-panel { flex-direction:column; overflow:hidden; }
-.multi-top   { flex:1; display:flex; flex-direction:column; min-height:0; }
-.multi-controls { flex-shrink:0; }
-.multi-bottom {
-  height:340px; flex-shrink:0;
-  border-top:0.5px solid var(--color-border-tertiary);
-  overflow-y:auto; display:flex; flex-direction:column;
+/* ── 多時期趨勢 ── */
+.multi-panel {
+  flex-direction: column; overflow: hidden;
 }
-.multi-bottom::-webkit-scrollbar { width:4px; }
-.multi-bottom::-webkit-scrollbar-thumb { background:var(--color-border-secondary); border-radius:2px; }
-.trend-section { padding:12px 12px 8px; flex-shrink:0; }
-.trend-title   { font-size:11px; font-weight:500; color:var(--color-text-secondary); margin-bottom:8px; }
+
+/* 指標選擇列 */
+.multi-field-bar {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  flex-shrink: 0; flex-wrap: wrap;
+}
+
+/* 中段：行政區 + 地圖 */
+.multi-mid {
+  flex: 1; display: flex; min-height: 0; overflow: hidden;
+}
+
+/* 右側行政區列表 */
+.multi-area-col {
+  width: 140px; flex-shrink: 0;
+  border-left: 0.5px solid var(--color-border-tertiary);
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--color-background-primary);
+}
+.multi-area-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; flex-shrink: 0;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-secondary);
+}
+.multi-area-count {
+  font-size: 10px; color: var(--color-text-tertiary);
+  background: var(--color-background-primary);
+  padding: 1px 6px; border-radius: 10px;
+}
+.multi-area-list {
+  flex: 1; overflow-y: auto; padding: 4px 0;
+}
+.multi-area-list::-webkit-scrollbar { width: 3px; }
+.multi-area-list::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 2px; }
+
+.multi-area-item {
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; padding: 7px 10px; text-align: left;
+  font-size: 12px; font-weight: 400;
+  color: var(--color-text-secondary);
+  background: transparent; border: none; cursor: pointer;
+  transition: background 0.12s; border-left: 2px solid transparent;
+  line-height: 1.3;
+}
+.multi-area-item::before {
+  content: '';
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--color-border-secondary);
+  flex-shrink: 0;
+}
+.multi-area-item:hover {
+  background: var(--color-background-secondary);
+  color: var(--color-text-primary);
+}
+.multi-area-item.active {
+  background: #EEF2FF;
+  color: #3B5BDB; font-weight: 600;
+  border-left-color: #3B5BDB;
+}
+.multi-area-item.active::before {
+  background: #3B5BDB;
+}
+
+/* 右側地圖 */
+.multi-map-col {
+  flex: 1; position: relative; overflow: hidden; min-width: 0;
+}
+
+/* 下方：趨勢圖 + 數據表 */
+.multi-bottom {
+  height: 300px; flex-shrink: 0;
+  border-top: 0.5px solid var(--color-border-tertiary);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.multi-bottom::-webkit-scrollbar { width: 4px; }
+.multi-bottom::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 2px; }
+
+.trend-section { padding: 10px 12px 6px; flex-shrink: 0; }
+.trend-title { font-size: 11px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 6px; }
 
 /* ── 單時期：左右分割 ── */
 .single-panel { flex-direction:column; overflow:hidden; }
@@ -1184,6 +1455,44 @@ const modes = [
 }
 .single-data-col::-webkit-scrollbar { width:4px; }
 .single-data-col::-webkit-scrollbar-thumb { background:var(--color-border-secondary); border-radius:2px; }
+
+/* ── 雙時期差異 ── */
+.dual-panel {
+  flex-direction:column; overflow:hidden;
+  display:flex;
+}
+.dual-controls { flex-shrink:0; }
+.dual-body {
+  flex:1; display:flex; flex-direction:column;
+  min-height:0; overflow:hidden;
+}
+.dual-map-full {
+  height:380px; flex-shrink:0;
+  position:relative; overflow:hidden;
+}
+.dual-panel .data-section {
+  flex:1; overflow-y:auto; min-height:0;
+  border-top:0.5px solid var(--color-border-tertiary);
+}
+.dual-panel .data-section::-webkit-scrollbar { width:4px; }
+.dual-panel .data-section::-webkit-scrollbar-thumb { background:var(--color-border-secondary); border-radius:2px; }
+
+.diff-scale-bar {
+  display:flex; align-items:center; gap:8px;
+  padding:6px 12px 8px;
+  border-top:0.5px solid var(--color-border-tertiary);
+}
+.diff-scale-gradient {
+  flex:1; height:10px; border-radius:5px;
+  background: linear-gradient(to right,
+    #2166ac, #4393c3, #92c5de, #d1e5f0,
+    #f7f7f7,
+    #fddbc7, #f4a582, #d6604d, #b2182b
+  );
+}
+.diff-scale-label { font-size:10px; font-weight:500; }
+.diff-scale-label.neg { color:#2166ac; }
+.diff-scale-label.pos { color:#b2182b; }
 
 /* ── Spinner ── */
 .spinner {

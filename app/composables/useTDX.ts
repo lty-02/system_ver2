@@ -48,7 +48,7 @@ const toArray = (data: any): any[] => {
 
 // ==================== Composable ====================
 
-export const useTDX = (sceneView: any) => {
+export const useTDX = (sceneView: any, onCctvClick?: (feature: TDXFeature, screenX: number, screenY: number) => void) => {
   const layers = shallowRef<Map<string, GraphicsLayer>>(new Map())
   const features = ref<Map<string, TDXFeature[]>>(new Map())
   const selectedFeature = ref<TDXFeature | null>(null)
@@ -362,7 +362,16 @@ export const useTDX = (sceneView: any) => {
       const { featureId, layerId } = hit.graphic.attributes
       const layerFeatures = features.value.get(layerId) ?? []
       const found = layerFeatures.find(f => f.id === featureId)
-      if (found) selectedFeature.value = found
+      if (!found) return
+
+      selectedFeature.value = found
+
+      // 若是 CCTV 且有回呼，傳入螢幕座標
+      if (layerId === 'cctv' && onCctvClick) {
+        const sx = event.native?.clientX ?? 0
+        const sy = event.native?.clientY ?? 0
+        onCctvClick(found, sx, sy)
+      }
     })
   }
 
