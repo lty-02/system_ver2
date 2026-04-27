@@ -20,7 +20,8 @@ export enum LayerCategory {
   PublicFacilities = 'public_facilities',  // 公共設施與社會福利
   Economic = 'economic',                    // 經濟資料
   Transportation = 'transportation',        // 交通運輸與規劃
-  Environment = 'environment',              // 自然環境與災害
+  Environment = 'environment', 
+  Cadastral = 'cadastral',              //地籍圖層
 }
 
 /**
@@ -32,6 +33,7 @@ export const LayerCategoryNames: Record<LayerCategory, string> = {
   [LayerCategory.Economic]: '經濟資料',
   [LayerCategory.Transportation]: '交通運輸與規劃',
   [LayerCategory.Environment]: '自然環境與災害',
+  [LayerCategory.Cadastral]:         '地政圖資', 
 }
 
 /**
@@ -124,6 +126,8 @@ const LAYER_CATEGORY_MAP: Record<string, LayerCategory> = {
   '2025年臺南市地下水區分範圍': LayerCategory.Environment,
   '2025年海嘯溢淹潛勢模擬': LayerCategory.Environment,
   '2024年歷史坡地災害位置': LayerCategory.Environment,
+
+  
 }
 
 /**
@@ -557,6 +561,39 @@ export const useLayerStore = defineStore('layer', () => {
     isLoadingLayers.value = false
     error.value = null
   }
+
+  /**
+ * 從外部（非 WebScene）直接註冊圖層到 store
+ * 用於 WMS、動態加入的圖層等
+ */
+  const registerExternalLayer = (layer: {
+    id: string
+    title: string
+    type?: string
+    category: LayerCategory
+    visible?: boolean
+    opacity?: number
+  }): void => {
+    if (allLayers.value.find(l => l.id === layer.id)) return
+
+    const newLayer: LayerInfo = {
+      id:            layer.id,
+      title:         layer.title,
+      type:          layer.type ?? 'wms',
+      category:      layer.category,
+      visible:       layer.visible ?? true,
+      opacity:       layer.opacity ?? 1,
+      isAddedToMap:  true,
+      legendEnabled: false,
+      popupEnabled:  false,
+    }
+
+    allLayers.value.push(newLayer)
+    if (!addedLayerIds.value.includes(layer.id)) {
+      addedLayerIds.value.push(layer.id)
+    }
+    createLayerGroups()
+  }
   
   // ==================== 返回 ====================
   
@@ -597,5 +634,7 @@ export const useLayerStore = defineStore('layer', () => {
     removeAllLayers,
     getLayerById,
     resetLayerState,
+
+    registerExternalLayer, 
   }
 })

@@ -437,23 +437,23 @@ const removeLayer = (layerId: string) => {
  * 切換圖層可見性
  */
 const toggleVisibility = (layerId: string) => {
-  console.log(`🔧 正在切換圖層可見性: ${layerId}`)
-  
-  // 1. 更新 store
   layerStore.toggleLayerVisibility(layerId)
   
-  // 2. 同步到地圖
   const view = mapStore.getSceneView()
-  if (view && view.map) {
-    const layer = view.map.allLayers.find((l: any) => l.id === layerId)
-    const layerInfo = layerStore.getLayerById(layerId)
-    
-    if (layer && layerInfo) {
-      layer.visible = layerInfo.visible
-      console.log(`✅ 圖層可見性已切換: ${layer.title} -> ${layerInfo.visible ? '顯示' : '隱藏'}`)
-    } else {
-      console.warn(`⚠️ 找不到圖層: ${layerId}`)
-    }
+  if (!view?.map) return
+  
+  const layerInfo = layerStore.getLayerById(layerId)
+  
+  // 先找 operational layers
+  let mapLayer = view.map.allLayers.find((l: any) => l.id === layerId)
+  
+  // 找不到就找 basemap layers（LDGIS WMS 在這裡）
+  if (!mapLayer) {
+    mapLayer = view.map.basemap?.baseLayers?.find((l: any) => l.id === layerId)
+  }
+  
+  if (mapLayer && layerInfo) {
+    mapLayer.visible = layerInfo.visible
   }
 }
 

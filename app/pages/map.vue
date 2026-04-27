@@ -108,7 +108,7 @@ import SketchViewModel from '@arcgis/core/widgets/Sketch/SketchViewModel'
 import * as geometryEngine from '@arcgis/core/geometry/geometryEngine'
 import { useMapQuery } from '@/composables/useMapQuery'
 import { useMapStore } from '@/stores/mapStore'
-import { useLayerStore } from '@/stores/layerStore'
+import { useLayerStore, LayerCategory } from '@/stores/layerStore'
 import RightSidePanel from '@/components/map/RightSidePanel.vue'
 import LayerManagementPanel from '@/components/map/LayerManagementPanel.vue'
 import LegendBasemapPanel from '@/components/map/LegendBasemapPanel.vue'
@@ -116,7 +116,7 @@ import BufferAnalysisPanel from '@/components/map/buffer-analysis-panel.vue'
 import MapPopup from '~/components/common/MapPopup.vue'
 import { useMapPopup } from '~/composables/useMapPopup'
 import { useSignCode } from '@/composables/useSignCode'
-import WMSLayer from '@arcgis/core/layers/WMSLayer'
+import Basemap from '@arcgis/core/Basemap'
 
 // ==================== 版面配置 ====================
 
@@ -143,25 +143,6 @@ const modules = [
   }
 ]
 
-//地政局底圖
-const { getWmsUrl, setupMidnightRefresh } = useSignCode()
-let refreshController: { stop: () => void } | null = null
-
-onMounted(async () => {
-  // 啟動午夜自動刷新
-  refreshController = setupMidnightRefresh()
-
-  // 取得 WMS URL 並加入地圖
-  const url = await getWmsUrl()
-  if (url && sceneView.value) {
-    const wmsLayer = new WMSLayer({ url })
-    sceneView.value?.map?.add(wmsLayer)
-  }
-})
-
-onUnmounted(() => {
-  refreshController?.stop()
-})
 
 const activeModule = ref<string | null>(null)
 
@@ -206,29 +187,49 @@ let bufferSize = 0
 let highlightHandles: any[] = []
 let mapQueryComposable: ReturnType<typeof useMapQuery> | null = null
 
+//地籍圖
+const { getAllWmsLayers, setupMidnightRefresh } = useSignCode()
+let refreshController: { stop: () => void } | null = null
+
 // ==================== 生命週期 ====================
 
 onMounted(async () => {
   try {
     console.log('📍 開始初始化地圖...')
-
     await initSceneView()
     console.log('✅ SceneView 初始化完成')
-
-    // 掛載自訂 popup 點擊事件
     removeClickHandler = attachClickHandler()
-
     initMapQuery()
-    console.log('✅ useMapQuery 初始化完成')
-
     initQuery()
-    console.log('✅ 查詢功能初始化完成')
-
     setupEventListeners()
-    console.log('✅ 事件監聽器設置完成')
-
     loadLayers()
-    console.log('✅ 圖層加載完成')
+
+    // ✅ 移到這裡，在 try 內
+    refreshController = setupMidnightRefresh()
+    const ldgisLayers = await getAllWmsLayers()
+    if (ldgisLayers.length && sceneView.value?.map) {
+      const existingBaseLayers = sceneView.value.map.basemap?.baseLayers?.toArray() ?? []
+      const newBasemap = new Basemap({
+        baseLayers: [
+          ...existingBaseLayers,
+          ...ldgisLayers.map(l => l.layer),
+        ],
+        title: sceneView.value.map.basemap?.title ?? 'basemap',
+      })
+      sceneView.value.map.basemap = newBasemap
+      console.log(`✅ 已加入 ${ldgisLayers.length} 張 LDGIS WMS 底圖`)
+      console.log('basemap layers:', sceneView.value.map.basemap.baseLayers.map((l: any) => l.title).toArray())
+    }
+    ldgisLayers.forEach(l => {
+    layerStore.registerExternalLayer({
+        id:       `ldgis-${l.id}`,
+        title:    l.title,
+        type:     'wms',
+        category: LayerCategory.Cadastral,
+        visible:  l.layer.visible,
+        opacity:  l.layer.opacity,
+      })
+    })
 
     console.log('🎉 地圖初始化成功！')
   } catch (error) {
@@ -247,6 +248,7 @@ onUnmounted(() => {
   }
   document.removeEventListener('input', handleInputEvent)
   document.removeEventListener('click', handleClickEvent)
+  refreshController?.stop()
 })
 
 // ==================== 初始化方法 ====================
