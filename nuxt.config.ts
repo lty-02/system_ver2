@@ -11,7 +11,9 @@ export default defineNuxtConfig({
     public: {
       arcgisPortalUrl: 'https://igisportal.geomatics.ncku.edu.tw/portal',
       websceneId: '2ae01d33fe194607b721072b1c10dc1a',
-    }
+    },
+    ldgisApId: '',
+    ldgisApPswd: '',
   },
 
   vite: {
