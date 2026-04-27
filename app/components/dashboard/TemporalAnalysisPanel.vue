@@ -4,71 +4,87 @@
     <!-- 說明區 -->
     <section class="panel-section intro-section">
       <div class="intro-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
-          <path d="M3 17l5-5 4 4 6-8M3 20h18"/>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+          <path d="M3 3v18h18"/><path d="M18 17l-5-5-4 4-4-4"/>
         </svg>
       </div>
       <div class="intro-text">
-        <div class="intro-title">臺南市宅數人口統計</div>
-        <div class="intro-desc">鄉鎮市區設有戶籍宅數依宅內人口數區分統計，涵蓋 2024Q1～2025Q1 共五個時期。</div>
+        <div class="intro-title">多時期空間分析</div>
+        <div class="intro-desc">選擇圖層與展示模式，探索時空變化</div>
       </div>
     </section>
 
-    <!-- 時期覆蓋 -->
+    <!-- ① 圖層選擇 -->
     <section class="panel-section">
-      <div class="section-label">資料涵蓋時期</div>
-      <div class="period-pills">
-        <span class="period-pill" v-for="t in timePeriods" :key="t.value">{{ t.label }}</span>
+      <div class="section-label">分析圖層</div>
+
+      <!-- 分類 Tab -->
+      <div class="cat-tabs">
+        <button
+          v-for="cat in TEMPORAL_CATEGORIES"
+          :key="cat.label"
+          class="cat-tab"
+          :class="{ active: selectedCat === cat.label }"
+          @click="selectCategory(cat.label)"
+        >{{ cat.label }}</button>
+      </div>
+
+      <!-- 圖層列表 -->
+      <div class="layer-list">
+        <button
+          v-for="layer in currentCatLayers"
+          :key="layer.key"
+          class="layer-item"
+          :class="{ active: selectedLayerKey === layer.key }"
+          @click="selectLayer(layer.key)"
+        >
+          <span class="layer-dot" :class="getCategoryColor(selectedCat)"></span>
+          <span class="layer-name">{{ layer.label }}</span>
+          <span class="layer-period-count">{{ layer.periods.length > 0 ? layer.periods.length + '個時期' : '動態掃描' }}</span>
+        </button>
       </div>
     </section>
 
-    <!-- 展示模式 -->
+    <!-- ② 展示模式 -->
     <section class="panel-section">
       <div class="section-label">展示模式</div>
-      <div class="mode-cards">
-        <label
+      <div class="mode-list">
+        <button
           v-for="mode in modes"
           :key="mode.id"
-          class="mode-card"
-          :class="{ selected: selectedMode === mode.id }"
+          class="mode-item"
+          :class="{ active: selectedMode === mode.id }"
+          @click="selectedMode = mode.id as 'single' | 'dual' | 'multi'"
         >
-          <input type="radio" :value="mode.id" v-model="selectedMode" class="mode-radio"/>
-          <div class="mode-card-icon" v-html="mode.icon"></div>
-          <div class="mode-card-body">
-            <div class="mode-card-title">{{ mode.label }}</div>
-            <div class="mode-card-desc">{{ mode.desc }}</div>
+          <span class="mode-icon" v-html="mode.icon"></span>
+          <div class="mode-text">
+            <span class="mode-label">{{ mode.label }}</span>
+            <span class="mode-desc">{{ mode.desc }}</span>
           </div>
-        </label>
+          <span v-if="selectedMode === mode.id" class="mode-check">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </span>
+        </button>
       </div>
     </section>
 
-    <!-- 圖資說明 -->
-    <section class="panel-section">
-      <div class="section-label">圖層欄位</div>
-      <div class="field-list">
-        <div class="field-row" v-for="f in fields" :key="f.key">
-          <span class="field-dot" :style="{ background: f.color }"></span>
-          <span class="field-name">{{ f.label }}</span>
-          <span class="field-unit">{{ f.unit }}</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- 說明 -->
+    <!-- ③ 說明 -->
     <section class="panel-section info-section">
       <div class="info-box">
         <div class="info-header">使用說明</div>
         <ul class="info-list">
-          <li>單時期：顯示選定時期地圖 + 統計指標與人口結構圖</li>
-          <li>雙時期：並排比較兩個時期的地圖面量圖，相機同步</li>
-          <li>多時期：地圖 + 可切換指標的折線趨勢圖 + 完整數據表</li>
+          <li>單時期：顯示選定時期地圖 + 統計指標與排名</li>
+          <li>雙時期：並排比較兩個時期，支援差異渲染</li>
+          <li>多時期：地圖 + 可切換指標的折線趨勢圖 + 數據表</li>
         </ul>
       </div>
     </section>
 
     <!-- 套用按鈕 -->
     <div class="panel-footer">
-      <button class="apply-btn" @click="applySettings">
+      <button class="apply-btn" @click="applySettings" :disabled="!selectedLayerKey">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
           <polyline points="20 6 9 17 4 12"/>
         </svg>
@@ -80,20 +96,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { TEMPORAL_CATEGORIES } from '~/composables/temporalLayerConfig'
+import type { TemporalCategory, TemporalLayerDef } from '~/composables/temporalLayerConfig'
 
 const emit = defineEmits<{
-  'apply-settings': [settings: { mode: string; websceneId: string }]
+  'apply-settings': [settings: { mode: string; layerKey: string }]
 }>()
 
-const timePeriods = [
-  { value: '2024-03', label: '2024年3月' },
-  { value: '2024-06', label: '2024年6月' },
-  { value: '2024-09', label: '2024年9月' },
-  { value: '2024-12', label: '2024年12月' },
-  { value: '2025-03', label: '2025年3月' },
-]
+// ── 狀態 ──
+const selectedCat      = ref<string>(TEMPORAL_CATEGORIES[0]?.label ?? '')
+const selectedLayerKey = ref<string>(TEMPORAL_CATEGORIES[0]?.layers[0]?.key ?? '')
+const selectedMode     = ref<'single' | 'dual' | 'multi'>('single')
 
+// ── Computed ──
+const currentCatLayers = computed(() =>
+  TEMPORAL_CATEGORIES.find((c: TemporalCategory) => c.label === selectedCat.value)?.layers ?? []
+)
+
+// ── 模式設定 ──
 const modes = [
   {
     id: 'single',
@@ -104,7 +125,7 @@ const modes = [
   {
     id: 'dual',
     label: '雙時期比較',
-    desc: '兩張地圖並排，相機同步',
+    desc: '兩張地圖並排，差異渲染',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="2" y="4" width="9" height="16" rx="2"/><rect x="13" y="4" width="9" height="16" rx="2"/></svg>',
   },
   {
@@ -115,23 +136,34 @@ const modes = [
   },
 ]
 
-const fields = [
-  { key: 'total_households', label: '設有戶籍宅數', unit: '宅', color: '#3B5BDB' },
-  { key: 'avg_persons',      label: '平均人口數',   unit: '人', color: '#0C8599' },
-  { key: 'h1',               label: '1人一宅宅數', unit: '宅', color: '#1971C2' },
-  { key: 'h2',               label: '2人一宅宅數', unit: '宅', color: '#2F9E44' },
-  { key: 'h3',               label: '3人一宅宅數', unit: '宅', color: '#E67700' },
-  { key: 'h4',               label: '4人一宅宅數', unit: '宅', color: '#C2255C' },
-  { key: 'h5',               label: '5人一宅宅數', unit: '宅', color: '#7048E8' },
-  { key: 'h6plus',           label: '6人以上一宅宅數', unit: '宅', color: '#862E9C' },
-]
+// ── 類別顏色 ──
+function getCategoryColor(cat: string): string {
+  const map: Record<string, string> = {
+    '人口': 'dot-blue',
+    '社福': 'dot-orange',
+    '住宅': 'dot-green',
+    '銀髮': 'dot-purple',
+  }
+  return map[cat] ?? 'dot-gray'
+}
 
-const selectedMode = ref<'single' | 'dual' | 'multi'>('single')
+// ── 事件 ──
+function selectCategory(cat: string) {
+  selectedCat.value = cat
+  // 自動選第一個圖層
+  const first = TEMPORAL_CATEGORIES.find((c: TemporalCategory) => c.label === cat)?.layers[0]
+  if (first) selectedLayerKey.value = first.key
+}
 
-const applySettings = () => {
+function selectLayer(key: string) {
+  selectedLayerKey.value = key
+}
+
+function applySettings() {
+  if (!selectedLayerKey.value) return
   emit('apply-settings', {
     mode: selectedMode.value,
-    websceneId: '826c9dda39d941808528c80e1c0e9c07',
+    layerKey: selectedLayerKey.value,
   })
 }
 </script>
@@ -147,223 +179,168 @@ const applySettings = () => {
 }
 
 .panel-section {
-  padding: 16px 20px;
-  border-bottom: 0.5px solid var(--color-border-tertiary);
+  padding: 14px 16px;
+  border-bottom: 0.5px solid var(--color-border-tertiary, #e5e7eb);
 }
 
 .section-label {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-tertiary, #9ca3af);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   margin-bottom: 10px;
 }
 
-/* ==================== 說明區 ==================== */
+/* ── 說明區 ── */
 .intro-section {
   display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  background: var(--color-background-info);
-}
-
-.intro-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--border-radius-md, 8px);
-  background: var(--color-background-primary);
-  border: 0.5px solid var(--color-border-info);
-  display: flex;
+  gap: 10px;
   align-items: center;
-  justify-content: center;
-  color: var(--color-text-info);
-  flex-shrink: 0;
+  background: var(--color-background-info, #f0f4ff);
 }
-
-.intro-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-primary);
-  margin-bottom: 3px;
+.intro-icon {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  background: #3B5BDB22;
+  display: flex; align-items: center; justify-content: center;
+  color: #3B5BDB; flex-shrink: 0;
 }
+.intro-title { font-size: 13px; font-weight: 600; color: var(--color-text-primary, #111); }
+.intro-desc  { font-size: 11px; color: var(--color-text-secondary, #6b7280); margin-top: 2px; }
 
-.intro-desc {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  line-height: 1.5;
-}
-
-/* ==================== 時期 Pills ==================== */
-.period-pills {
+/* ── 分類 Tab ── */
+.cat-tabs {
   display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
   flex-wrap: wrap;
-  gap: 5px;
+}
+.cat-tab {
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 0.5px solid var(--color-border-secondary, #d1d5db);
+  background: var(--color-background-secondary, #f9fafb);
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s;
+}
+.cat-tab:hover { border-color: #3B5BDB; color: #3B5BDB; }
+.cat-tab.active {
+  background: #3B5BDB; border-color: #3B5BDB;
+  color: #fff; font-weight: 600;
 }
 
-.period-pill {
-  padding: 3px 9px;
-  border: 0.5px solid var(--color-border-secondary);
-  border-radius: 12px;
-  font-size: 11px;
-  color: var(--color-text-secondary);
-  background: var(--color-background-secondary);
-}
-
-/* ==================== 模式卡片 ==================== */
-.mode-cards {
+/* ── 圖層列表 ── */
+.layer-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
 }
+.layer-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  border: 0.5px solid transparent;
+  background: transparent;
+  cursor: pointer; transition: all 0.13s;
+  text-align: left;
+  width: 100%;
+}
+.layer-item:hover { background: var(--color-background-secondary, #f3f4f6); }
+.layer-item.active {
+  background: #EEF2FF;
+  border-color: #3B5BDB44;
+}
+.layer-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%; flex-shrink: 0;
+}
+.dot-blue   { background: #3B5BDB; }
+.dot-orange { background: #E67700; }
+.dot-green  { background: #2F9E44; }
+.dot-purple { background: #7048E8; }
+.dot-gray   { background: #9ca3af; }
+.layer-name {
+  font-size: 12px; font-weight: 500;
+  color: var(--color-text-primary, #111);
+  flex: 1;
+}
+.layer-period-count {
+  font-size: 10px;
+  color: var(--color-text-tertiary, #9ca3af);
+  flex-shrink: 0;
+}
+.layer-item.active .layer-name { color: #3B5BDB; }
 
-.mode-card {
+/* ── 展示模式 ── */
+.mode-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mode-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
-  border: 0.5px solid var(--color-border-secondary);
-  border-radius: var(--border-radius-md, 8px);
-  cursor: pointer;
-  transition: all 0.15s;
-  background: var(--color-background-secondary);
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 0.5px solid var(--color-border-secondary, #d1d5db);
+  background: var(--color-background-primary, #fff);
+  cursor: pointer; transition: all 0.13s;
+  text-align: left; width: 100%;
 }
-
-.mode-card:hover {
+.mode-item:hover { border-color: #3B5BDB; }
+.mode-item.active {
+  background: #EEF2FF;
   border-color: #3B5BDB;
 }
-
-.mode-card.selected {
-  border-color: #3B5BDB;
-  background: var(--color-background-info);
-}
-
-.mode-radio {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.mode-card-icon {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.mode-icon {
+  width: 28px; height: 28px;
   border-radius: 6px;
-  background: var(--color-background-primary);
-  border: 0.5px solid var(--color-border-secondary);
-  color: var(--color-text-secondary);
-  flex-shrink: 0;
+  background: var(--color-background-secondary, #f3f4f6);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--color-text-secondary, #6b7280); flex-shrink: 0;
 }
+.mode-item.active .mode-icon { background: #3B5BDB22; color: #3B5BDB; }
+.mode-text { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.mode-label { font-size: 12px; font-weight: 600; color: var(--color-text-primary, #111); }
+.mode-desc  { font-size: 10px; color: var(--color-text-secondary, #6b7280); }
+.mode-check { color: #3B5BDB; flex-shrink: 0; }
 
-.mode-card.selected .mode-card-icon {
-  background: #3B5BDB;
-  border-color: #3B5BDB;
-  color: #fff;
-}
-
-.mode-card-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-primary);
-}
-
-.mode-card-desc {
-  font-size: 11px;
-  color: var(--color-text-secondary);
-  margin-top: 1px;
-}
-
-/* ==================== 欄位列表 ==================== */
-.field-list {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.field-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.field-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.field-name {
-  font-size: 12px;
-  color: var(--color-text-primary);
-  flex: 1;
-}
-
-.field-unit {
-  font-size: 11px;
-  color: var(--color-text-tertiary);
-}
-
-/* ==================== 說明框 ==================== */
-.info-section { background: var(--color-background-secondary); }
-
-.info-box {}
-
+/* ── 說明框 ── */
+.info-section { background: var(--color-background-secondary, #f9fafb); }
+.info-box { border-radius: 8px; }
 .info-header {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  margin-bottom: 8px;
+  font-size: 11px; font-weight: 600;
+  color: var(--color-text-secondary, #6b7280);
+  margin-bottom: 6px;
 }
-
 .info-list {
-  margin: 0;
-  padding: 0 0 0 16px;
-  list-style: disc;
+  margin: 0; padding: 0 0 0 14px;
+  display: flex; flex-direction: column; gap: 4px;
 }
-
 .info-list li {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  line-height: 1.6;
-  margin-bottom: 3px;
+  font-size: 11px;
+  color: var(--color-text-secondary, #6b7280);
+  line-height: 1.5;
 }
 
-/* ==================== 套用按鈕 ==================== */
+/* ── 底部按鈕 ── */
 .panel-footer {
-  padding: 16px 20px;
-  border-top: 0.5px solid var(--color-border-tertiary);
-  background: var(--color-background-primary);
+  padding: 14px 16px;
   margin-top: auto;
 }
-
 .apply-btn {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: #3B5BDB;
-  color: #fff;
-  border: none;
-  border-radius: var(--border-radius-md, 8px);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s;
+  width: 100%; padding: 10px;
+  border-radius: 8px; border: none;
+  background: #3B5BDB; color: #fff;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
 }
-
-.apply-btn:hover {
-  background: #2F4AC6;
-}
-
-/* 滾動條 */
-.temporal-panel::-webkit-scrollbar { width: 4px; }
-.temporal-panel::-webkit-scrollbar-thumb {
-  background: var(--color-border-secondary);
-  border-radius: 2px;
-}
+.apply-btn:hover:not(:disabled) { background: #2f4ec8; }
+.apply-btn:disabled { background: #9ca3af; cursor: not-allowed; }
 </style>

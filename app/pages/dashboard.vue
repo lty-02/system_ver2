@@ -65,7 +65,7 @@
       <div class="main-view">
         <TemporalAnalysisView
           v-if="activeModule === 'temporal'"
-          :webscene-id="websceneId"
+          :layer-key="temporalLayerKey"
         />
 
         <AreaProfileView
@@ -162,6 +162,7 @@ const activeModule    = ref<string | null>(null)
 const websceneId      = ref('826c9dda39d941808528c80e1c0e9c07')
 const selectedVillage = ref('全區')
 const activeLayerKey  = ref('born')
+const temporalLayerKey = ref('household')
 
 // ── 南科設定 ──
 const nankeSettings = ref({ mode: 'story', swipeLeft: '2000', swipeRight: '2025', eraKey: '2000' })
@@ -175,8 +176,8 @@ function toggleModule(id: string) {
   activeModule.value = activeModule.value === id ? null : id
 }
 
-function applyTemporalSettings(_settings: unknown) {
-  // 保留原有多時期邏輯
+const applyTemporalSettings = (s: { mode: string; layerKey: string }) => {
+  temporalLayerKey.value = s.layerKey
 }
 
 function applyNankeSettings(settings: { mode: string; swipeLeft: string; swipeRight: string; eraKey: string }) {

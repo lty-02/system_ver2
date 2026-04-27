@@ -1,6 +1,15 @@
 <template>
   <div class="temporal-view">
 
+    <!-- 圖層名稱標題列 -->
+    <div class="layer-title-bar" v-if="activeTheme">
+      <span class="layer-title-label">{{ activeTheme.label }}</span>
+      <span class="layer-title-periods">{{ activeTheme.periods.length }} 個時期</span>
+      <div v-if="isScanning" class="scanning-badge">
+        <div class="spinner sm"></div>掃描圖層中...
+      </div>
+    </div>
+
     <!-- 模式切換標籤 -->
     <div class="mode-tabs">
       <button
@@ -22,7 +31,7 @@
         <div class="time-selector">
           <div class="time-chips">
             <button
-              v-for="p in theme.periods"
+              v-for="p in activeTheme?.periods ?? []"
               :key="p.value"
               class="time-chip"
               :class="{ active: selectedSingle === p.value }"
@@ -34,7 +43,7 @@
           <span class="selector-label">指標</span>
           <div class="field-chips">
             <button
-              v-for="f in theme.fields"
+              v-for="f in activeTheme?.fields ?? []"
               :key="f.key"
               class="field-chip"
               :class="{ active: selectedField === f.key }"
@@ -58,29 +67,25 @@
           <template v-else-if="singleFeatures.length > 0">
             <div class="summary-cards">
               <div class="summary-card">
-                <div class="sc-label">最大值</div>
+                <div class="sc-label">最高</div>
                 <div class="sc-value">{{ formatValue(singleSummary.max, selectedField) }}</div>
                 <div class="sc-sub">{{ singleSummary.maxName }}</div>
               </div>
               <div class="summary-card">
-                <div class="sc-label">最小值</div>
+                <div class="sc-label">中位數</div>
+                <div class="sc-value">{{ formatValue(singleSummary.median, selectedField) }}</div>
+              </div>
+              <div class="summary-card">
+                <div class="sc-label">最低</div>
                 <div class="sc-value">{{ formatValue(singleSummary.min, selectedField) }}</div>
                 <div class="sc-sub">{{ singleSummary.minName }}</div>
               </div>
-              <div class="summary-card">
-                <div class="sc-label">中位數</div>
-                <div class="sc-value">{{ formatValue(singleSummary.median, selectedField) }}</div>
-                <div class="sc-sub">{{ getFieldUnit(selectedField) }}</div>
-              </div>
             </div>
-            <div class="table-title">各鄉鎮市區數據</div>
+            <div class="table-title">{{ getFieldLabel(selectedField) }}（{{ getFieldUnit(selectedField) }}）</div>
             <div class="table-wrapper">
               <table class="data-table">
                 <thead>
-                  <tr>
-                    <th class="left">鄉鎮市區</th>
-                    <th>{{ getFieldLabel(selectedField) }}（{{ getFieldUnit(selectedField) }}）</th>
-                  </tr>
+                  <tr><th class="left">行政區</th><th>數值</th></tr>
                 </thead>
                 <tbody>
                   <tr v-for="row in singleFeatures" :key="row.name">
@@ -103,20 +108,20 @@
           <div class="dual-period-group">
             <span class="period-dot dot-a"></span>
             <select v-model="selectedDualA" class="period-select" @change="onDualChange">
-              <option v-for="p in theme.periods" :key="p.value" :value="p.value">{{ p.label }}</option>
+              <option v-for="p in activeTheme?.periods ?? []" :key="p.value" :value="p.value">{{ p.label }}</option>
             </select>
           </div>
           <span class="dual-vs">vs</span>
           <div class="dual-period-group">
             <span class="period-dot dot-b"></span>
             <select v-model="selectedDualB" class="period-select" @change="onDualChange">
-              <option v-for="p in theme.periods" :key="p.value" :value="p.value">{{ p.label }}</option>
+              <option v-for="p in activeTheme?.periods ?? []" :key="p.value" :value="p.value">{{ p.label }}</option>
             </select>
           </div>
         </div>
         <div class="field-chips" style="padding: 0 12px 10px;">
           <button
-            v-for="f in theme.fields"
+            v-for="f in activeTheme?.fields ?? []"
             :key="f.key"
             class="field-chip"
             :class="{ active: selectedField === f.key }"
@@ -149,7 +154,7 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th class="left">鄉鎮市區</th>
+                  <th class="left">行政區</th>
                   <th style="color:#3B5BDB">期A（{{ getFieldUnit(selectedField) }}）</th>
                   <th style="color:#12B886">期B（{{ getFieldUnit(selectedField) }}）</th>
                   <th>差異</th>
@@ -162,7 +167,7 @@
                   <td class="num-cell" style="color:#3B5BDB">{{ formatValue(row.valA, selectedField) }}</td>
                   <td class="num-cell" style="color:#12B886">{{ formatValue(row.valB, selectedField) }}</td>
                   <td class="num-cell" :class="row.delta >= 0 ? 'pos' : 'neg'">
-                    {{ row.delta >= 0 ? '+' : '' }}{{ row.delta.toLocaleString() }}
+                    {{ row.delta >= 0 ? '+' : '' }}{{ formatValue(row.delta, selectedField) }}
                   </td>
                   <td class="num-cell" :class="row.pct >= 0 ? 'pos' : 'neg'">
                     {{ row.pct >= 0 ? '+' : '' }}{{ row.pct.toFixed(1) }}%
@@ -178,18 +183,18 @@
 
     <!-- ═══════════════ 模式三：多時期趨勢 ═══════════════ -->
     <div v-else-if="activeMode === 'multi'" class="mode-panel multi-panel">
-      <!-- 上半：地圖 + 控制 -->
       <div class="multi-top">
         <div class="map-wrapper" style="flex:1;min-height:0">
           <div ref="multiMapDiv" class="map-div"></div>
           <div class="map-badge">{{ getPeriodLabel(latestPeriod) }}・{{ getFieldLabel(selectedField) }}</div>
+          <div v-if="isRendering" class="map-spinner"><div class="spinner"></div></div>
         </div>
         <div class="multi-controls">
           <div class="field-selector" style="border-bottom:0.5px solid var(--color-border-tertiary)">
             <span class="selector-label">指標</span>
             <div class="field-chips">
               <button
-                v-for="f in theme.fields"
+                v-for="f in activeTheme?.fields ?? []"
                 :key="f.key"
                 class="field-chip"
                 :class="{ active: selectedField === f.key }"
@@ -198,7 +203,7 @@
             </div>
           </div>
           <div class="field-selector" style="border-bottom:none">
-            <span class="selector-label">鄉鎮</span>
+            <span class="selector-label">行政區</span>
             <div class="field-chips">
               <button
                 v-for="name in areaNames"
@@ -211,47 +216,48 @@
           </div>
         </div>
       </div>
-      <!-- 下半：折線圖 + 資料表（可捲動） -->
       <div class="multi-bottom">
-        <div class="trend-section">
-          <div class="trend-title">{{ getFieldLabel(selectedField) }}・{{ selectedArea }}・歷期趨勢</div>
-          <div v-if="isLoadingData" class="data-loading">
-            <div class="spinner sm"></div><span>查詢中...</span>
-          </div>
-          <div v-else style="position:relative;width:100%;height:180px;">
-            <canvas id="trendChart"></canvas>
-          </div>
+        <div v-if="isLoadingData" class="data-loading" style="padding:20px 12px">
+          <div class="spinner sm"></div><span>載入趨勢資料中...</span>
         </div>
-        <div class="data-section" style="border-top:0.5px solid var(--color-border-tertiary)">
-          <div class="table-title">{{ selectedArea }}・各時期完整數據</div>
-          <div v-if="isLoadingData" class="data-loading"><div class="spinner sm"></div></div>
-          <div v-else-if="multiRows.length > 0" class="table-wrapper">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th class="left">時期</th>
-                  <th
-                    v-for="f in theme.fields"
-                    :key="f.key"
-                    :class="{ 'col-active': selectedField === f.key }"
-                  >{{ f.shortLabel }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in multiRows" :key="row.period">
-                  <td class="left name-cell">{{ getPeriodLabel(row.period) }}</td>
-                  <td
-                    v-for="f in theme.fields"
-                    :key="f.key"
-                    class="num-cell"
-                    :class="{ 'col-active': selectedField === f.key }"
-                  >{{ formatValue(row.values[f.key], f.key) }}</td>
-                </tr>
-              </tbody>
-            </table>
+        <template v-else-if="multiRows.length > 0">
+          <div class="trend-section">
+            <div class="trend-title">
+              {{ selectedArea }} ・ {{ getFieldLabel(selectedField) }} 趨勢
+            </div>
+            <div style="height:160px; position:relative;">
+              <canvas id="trendChart"></canvas>
+            </div>
           </div>
-          <div v-else class="data-empty">尚無資料</div>
-        </div>
+          <div class="data-section" style="padding-top:0">
+            <div class="table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th class="left">時期</th>
+                    <th
+                      v-for="f in activeTheme?.fields ?? []"
+                      :key="f.key"
+                      :class="{ 'col-active': selectedField === f.key }"
+                    >{{ f.shortLabel }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in multiRows" :key="row.period">
+                    <td class="left name-cell">{{ getPeriodLabel(row.period) }}</td>
+                    <td
+                      v-for="f in activeTheme?.fields ?? []"
+                      :key="f.key"
+                      class="num-cell"
+                      :class="{ 'col-active': selectedField === f.key }"
+                    >{{ formatValue(row.values[f.key], f.key) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </template>
+        <div v-else class="data-empty">尚無資料</div>
       </div>
     </div>
 
@@ -259,14 +265,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import SceneView from '@arcgis/core/views/SceneView'
-import WebScene from '@arcgis/core/WebScene'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import MapView from '@arcgis/core/views/MapView'
+import WebMap from '@arcgis/core/WebMap'
 import FeatureLayer from '@arcgis/core/layers/FeatureLayer'
 import Portal from '@arcgis/core/portal/Portal'
 import ClassBreaksRenderer from '@arcgis/core/renderers/ClassBreaksRenderer'
 import SimpleFillSymbol from '@arcgis/core/symbols/SimpleFillSymbol'
 import Color from '@arcgis/core/Color'
+import {
+  getLayerDef,
+  scanPeriodsFromLayers,
+} from '~/composables/temporalLayerConfig'
+import type { TemporalPeriod } from '~/composables/temporalLayerConfig'
 
 // ==================== 型別 ====================
 type ModeType = 'single' | 'dual' | 'multi'
@@ -274,47 +285,37 @@ interface FeatureRow { name: string; value: number }
 interface DualRow    { name: string; valA: number; valB: number; delta: number; pct: number }
 interface MultiRow   { period: string; values: Record<string, number> }
 
-// ==================== 主題設定 ====================
-const LABEL_FIELD  = 'TOWNNAME'
-const PORTAL_URL   = 'https://igisportal.geomatics.ncku.edu.tw/portal'
-const WEBSCENE_ID  = 'b8749c5de8e44fe08306d1a03d764f04'
+// ==================== 常數 ====================
+const PORTAL_URL  = 'https://igisportal.geomatics.ncku.edu.tw/portal'
+const WEBSCENE_ID = 'b8749c5de8e44fe08306d1a03d764f04'  // 只用來取圖層目錄，不建 SceneView
+const WEBMAP_ID   = 'df28ccde4f9c4ea2875b983cab213474'  // 底圖用
 
-const theme = {
-  periods: [
-    { value: '2024-03', label: '2024年3月',  layerName: '2024年3月臺南市鄉鎮市區設有戶籍宅數依宅內人口數區分統計' },
-    { value: '2024-06', label: '2024年6月',  layerName: '2024年6月臺南市鄉鎮市區設有戶籍宅數依宅內人口數區分統計' },
-    { value: '2024-09', label: '2024年9月',  layerName: '2024年9月臺南市鄉鎮市區設有戶籍宅數依宅內人口數區分統計' },
-    { value: '2024-12', label: '2024年12月', layerName: '2024年12月臺南市鄉鎮市區設有戶籍宅數依宅內人口數區分統計' },
-    { value: '2025-03', label: '2025年3月',  layerName: '2025年3月臺南市鄉鎮市區設有戶籍宅數依宅內人口數區分統計' },
-  ],
-  fields: [
-    { key: 'fld01', label: '設有戶籍宅數',           shortLabel: '總宅數',   unit: '宅' },
-    { key: 'fld02', label: '設有戶籍宅數之平均人口數', shortLabel: '平均人口', unit: '人' },
-    { key: 'fld03', label: '1人一宅宅數',            shortLabel: '1人宅',   unit: '宅' },
-    { key: 'fld04', label: '2人一宅宅數',            shortLabel: '2人宅',   unit: '宅' },
-    { key: 'fld05', label: '3人一宅宅數',            shortLabel: '3人宅',   unit: '宅' },
-    { key: 'fld06', label: '4人一宅宅數',            shortLabel: '4人宅',   unit: '宅' },
-    { key: 'fld07', label: '5人一宅宅數',            shortLabel: '5人宅',   unit: '宅' },
-    { key: 'fld08', label: '6人以上一宅宅數',         shortLabel: '6人+宅',  unit: '宅' },
-  ],
-  defaultField: 'fld01',
-}
+// 圖層後綴由 temporalLayerConfig 中各圖層的 layerSuffix 提供
 
-const BLUE_RAMP = ['#dce9f5', '#a8c8e8', '#6aa3d2', '#2d75b6', '#0b4a87']
+// ==================== Props ====================
+const props = withDefaults(defineProps<{
+  layerKey?: string
+}>(), {
+  layerKey: 'household',
+})
 
 // ==================== 狀態 ====================
 const activeMode     = ref<ModeType>('single')
-const selectedField  = ref<string>(theme.defaultField)
-const selectedSingle = ref<string>(theme.periods[0]?.value ?? '')
-const selectedDualA  = ref<string>(theme.periods[0]?.value ?? '')
-const selectedDualB  = ref<string>(theme.periods[theme.periods.length - 1]?.value ?? '')
+const selectedField  = ref<string>('fld01')
+const selectedSingle = ref<string>('')
+const selectedDualA  = ref<string>('')
+const selectedDualB  = ref<string>('')
 const selectedArea   = ref<string>('')
 const isLoadingData  = ref(false)
 const isRendering    = ref(false)
+const isScanning     = ref(false)
 const singleFeatures = ref<FeatureRow[]>([])
 const dualRows       = ref<DualRow[]>([])
 const multiRows      = ref<MultiRow[]>([])
 const areaNames      = ref<string[]>([])
+
+// 銀髮類圖層掃描到的時期
+const scannedPeriods = ref<TemporalPeriod[]>([])
 
 // DOM refs
 const singleMapDiv = ref<HTMLDivElement | null>(null)
@@ -322,12 +323,11 @@ const dualMapDivA  = ref<HTMLDivElement | null>(null)
 const dualMapDivB  = ref<HTMLDivElement | null>(null)
 const multiMapDiv  = ref<HTMLDivElement | null>(null)
 
-// ArcGIS view objects（各模式獨立一個 SceneView）
-let singleView: SceneView | null = null
-let dualViewA:  SceneView | null = null
-let dualViewB:  SceneView | null = null
-let multiView:  SceneView | null = null
-// 當前操作中的 FeatureLayer references
+// ArcGIS objects
+let singleView: MapView | null = null
+let dualViewA:  MapView | null = null
+let dualViewB:  MapView | null = null
+let multiView:  MapView | null = null
 let singleLayer: FeatureLayer | null = null
 let dualLayerA:  FeatureLayer | null = null
 let dualLayerB:  FeatureLayer | null = null
@@ -335,9 +335,21 @@ let multiLayer:  FeatureLayer | null = null
 let chartInstance: any = null
 
 // ==================== Computed ====================
-const latestPeriod = computed(
-  () => theme.periods[theme.periods.length - 1]?.value ?? ''
-)
+const activeLayerDef = computed(() => getLayerDef(props.layerKey ?? 'household'))
+
+const activeTheme = computed(() => {
+  const def = activeLayerDef.value
+  if (!def) return null
+  // periods 全部來自動態掃描（scannedPeriods），config 的 periods 陣列永遠為空
+  return { ...def, periods: scannedPeriods.value }
+})
+
+const labelField = computed(() => activeLayerDef.value?.labelField ?? 'TOWNNAME')
+
+const latestPeriod = computed(() => {
+  const ps = activeTheme.value?.periods ?? []
+  return ps[ps.length - 1]?.value ?? ''
+})
 
 const singleSummary = computed(() => {
   if (!singleFeatures.value.length) return { max: 0, min: 0, median: 0, maxName: '', minName: '' }
@@ -352,125 +364,347 @@ const singleSummary = computed(() => {
   }
 })
 
-// ==================== 輔助函數 ====================
-const getPeriodLabel   = (val: string) => theme.periods.find(p => p.value === val)?.label     ?? val
-const getLayerName     = (val: string) => theme.periods.find(p => p.value === val)?.layerName ?? ''
-const getFieldLabel    = (key: string) => theme.fields.find(f => f.key === key)?.label        ?? key
-const getFieldUnit     = (key: string) => theme.fields.find(f => f.key === key)?.unit         ?? ''
+// ==================== Watch: layerKey 切換 ====================
+watch(() => props.layerKey, async (newKey) => {
+  const def = getLayerDef(newKey ?? 'household')
+  if (!def) return
 
+  // 重設選擇狀態（scannedPeriods 清空後 createMapView 會重新掃描）
+  scannedPeriods.value = []
+  selectedField.value  = def.defaultField
+  selectedSingle.value = ''
+  selectedDualA.value  = ''
+  selectedDualB.value  = ''
+  selectedArea.value   = ''
+  singleFeatures.value = []
+  dualRows.value       = []
+  multiRows.value      = []
+  areaNames.value      = []
+
+  // 銷毀既有 views，重新載入
+  destroyAllViews()
+  await nextTick()
+  await switchMode(activeMode.value)
+}, { flush: 'post' })
+
+// ==================== 輔助函數 ====================
+const getPeriodLabel = (val: string) =>
+  activeTheme.value?.periods.find(p => p.value === val)?.label ?? val
+
+const getFieldLabel = (key: string) =>
+  activeTheme.value?.fields.find(f => f.key === key)?.label ?? key
+
+const getFieldUnit = (key: string) =>
+  activeTheme.value?.fields.find(f => f.key === key)?.unit ?? ''
+
+const isRatioField = (key: string) =>
+  activeTheme.value?.fields.find(f => f.key === key)?.isRatio ?? false
+
+/** 格式化數值：比率類固定2位小數，數量類 toLocaleString */
 const formatValue = (v: number | undefined, key: string): string => {
-  if (v === undefined) return '—'
-  return key === 'fld02' ? v.toFixed(2) : v.toLocaleString()
+  if (v === undefined || v === null) return '—'
+  return isRatioField(key) ? Number(v).toFixed(2) : Number(v).toLocaleString()
 }
 
-// ==================== WebScene 工廠 ====================
-// 建立一個載入指定 WebScene 的 SceneView，並回傳 view
-async function createSceneView(container: HTMLDivElement): Promise<SceneView> {
-  const portal   = new Portal({ url: PORTAL_URL })
-  const webScene = new WebScene({ portalItem: { id: WEBSCENE_ID, portal } })
-  const view     = new SceneView({ container, map: webScene, qualityProfile: 'medium' })
+/** 大小寫不敏感取得實際欄位名稱 */
+function resolveKey(attrs: Record<string, unknown>, key: string): string {
+  return Object.keys(attrs).find(k => k.toUpperCase() === key.toUpperCase()) ?? key
+}
+
+function destroyAllViews() {
+  singleView?.destroy(); singleView = null
+  dualViewA?.destroy();  dualViewA  = null
+  dualViewB?.destroy();  dualViewB  = null
+  multiView?.destroy();  multiView  = null
+  singleLayer = null; dualLayerA = null; dualLayerB = null; multiLayer = null
+  chartInstance?.destroy(); chartInstance = null
+  // 清除獨立 FeatureLayer 快取
+  layerCache.clear()
+}
+
+// ==================== 圖層目錄（WebScene metadata） ====================
+// layerUrlMap: title → service URL（從 WebScene.load() 取得，不渲染）
+const layerUrlMap   = new Map<string, string>()
+// layerCache: title → 已建立的獨立 FeatureLayer
+const layerCache    = new Map<string, FeatureLayer>()
+// portalUrlCache: 保留向後相容
+const portalUrlCache = new Map<string, string>()
+
+let webSceneCatalogLoaded = false
+
+/**
+ * 只載入 WebScene metadata（不建 SceneView，不渲染）。
+ * 從 allLayers 建立 title→URL 對照表。
+ * 速度快（只是一個 REST 請求取 JSON），不佔記憶體。
+ */
+async function loadWebSceneCatalog(): Promise<void> {
+  if (webSceneCatalogLoaded) return
+  try {
+    const portal   = new Portal({ url: PORTAL_URL })
+    const WebSceneModule = (await import('@arcgis/core/WebScene')).default
+    const webScene = new WebSceneModule({ portalItem: { id: WEBSCENE_ID, portal } })
+    await webScene.load()
+
+    webScene.allLayers.forEach((l: any) => {
+      if (l.title && (l.url || l.parsedUrl)) {
+        const rawUrl = l.url ?? l.parsedUrl?.path ?? ''
+        // FeatureLayer URL 可能已含 /0，也可能是 FeatureServer 根路徑
+        const url = rawUrl.replace(/\/+$/, '').endsWith('/0')
+          ? rawUrl.replace(/\/+$/, '')
+          : `${rawUrl.replace(/\/+$/, '')}/0`
+        layerUrlMap.set(l.title, url)
+      }
+    })
+
+    console.log(`[TemporalAnalysis] WebScene catalog loaded: ${layerUrlMap.size} layers`)
+    webSceneCatalogLoaded = true
+  } catch (e) {
+    console.warn('[TemporalAnalysis] WebScene catalog load 失敗:', e)
+  }
+}
+
+// ==================== WebMap 工廠 ====================
+/**
+ * 建立 MapView（2D）+ WebMap 底圖（只取底圖，不取圖層）。
+ * 圖層 title/URL 來自 WebScene catalog，不需 WebMap 包含任何圖層。
+ */
+async function createMapView(container: HTMLDivElement): Promise<MapView> {
+  // 先載入 WebScene catalog（只做一次，後續走快取）
+  await loadWebSceneCatalog()
+
+  const portal = new Portal({ url: PORTAL_URL })
+  const webMap = new WebMap({ portalItem: { id: WEBMAP_ID, portal } })
+  const view   = new MapView({ container, map: webMap })
   await view.when()
 
   view.ui.move('zoom', 'top-left')
-  view.ui.move('navigation-toggle', 'top-left')
-  view.ui.move('compass', 'top-left')
   view.ui.remove('attribution')
 
-  await (webScene as any).loadAll()
-  // ── DEBUG：印出所有圖層標題，確認名稱吻合後可移除 ──
-  console.log('[TemporalAnalysis] WebScene 圖層清單:',
-    view.map!.allLayers.map((l: any) => `"${l.title}"`).toArray()
-  )
+  // 隱藏 WebMap 原有圖層（只保留底圖）
+  webMap.allLayers.forEach((l: any) => { l.visible = false })
+
+  // 從 WebScene catalog 掃描時期
+  const def = activeLayerDef.value
+  if (def && scannedPeriods.value.length === 0) {
+    isScanning.value = true
+    try {
+      const allTitles = Array.from(layerUrlMap.keys())
+      const found = scanPeriodsFromLayers(allTitles, def.layerSuffix)
+      scannedPeriods.value = found
+      console.log(`[TemporalAnalysis] 掃描到 ${found.length} 個時期，suffix: ${def.layerSuffix}`)
+      if (found.length > 0) {
+        const first = found[0]
+        const last  = found[found.length - 1]
+        if (first && !selectedSingle.value) {
+          selectedSingle.value = first.value
+          selectedDualA.value  = first.value
+        }
+        if (last && !selectedDualB.value) selectedDualB.value = last.value
+      }
+    } finally {
+      isScanning.value = false
+    }
+  }
+
+  console.log('[TemporalAnalysis]', def?.label, '| 時期數:', scannedPeriods.value.length)
   return view
 }
 
-// 從 SceneView 的 allLayers 中依名稱取得 FeatureLayer
-function getLayerByName(view: SceneView, layerName: string): FeatureLayer | null {
-  const layer = view.map!.allLayers.find((l: any) => l.title === layerName)
-  if (!layer) {
-    console.warn(`[TemporalAnalysis] 找不到圖層：${layerName}`)
+// ==================== 圖層控制 ====================
+/**
+ * 取得或建立 FeatureLayer。
+ * URL 來自 layerUrlMap（WebScene catalog），不依賴 WebMap/Portal search。
+ */
+async function getOrCreateLayer(_view: MapView, layerName: string): Promise<FeatureLayer | null> {
+  if (layerCache.has(layerName)) return layerCache.get(layerName)!
+
+  const url = layerUrlMap.get(layerName)
+  if (!url) {
+    console.warn('[TemporalAnalysis] 找不到圖層 URL:', layerName)
     return null
   }
-  return layer as FeatureLayer
+
+  const layer = new FeatureLayer({ url, outFields: ['*'], visible: true })
+  try {
+    await layer.load()
+  } catch (e) {
+    console.warn('[TemporalAnalysis] FeatureLayer 載入失敗:', url, e)
+    return null
+  }
+
+  layerCache.set(layerName, layer)
+  return layer
 }
 
-// 將 WebScene 中所有時期圖層隱藏，只顯示指定時期
-function showOnlyPeriod(view: SceneView, targetValue: string): FeatureLayer | null {
-  const targetName = getLayerName(targetValue)
-  let found: FeatureLayer | null = null
-  theme.periods.forEach(p => {
-    const lyr = getLayerByName(view, p.layerName)
-    if (!lyr) return
-    lyr.visible = (p.layerName === targetName)
-    if (lyr.visible) found = lyr
-  })
-  return found
+// fetchLayerUrlFromPortal 保留向後相容（已不使用）
+async function fetchLayerUrlFromPortal(layerName: string): Promise<string | null> {
+  return layerUrlMap.get(layerName) ?? null
 }
 
-// ==================== 動態面量圖 ====================
+
+// ==================== 時期切換 ====================
+/**
+ * 移除舊圖層、加入新時期 FeatureLayer
+ */
+async function showOnlyPeriod(view: MapView, targetValue: string): Promise<FeatureLayer | null> {
+  const theme = activeTheme.value
+  if (!theme) return null
+
+  const targetPeriod = theme.periods.find(p => p.value === targetValue)
+  if (!targetPeriod) return null
+
+  // 移除 view 中屬於本圖層集合的舊圖層
+  const layerNames = new Set(theme.periods.map(p => p.layerName))
+  if (view.map) {
+    const toRemove = view.map.layers.filter((l: any) => layerNames.has(l.title)).toArray()
+    view.map.removeMany(toRemove)
+  }
+
+  const layer = await getOrCreateLayer(view, targetPeriod.layerName)
+  if (!layer) return null
+
+  layer.visible = true
+  view.map?.add(layer)
+  return layer
+}
+
+// ==================== 面量圖渲染（log1p/gamma + ClassBreaks）====================
 async function applyChoroRenderer(layer: FeatureLayer, fieldKey: string): Promise<void> {
   isRendering.value = true
   try {
-    const unit = getFieldUnit(fieldKey)
-    // 統計查詢直接用小寫，伺服器實際欄位名稱是小寫
-    const fk = fieldKey.toLowerCase()
-    const result = await layer.queryFeatures({
+    const unit    = getFieldUnit(fieldKey)
+    const isRatio = isRatioField(fieldKey)
+
+    // 用小寫查詢統計，避免大小寫問題；outStatistics 不受 WebMap outFields 限制
+    const fkLower = fieldKey.toLowerCase()
+
+    // 先用單筆查詢取得實際欄位名稱（大小寫不敏感）
+    const sampleResult = await layer.queryFeatures({
+      where: '1=1', outFields: ['*'], returnGeometry: false, num: 1,
+    })
+    const sampleAttrs = sampleResult.features[0]?.attributes ?? {}
+    const actualKey   = resolveKey(sampleAttrs, fieldKey)
+
+    // 用 outStatistics 取 min/max（效能好，不拉全部 features）
+    const statsResult = await layer.queryFeatures({
       where: '1=1',
+      returnGeometry: false,
       outStatistics: [
-        { statisticType: 'min', onStatisticField: fk, outStatisticFieldName: 'S_MIN' } as any,
-        { statisticType: 'max', onStatisticField: fk, outStatisticFieldName: 'S_MAX' } as any,
+        { statisticType: 'min', onStatisticField: actualKey, outStatisticFieldName: 'S_MIN' } as any,
+        { statisticType: 'max', onStatisticField: actualKey, outStatisticFieldName: 'S_MAX' } as any,
       ],
     })
-    const attrs = result.features[0]?.attributes ?? {}
-    const min: number = attrs['S_MIN'] ?? 0
-    const max: number = attrs['S_MAX'] ?? 1
-    const step = (max - min) / BLUE_RAMP.length
+    const statsAttrs = statsResult.features[0]?.attributes ?? {}
+    const minVal = Number(statsAttrs['S_MIN'] ?? 0)
+    const maxVal = Number(statsAttrs['S_MAX'] ?? 1)
+
+    if (minVal === maxVal) return
+
+    // 7 色段藍色漸層
+    const BLUE_RAMP = ['#f0f4ff','#c9d8f5','#96b4ea','#5e8de0','#2d63c8','#1540a0','#0a2572']
+    const STEPS = BLUE_RAMP.length
+
+    // 計算每段的原始值邊界（反推正規化）
+    const breakValues: number[] = []
+    for (let i = 0; i <= STEPS; i++) {
+      const norm = i / STEPS
+      let v: number
+      if (isRatio) {
+        v = norm * (maxVal - minVal) + minVal
+      } else {
+        // log1p 反推
+        const logMax = Math.log1p(maxVal - minVal)
+        v = Math.expm1(norm * logMax) + minVal
+      }
+      breakValues.push(v)
+    }
 
     layer.renderer = new ClassBreaksRenderer({
-      field: fk,
+      field: actualKey,
       classBreakInfos: BLUE_RAMP.map((hex, i) => ({
-        minValue: i === 0 ? min - 1 : min + step * i,
-        maxValue: min + step * (i + 1),
+        minValue: i === 0 ? minVal - 1 : breakValues[i],
+        maxValue: breakValues[i + 1],
         symbol: new SimpleFillSymbol({
           color: new Color(hex),
           outline: { color: new Color([255, 255, 255, 0.6]), width: 0.5 },
         }),
-        label: `${Math.round(min + step * i).toLocaleString()} – ${Math.round(min + step * (i + 1)).toLocaleString()} ${unit}`,
+        label: isRatio
+          ? `${(breakValues[i] ?? 0).toFixed(2)} – ${(breakValues[i + 1] ?? 0).toFixed(2)} ${unit}`
+          : `${Math.round(breakValues[i] ?? 0).toLocaleString()} – ${Math.round(breakValues[i + 1] ?? 0).toLocaleString()} ${unit}`,
       })) as any,
       defaultSymbol: new SimpleFillSymbol({
-        color: new Color('#dddddd'),
+        color: new Color('#e5e7eb'),
         outline: { color: new Color([180, 180, 180, 0.4]), width: 0.3 },
       }),
     })
+  } catch (e) {
+    console.warn('[TemporalAnalysis] applyChoroRenderer 失敗:', e)
   } finally {
     isRendering.value = false
   }
 }
 
 // ==================== 查詢圖層資料 ====================
-async function queryFeatureRows(layer: FeatureLayer, fieldKey: string): Promise<FeatureRow[]> {
-  const result = await layer.queryFeatures({
-    where: '1=1',
-    outFields: ['*'],           // 用萬用字元避免欄位名稱大小寫問題
-    returnGeometry: false,
-    orderByFields: [`${fieldKey} DESC`],
-  })
-  // 動態偵測 TOWNNAME 欄位的實際大小寫
-  const firstAttrs = result.features[0]?.attributes ?? {}
-  const actualLabelField = Object.keys(firstAttrs).find(
-    k => k.toUpperCase() === LABEL_FIELD.toUpperCase()
-  ) ?? LABEL_FIELD
-  const actualFieldKey = Object.keys(firstAttrs).find(
-    k => k.toUpperCase() === fieldKey.toUpperCase()
-  ) ?? fieldKey
+// 常見地名欄位候選（大小寫不敏感逐一嘗試）
+const LABEL_CANDIDATES = ['VILLAGE', 'TOWN', 'VILLNAME', 'TOWNNAME', 'AREANAME', 'NAME', 'DISTNAME', 'VNAME']
 
-  const rows = result.features.map(f => ({
-    name:  String(f.attributes[actualLabelField] ?? '未知'),
-    value: Number(f.attributes[actualFieldKey]   ?? 0),
-  }))
-  const seen = new Map<string, number>()
-  rows.forEach(r => { if (!seen.has(r.name)) seen.set(r.name, r.value) })
-  return Array.from(seen.entries()).map(([name, value]) => ({ name, value }))
+/** 從 attributes 中找出地名欄位 */
+function resolveLabelField(attrs: Record<string, unknown>): string {
+  const preferred = resolveKey(attrs, labelField.value)
+  if (attrs[preferred] !== undefined) return preferred
+  // 也嘗試 village/town 直接對應（Portal 實際欄位名稱）
+  const directMap: Record<string, string[]> = {
+    'VILLNAME': ['village', 'VILLAGE', 'villname'],
+    'TOWNNAME': ['town', 'TOWN', 'townname'],
+  }
+  const candidates = directMap[labelField.value.toUpperCase()] ?? []
+  for (const c of candidates) {
+    const found = Object.keys(attrs).find(k => k.toUpperCase() === c.toUpperCase())
+    if (found && attrs[found] !== undefined) return found
+  }
+  const keys = Object.keys(attrs)
+  for (const candidate of LABEL_CANDIDATES) {
+    const found = keys.find(k => k.toUpperCase() === candidate)
+    if (found && attrs[found] !== undefined) return found
+  }
+  console.warn('[TemporalAnalysis] 找不到地名欄位，可用欄位:', keys)
+  return keys[0] ?? labelField.value
+}
+
+// createDirectLayer 已移除（FeatureLayer 不支援 portal 屬性）
+
+async function queryFeatureRows(layer: FeatureLayer, fieldKey: string): Promise<FeatureRow[]> {
+  try {
+    const result = await layer.queryFeatures({
+      where: '1=1',
+      outFields: ['*'],
+      returnGeometry: false,
+      num: 2000,
+    })
+    if (!result.features.length) return []
+
+    const firstAttrs     = result.features[0]?.attributes ?? {}
+    const actualLabel    = resolveLabelField(firstAttrs)
+    const actualFieldKey = resolveKey(firstAttrs, fieldKey)
+
+    if (actualFieldKey === fieldKey && firstAttrs[actualFieldKey] === undefined) {
+      console.warn(`[TemporalAnalysis] 欄位 "${fieldKey}" 找不到，可用欄位:`, Object.keys(firstAttrs))
+    }
+
+    const rows = result.features.map(f => ({
+      name:  String(f.attributes[actualLabel] ?? '').trim() || '未知',
+      value: Number(f.attributes[actualFieldKey] ?? 0),
+    }))
+    const seen = new Map<string, number>()
+    rows.forEach(r => { if (!seen.has(r.name)) seen.set(r.name, r.value) })
+    return Array.from(seen.entries())
+      .map(([name, value]) => ({ name, value }))
+      .filter(r => r.name !== '未知' && r.name !== '')
+      .sort((a, b) => b.value - a.value)
+  } catch (e) {
+    console.warn('[TemporalAnalysis] queryFeatureRows 失敗:', e)
+    return []
+  }
 }
 
 // ==================== 模式一：單時期 ====================
@@ -478,8 +712,14 @@ async function loadSingleMode(): Promise<void> {
   if (!singleMapDiv.value) return
   singleView?.destroy(); singleView = null
 
-  singleView  = await createSceneView(singleMapDiv.value)
-  singleLayer = showOnlyPeriod(singleView, selectedSingle.value)
+  singleView  = await createMapView(singleMapDiv.value)
+
+  // 初始時期：若未設定則取第一個
+  if (!selectedSingle.value) {
+    selectedSingle.value = activeTheme.value?.periods[0]?.value ?? ''
+  }
+
+  singleLayer = await showOnlyPeriod(singleView, selectedSingle.value)
   if (!singleLayer) return
 
   await Promise.all([
@@ -498,8 +738,7 @@ async function loadSingleData(): Promise<void> {
 const selectSinglePeriod = async (val: string): Promise<void> => {
   selectedSingle.value = val
   if (!singleView) return
-  // 只切換 visible，不重建 SceneView
-  singleLayer = showOnlyPeriod(singleView, val)
+  singleLayer = await showOnlyPeriod(singleView, val)
   if (!singleLayer) return
   await Promise.all([
     applyChoroRenderer(singleLayer, selectedField.value),
@@ -527,21 +766,25 @@ async function loadDualMode(): Promise<void> {
   dualViewA?.destroy(); dualViewA = null
   dualViewB?.destroy(); dualViewB = null
 
-  // 兩個獨立的 SceneView，各自載入同一個 WebScene
   ;[dualViewA, dualViewB] = await Promise.all([
-    createSceneView(dualMapDivA.value),
-    createSceneView(dualMapDivB.value),
+    createMapView(dualMapDivA.value),
+    createMapView(dualMapDivB.value),
   ])
 
-  dualLayerA = showOnlyPeriod(dualViewA, selectedDualA.value)
-  dualLayerB = showOnlyPeriod(dualViewB, selectedDualB.value)
+  // 初始時期
+  const periods = activeTheme.value?.periods ?? []
+  if (!selectedDualA.value) selectedDualA.value = periods[0]?.value ?? ''
+  if (!selectedDualB.value) selectedDualB.value = periods[periods.length - 1]?.value ?? ''
+
+  dualLayerA = await showOnlyPeriod(dualViewA, selectedDualA.value)
+  dualLayerB = await showOnlyPeriod(dualViewB, selectedDualB.value)
 
   const tasks: Promise<void>[] = [loadDualData()]
   if (dualLayerA) tasks.push(applyChoroRenderer(dualLayerA, selectedField.value))
   if (dualLayerB) tasks.push(applyChoroRenderer(dualLayerB, selectedField.value))
   await Promise.all(tasks)
 
-  syncViews(dualViewA, dualViewB)
+  if (dualViewA && dualViewB) syncViews(dualViewA, dualViewB)
 }
 
 async function loadDualData(): Promise<void> {
@@ -568,9 +811,8 @@ async function loadDualData(): Promise<void> {
 
 const onDualChange = async (): Promise<void> => {
   if (!dualViewA || !dualViewB) return
-  // 只切換 visible，不重建 SceneView
-  dualLayerA = showOnlyPeriod(dualViewA, selectedDualA.value)
-  dualLayerB = showOnlyPeriod(dualViewB, selectedDualB.value)
+  dualLayerA = await showOnlyPeriod(dualViewA, selectedDualA.value)
+  dualLayerB = await showOnlyPeriod(dualViewB, selectedDualB.value)
   const tasks: Promise<void>[] = [loadDualData()]
   if (dualLayerA) tasks.push(applyChoroRenderer(dualLayerA, selectedField.value))
   if (dualLayerB) tasks.push(applyChoroRenderer(dualLayerB, selectedField.value))
@@ -582,8 +824,10 @@ async function loadMultiMode(): Promise<void> {
   if (!multiMapDiv.value) return
   multiView?.destroy(); multiView = null
 
-  multiView  = await createSceneView(multiMapDiv.value)
-  multiLayer = showOnlyPeriod(multiView, latestPeriod.value)
+  multiView  = await createMapView(multiMapDiv.value)
+
+  if (!latestPeriod.value) return
+  multiLayer = await showOnlyPeriod(multiView, latestPeriod.value)
   if (!multiLayer) return
 
   await Promise.all([
@@ -596,12 +840,13 @@ async function loadMultiData(): Promise<void> {
   if (!multiView) return
   isLoadingData.value = true
   try {
-    // 從已載入的 WebScene 中取得各時期圖層直接查詢，不重新建立圖層
+    const theme = activeTheme.value
+    if (!theme) return
+
     const allPeriodData = await Promise.all(
       theme.periods.map(async p => {
-        const lyr = getLayerByName(multiView!, p.layerName)
+        const lyr = await getOrCreateLayer(multiView!, p.layerName)
         if (!lyr) return { period: p.value, features: [] as any[] }
-        await lyr.load()
         const result = await lyr.queryFeatures({
           where: '1=1',
           outFields: ['*'],
@@ -611,15 +856,11 @@ async function loadMultiData(): Promise<void> {
       })
     )
 
-    // 收集鄉鎮名稱
+    // 收集行政區名稱
     const firstPeriod = allPeriodData[0]
-    if (firstPeriod && firstPeriod.features.length > 0) {
-      // 動態偵測實際欄位名稱大小寫
+    if (firstPeriod?.features.length) {
       const sampleAttrs = firstPeriod.features[0]?.attributes ?? {}
-      const actualLabel = Object.keys(sampleAttrs).find(
-        k => k.toUpperCase() === LABEL_FIELD.toUpperCase()
-      ) ?? LABEL_FIELD
-
+      const actualLabel = resolveKey(sampleAttrs, labelField.value)
       const names = firstPeriod.features
         .map((f: any) => String(f.attributes[actualLabel] ?? ''))
         .filter((n: string) => n !== '')
@@ -630,23 +871,17 @@ async function loadMultiData(): Promise<void> {
       }
     }
 
-    // 整理 multiRows（大小寫不敏感讀取）
+    // 整理 multiRows
     multiRows.value = allPeriodData.map(({ period, features }) => {
       const sampleAttrs = features[0]?.attributes ?? {}
-      const actualLabel = Object.keys(sampleAttrs).find(
-        k => k.toUpperCase() === LABEL_FIELD.toUpperCase()
-      ) ?? LABEL_FIELD
-
+      const actualLabel = resolveKey(sampleAttrs, labelField.value)
       const feat = features.find((f: any) =>
         String(f.attributes[actualLabel] ?? '') === selectedArea.value
       )
       const values: Record<string, number> = {}
       theme.fields.forEach(f => {
-        // 找出實際欄位名稱（大小寫不敏感）
-        const actualKey = Object.keys(feat?.attributes ?? {}).find(
-          k => k.toUpperCase() === f.key.toUpperCase()
-        ) ?? f.key
-        values[f.key] = Number(feat?.attributes[actualKey] ?? 0)
+        const actualKey = resolveKey(feat?.attributes ?? {}, f.key)
+        values[f.key] = Number(feat?.attributes?.[actualKey] ?? 0)
       })
       return { period, values }
     })
@@ -663,17 +898,17 @@ const selectArea = async (name: string): Promise<void> => {
 }
 
 // ==================== 相機同步 ====================
-function syncViews(vA: SceneView, vB: SceneView): void {
+function syncViews(vA: MapView, vB: MapView): void {
   let syncing = false
-  vA.watch('camera', (cam: any) => { if (syncing) return; syncing = true; vB.camera = cam; syncing = false })
-  vB.watch('camera', (cam: any) => { if (syncing) return; syncing = true; vA.camera = cam; syncing = false })
+  vA.watch('viewpoint', (vp: any) => { if (syncing) return; syncing = true; vB.viewpoint = vp; syncing = false })
+  vB.watch('viewpoint', (vp: any) => { if (syncing) return; syncing = true; vA.viewpoint = vp; syncing = false })
 }
 
 // ==================== 折線圖 ====================
 async function renderTrendChart(): Promise<void> {
   await nextTick()
   const canvas = document.getElementById('trendChart') as HTMLCanvasElement | null
-  if (!canvas || multiRows.value.length === 0) return
+  if (!canvas || !multiRows.value.length) return
   chartInstance?.destroy(); chartInstance = null
 
   if (!(window as any).Chart) {
@@ -685,7 +920,7 @@ async function renderTrendChart(): Promise<void> {
       document.head.appendChild(s)
     })
   }
-  const Chart = (window as any).Chart
+  const Chart     = (window as any).Chart
   const isDark    = window.matchMedia('(prefers-color-scheme: dark)').matches
   const textColor = isDark ? '#b4b2a9' : '#5f5e5a'
   const gridColor = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'
@@ -693,11 +928,11 @@ async function renderTrendChart(): Promise<void> {
   chartInstance = new Chart(canvas, {
     type: 'line',
     data: {
-      labels: multiRows.value.map(r => getPeriodLabel(r.period)),
+      labels:   multiRows.value.map(r => getPeriodLabel(r.period)),
       datasets: [{
-        label: getFieldLabel(selectedField.value),
-        data:  multiRows.value.map(r => r.values[selectedField.value] ?? 0),
-        borderColor: '#3B5BDB',
+        label:           getFieldLabel(selectedField.value),
+        data:            multiRows.value.map(r => r.values[selectedField.value] ?? 0),
+        borderColor:     '#3B5BDB',
         backgroundColor: 'rgba(59,91,219,0.08)',
         fill: true, tension: 0.35,
         pointRadius: 5, pointBackgroundColor: '#3B5BDB',
@@ -713,7 +948,9 @@ async function renderTrendChart(): Promise<void> {
           ticks: {
             color: textColor, font: { size: 11 },
             callback: (v: string | number) =>
-              selectedField.value === 'fld02' ? Number(v).toFixed(2) : Number(v).toLocaleString(),
+              isRatioField(selectedField.value)
+                ? Number(v).toFixed(2)
+                : Number(v).toLocaleString(),
           },
           grid: { color: gridColor },
         },
@@ -734,16 +971,17 @@ async function switchMode(mode: ModeType): Promise<void> {
 
 // ==================== 生命週期 ====================
 onMounted(async () => {
+  // 初始化欄位（時期由 createMapView 掃描後設定）
+  const def = getLayerDef(props.layerKey ?? 'household')
+  if (def) {
+    selectedField.value = def.defaultField
+  }
   await nextTick()
   await loadSingleMode()
 })
 
 onUnmounted(() => {
-  singleView?.destroy()
-  dualViewA?.destroy()
-  dualViewB?.destroy()
-  multiView?.destroy()
-  chartInstance?.destroy()
+  destroyAllViews()
 })
 
 // ==================== 模式定義 ====================
@@ -758,14 +996,37 @@ const modes = [
 </script>
 
 <style scoped>
-:deep(.esri-ui-bottom-left) {
-  display: none;
-}
+:deep(.esri-ui-bottom-left) { display: none; }
+
 .temporal-view {
   width:100%; height:100%; display:flex; flex-direction:column;
   overflow:hidden; font-family:var(--font-sans,system-ui,sans-serif);
   background:var(--color-background-primary);
 }
+
+/* ── 圖層標題列 ── */
+.layer-title-bar {
+  display:flex; align-items:center; gap:8px;
+  padding:6px 14px;
+  background:var(--color-background-info, #f0f4ff);
+  border-bottom:0.5px solid var(--color-border-tertiary);
+  flex-shrink:0;
+}
+.layer-title-label {
+  font-size:12px; font-weight:600; color:#3B5BDB;
+}
+.layer-title-periods {
+  font-size:10px; color:var(--color-text-tertiary);
+  background:var(--color-background-secondary);
+  padding:1px 7px; border-radius:10px;
+}
+.scanning-badge {
+  display:flex; align-items:center; gap:5px;
+  font-size:10px; color:var(--color-text-tertiary);
+  margin-left:auto;
+}
+
+/* ── 模式 Tab ── */
 .mode-tabs {
   display:flex; border-bottom:0.5px solid var(--color-border-tertiary);
   background:var(--color-background-primary); flex-shrink:0;
@@ -787,15 +1048,19 @@ const modes = [
 .mode-tab-icon  { display:flex; align-items:center; }
 .mode-tab-label { font-size:12px; font-weight:500; }
 .mode-tab-desc  { font-size:10px; color:var(--color-text-tertiary); }
+
+/* ── 通用 panel ── */
 .mode-panel {
   flex:1; display:flex; flex-direction:column; overflow-y:auto;
 }
 .mode-panel::-webkit-scrollbar { width:4px; }
 .mode-panel::-webkit-scrollbar-thumb { background:var(--color-border-secondary); border-radius:2px; }
+
+/* ── 時期/欄位選擇器 ── */
 .time-selector {
   padding:10px 12px; border-bottom:0.5px solid var(--color-border-tertiary); flex-shrink:0;
 }
-.time-chips { display:flex; gap:5px; flex-wrap:wrap; }
+.time-chips  { display:flex; gap:5px; flex-wrap:wrap; }
 .time-chip {
   padding:4px 10px; border:0.5px solid var(--color-border-secondary);
   border-radius:14px; background:var(--color-background-secondary);
@@ -820,14 +1085,13 @@ const modes = [
 .field-chip.sm { font-size:10px; padding:2px 7px; }
 .field-chip:hover { border-color:#3B5BDB; color:#3B5BDB; }
 .field-chip.active { background:#3B5BDB; border-color:#3B5BDB; color:#fff; font-weight:500; }
-.map-wrapper { position:relative; flex-shrink:0; background:#e0e8f0; overflow: hidden;}
-.single-map  { height:280px; }
-.multi-map   { height:220px; }
+
+/* ── 地圖 ── */
+.map-wrapper { position:relative; flex-shrink:0; background:#e0e8f0; overflow:hidden; }
 .map-div     { width:100%; height:100%; }
 .map-badge {
   position:absolute; top:8px; left:8px;
-  background:rgba(255,255,255,0.92);
-  border:0.5px solid var(--color-border-secondary);
+  background:rgba(255,255,255,0.92); border:0.5px solid var(--color-border-secondary);
   border-radius:6px; padding:3px 9px;
   font-size:11px; font-weight:500; color:var(--color-text-primary); pointer-events:none;
 }
@@ -835,12 +1099,14 @@ const modes = [
   position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
   background:rgba(255,255,255,0.5);
 }
+
+/* ── 雙時期 ── */
 .dual-controls { border-bottom:0.5px solid var(--color-border-tertiary); flex-shrink:0; }
 .dual-period-row {
   display:flex; align-items:center; gap:8px; padding:10px 12px 8px;
 }
 .dual-period-group { display:flex; align-items:center; gap:6px; flex:1; }
-.period-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.period-dot  { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
 .dot-a { background:#3B5BDB; }
 .dot-b { background:#12B886; }
 .dual-vs { font-size:11px; color:var(--color-text-tertiary); flex-shrink:0; }
@@ -849,7 +1115,7 @@ const modes = [
   border-radius:6px; font-size:12px;
   background:var(--color-background-primary); color:var(--color-text-primary); cursor:pointer;
 }
-.dual-maps { display:flex; height:360px; flex-shrink:0; }
+.dual-maps    { display:flex; height:360px; flex-shrink:0; }
 .dual-map-wrap { flex:1; position:relative; overflow:hidden; }
 .dual-divider  { width:2px; background:var(--color-background-primary); flex-shrink:0; }
 .badge-a { border-color:#3B5BDB !important; color:#3B5BDB !important; }
@@ -859,6 +1125,8 @@ const modes = [
   font-size:11px; color:var(--color-text-secondary); margin-bottom:8px;
 }
 .diff-legend .dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+
+/* ── 資料區 ── */
 .data-section { padding:12px; }
 .data-loading {
   display:flex; align-items:center; gap:8px;
@@ -889,36 +1157,10 @@ const modes = [
 .col-active { background:var(--color-background-info) !important; color:var(--color-text-info) !important; font-weight:500; }
 .pos { color:#12B886; }
 .neg { color:#E03131; }
-.trend-section { padding:12px 12px 8px; flex-shrink:0; }
-.trend-title   { font-size:11px; font-weight:500; color:var(--color-text-secondary); margin-bottom:8px; }
-.spinner {
-  width:28px; height:28px; border:2.5px solid var(--color-border-secondary);
-  border-top-color:#3B5BDB; border-radius:50%; animation:spin 0.7s linear infinite;
-}
-.spinner.sm { width:16px; height:16px; border-width:2px; }
-@keyframes spin { to { transform:rotate(360deg); } }
-/* ── 單時期：左右分割 ── */
-.single-panel { flex-direction:column; overflow:hidden; }
-.single-controls { flex-shrink:0; }
-.single-body {
-  flex:1; display:flex; min-height:0; overflow:hidden;
-}
-.single-map-col {
-  flex:1; min-width:0; position:relative;
-}
-.single-data-col {
-  width:280px; flex-shrink:0;
-  border-left:0.5px solid var(--color-border-tertiary);
-  overflow-y:auto; padding:12px;
-}
-.single-data-col::-webkit-scrollbar { width:4px; }
-.single-data-col::-webkit-scrollbar-thumb { background:var(--color-border-secondary); border-radius:2px; }
 
-/* ── 多時期：上下分割 ── */
+/* ── 多時期 ── */
 .multi-panel { flex-direction:column; overflow:hidden; }
-.multi-top {
-  flex:1; display:flex; flex-direction:column; min-height:0;
-}
+.multi-top   { flex:1; display:flex; flex-direction:column; min-height:0; }
 .multi-controls { flex-shrink:0; }
 .multi-bottom {
   height:340px; flex-shrink:0;
@@ -927,5 +1169,27 @@ const modes = [
 }
 .multi-bottom::-webkit-scrollbar { width:4px; }
 .multi-bottom::-webkit-scrollbar-thumb { background:var(--color-border-secondary); border-radius:2px; }
+.trend-section { padding:12px 12px 8px; flex-shrink:0; }
+.trend-title   { font-size:11px; font-weight:500; color:var(--color-text-secondary); margin-bottom:8px; }
 
+/* ── 單時期：左右分割 ── */
+.single-panel { flex-direction:column; overflow:hidden; }
+.single-controls { flex-shrink:0; }
+.single-body { flex:1; display:flex; min-height:0; overflow:hidden; }
+.single-map-col { flex:1; min-width:0; position:relative; }
+.single-data-col {
+  width:280px; flex-shrink:0;
+  border-left:0.5px solid var(--color-border-tertiary);
+  overflow-y:auto; padding:12px;
+}
+.single-data-col::-webkit-scrollbar { width:4px; }
+.single-data-col::-webkit-scrollbar-thumb { background:var(--color-border-secondary); border-radius:2px; }
+
+/* ── Spinner ── */
+.spinner {
+  width:28px; height:28px; border:2.5px solid var(--color-border-secondary);
+  border-top-color:#3B5BDB; border-radius:50%; animation:spin 0.7s linear infinite;
+}
+.spinner.sm { width:16px; height:16px; border-width:2px; }
+@keyframes spin { to { transform:rotate(360deg); } }
 </style>
