@@ -14,6 +14,7 @@ export default defineNuxtConfig({
     },
     ldgisApId: '',
     ldgisApPswd: '',
+    ncdrApiKey: '', // 對應環境變數 NUXT_NCDR_API_KEY
   },
 
   vite: {
