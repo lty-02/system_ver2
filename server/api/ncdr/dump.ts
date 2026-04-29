@@ -6,13 +6,14 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 503, statusMessage: 'NCDR API key 未設定，請設定 NUXT_NCDR_API_KEY 環境變數' })
   }
 
-  if (!query.identifier) {
-    throw createError({ statusCode: 400, statusMessage: '缺少必要參數 identifier' })
+  if (!query.capid) {
+    throw createError({ statusCode: 400, statusMessage: '缺少必要參數 capid' })
   }
 
   const params = new URLSearchParams({
     apikey: config.ncdrApiKey,
-    identifier: String(query.identifier),
+    capid:  String(query.capid),
+    format: 'json',
   })
 
   try {

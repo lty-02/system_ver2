@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     return await $fetch(
-      `https://alerts.ncdr.nat.gov.tw/api/dataset?apikey=${config.ncdrApiKey}`,
+      `https://alerts.ncdr.nat.gov.tw/api/dataset?apikey=${config.ncdrApiKey}&format=json`,
       { headers: { Accept: 'application/json' } }
     )
   } catch (err: any) {
