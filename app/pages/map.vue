@@ -139,7 +139,7 @@ const modules = [
   },
   {
     id: 'buffer-analysis',
-    label: '生活圈分析',
+    label: '區域分析',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>'
   },
   {
