@@ -63,6 +63,20 @@ const _legendItems  = ref<LegendItem[]>([])
 const _isLoading    = ref(false)
 const _uvCache      = new Map<string, string[]>()
 
+// Fallback values when SceneLayer query is unavailable
+const PREDEFINED_VALUES: Record<string, string[]> = {
+  '分區類別': [
+    '住宅區', '商業區', '工業區', '農業區', '保護區',
+    '機關用地', '公共設施用地', '科學工業園區',
+  ],
+  '分區簡稱': [
+    '住一', '住二', '住三', '住四',
+    '住二之一', '住二之二', '住三之一', '住三之二',
+    '商一', '商二', '商三', '商四',
+    '工業', '乙種工業', '科工', '農業', '保護',
+  ],
+}
+
 // ==================== Helpers ====================
 
 const getBuildingLayer = (): any => {
@@ -95,20 +109,30 @@ const makeMeshSymbol = async (color: string): Promise<any> => {
 
 const queryUniqueValues = async (layer: any, field: string): Promise<string[]> => {
   if (_uvCache.has(field)) return _uvCache.get(field)!
-  const query = layer.createQuery()
-  query.where = `${field} IS NOT NULL`
-  query.outFields = [field]
-  query.returnGeometry = false
-  query.returnDistinctValues = true
-  query.orderByFields = [field]
-  const result = await layer.queryFeatures(query)
-  const values = [...new Set<string>(
-    result.features
-      .map((f: any) => String(f.attributes[field] ?? '').trim())
-      .filter((v: string) => v && v !== 'null' && v !== 'undefined')
-  )].sort()
-  _uvCache.set(field, values)
-  return values
+
+  // Prefer associated feature layer which supports full queries
+  const queryTarget = layer.associatedFeatureLayer ?? layer
+  try {
+    const query = queryTarget.createQuery()
+    query.where = `${field} IS NOT NULL`
+    query.outFields = [field]
+    query.returnGeometry = false
+    query.returnDistinctValues = true
+    query.orderByFields = [field]
+    const result = await queryTarget.queryFeatures(query)
+    const values = [...new Set<string>(
+      result.features
+        .map((f: any) => String(f.attributes[field] ?? '').trim())
+        .filter((v: string) => v && v !== 'null' && v !== 'undefined')
+    )].sort()
+    _uvCache.set(field, values)
+    return values
+  } catch {
+    // SceneLayer without associated feature layer — use pre-defined fallback
+    const fallback = PREDEFINED_VALUES[field] ?? []
+    _uvCache.set(field, fallback)
+    return fallback
+  }
 }
 
 // ==================== Renderer builders ====================
