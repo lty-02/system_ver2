@@ -257,25 +257,15 @@ export const useAlerts = (
     return base
   }
 
-  // ==================== 地圖符號（SVG） ====================
+  // ==================== 地圖符號 ====================
 
-  const makeSvgMarker = (svgContent: string, size = 28): any => ({
-    type: 'picture-marker',
-    url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${svgContent}</svg>`
-    )}`,
-    width: `${size}px`,
-    height: `${size}px`,
+  const makeAlertPointMarker = (severity: AlertSeverity): any => ({
+    type: 'simple-marker',
+    style: 'circle',
+    color: SEVERITY_CONFIG[severity].color,
+    size: '18px',
+    outline: { color: 'white', width: 2 },
   })
-
-  const makeAlertPointMarker = (severity: AlertSeverity): any => {
-    const c = SEVERITY_CONFIG[severity].color
-    return makeSvgMarker(
-      `<circle cx="12" cy="12" r="10.5" fill="${c}" stroke="white" stroke-width="1.5"/>` +
-      `<line x1="12" y1="7" x2="12" y2="13.5" stroke="white" stroke-width="2.5" stroke-linecap="round"/>` +
-      `<circle cx="12" cy="17.5" r="1.5" fill="white"/>`
-    )
-  }
 
   // ==================== ArcGIS 圖層操作 ====================
 
