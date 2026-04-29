@@ -91,7 +91,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
               <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
-            <span>分析圖層不需開啟即可計算，可見圖層另額外顯示高亮</span>
+            <span>分析圖層不需開啟即可計算</span>
           </div>
         </div>
       </template>
@@ -104,7 +104,7 @@
             <polyline points="9 22 9 12 15 12 15 22"/>
           </svg>
           <p>買賣租賃分析</p>
-          <span>功能開發中，敬請期待</span>
+          <span>開發中</span>
         </div>
       </template>
 
@@ -125,7 +125,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
-const MODES = [
+const MODES: Array<{ id: 'livability' | 'realestate'; label: string; desc: string; icon: string }> = [
   {
     id: 'livability',
     label: '生活機能',
