@@ -301,11 +301,69 @@ export const useTDX = (sceneView: any, onCctvClick?: (feature: TDXFeature, scree
     return gl
   }
 
-  const makeSymbol = (icon: string) => ({
-    type: 'text',
-    text: icon,
-    font: { size: 16 },
+  const makeSvgMarker = (svgContent: string, size = 28): any => ({
+    type: 'picture-marker',
+    url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${svgContent}</svg>`
+    )}`,
+    width: `${size}px`,
+    height: `${size}px`,
   })
+
+  const LAYER_SVG: Record<string, (c: string) => string> = {
+    bus_intercity: c =>
+      `<rect x="2" y="6" width="20" height="14" rx="3" fill="${c}" stroke="white" stroke-width="1.5"/>` +
+      `<circle cx="7" cy="19" r="2" fill="white"/><circle cx="17" cy="19" r="2" fill="white"/>` +
+      `<line x1="2" y1="12" x2="22" y2="12" stroke="white" stroke-width="1.2" opacity="0.6"/>` +
+      `<rect x="5" y="8" width="5" height="3" rx="1" fill="white" opacity="0.5"/>` +
+      `<rect x="14" y="8" width="5" height="3" rx="1" fill="white" opacity="0.5"/>`,
+    bus_tainan: c =>
+      `<rect x="2" y="6" width="20" height="14" rx="3" fill="${c}" stroke="white" stroke-width="1.5"/>` +
+      `<circle cx="7" cy="19" r="2" fill="white"/><circle cx="17" cy="19" r="2" fill="white"/>` +
+      `<line x1="2" y1="12" x2="22" y2="12" stroke="white" stroke-width="1.2" opacity="0.6"/>`,
+    bike: c =>
+      `<circle cx="6" cy="16" r="4" fill="none" stroke="${c}" stroke-width="2.5"/>` +
+      `<circle cx="18" cy="16" r="4" fill="none" stroke="${c}" stroke-width="2.5"/>` +
+      `<polyline points="6,16 12,8 18,16" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round"/>` +
+      `<circle cx="12" cy="8" r="2" fill="${c}"/>`,
+    bus_alert: c =>
+      `<path d="M12 3 L22 21 H2 Z" fill="${c}" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>` +
+      `<line x1="12" y1="9" x2="12" y2="15" stroke="white" stroke-width="2.5" stroke-linecap="round"/>` +
+      `<circle cx="12" cy="18.5" r="1.5" fill="white"/>`,
+    live_event: c =>
+      `<circle cx="12" cy="12" r="10.5" fill="${c}" stroke="white" stroke-width="1.5"/>` +
+      `<line x1="12" y1="7" x2="12" y2="13.5" stroke="white" stroke-width="2.5" stroke-linecap="round"/>` +
+      `<circle cx="12" cy="17.5" r="1.5" fill="white"/>`,
+    scheduled_event: c =>
+      `<rect x="3" y="4" width="18" height="18" rx="2" fill="${c}" stroke="white" stroke-width="1.5"/>` +
+      `<line x1="8" y1="2" x2="8" y2="6" stroke="white" stroke-width="2" stroke-linecap="round"/>` +
+      `<line x1="16" y1="2" x2="16" y2="6" stroke="white" stroke-width="2" stroke-linecap="round"/>` +
+      `<line x1="3" y1="10" x2="21" y2="10" stroke="white" stroke-width="1.5"/>`,
+    cms: c =>
+      `<rect x="1" y="6" width="22" height="13" rx="2" fill="${c}" stroke="white" stroke-width="1.5"/>` +
+      `<line x1="12" y1="1" x2="12" y2="6" stroke="white" stroke-width="2" stroke-linecap="round"/>` +
+      `<line x1="5" y1="11" x2="19" y2="11" stroke="white" stroke-width="1.5" stroke-linecap="round"/>` +
+      `<line x1="5" y1="15" x2="14" y2="15" stroke="white" stroke-width="1.5" stroke-linecap="round"/>`,
+    cctv: c =>
+      `<rect x="1" y="7" width="14" height="11" rx="2" fill="${c}" stroke="white" stroke-width="1.5"/>` +
+      `<path d="M15 10.5 L22 7.5 L22 16.5 L15 13.5 Z" fill="${c}" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>` +
+      `<circle cx="8" cy="12.5" r="2.5" fill="none" stroke="white" stroke-width="1.5"/>`,
+    carpark: c =>
+      `<circle cx="12" cy="12" r="10.5" fill="${c}" stroke="white" stroke-width="1.5"/>` +
+      `<path d="M9 8 h4.5 a3.5 3.5 0 1 1 0 7 H9" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>` +
+      `<line x1="9" y1="15" x2="9" y2="19" stroke="white" stroke-width="2.5" stroke-linecap="round"/>`,
+    ev: c =>
+      `<circle cx="12" cy="12" r="10.5" fill="${c}" stroke="white" stroke-width="1.5"/>` +
+      `<path d="M13.5 4 L8 13 H12 L10.5 20 L17 11 H13 Z" fill="white"/>`,
+  }
+
+  const makeTDXMarker = (layerId: string, color: string): any => {
+    const svgFn = LAYER_SVG[layerId]
+    const content = svgFn
+      ? svgFn(color)
+      : `<circle cx="12" cy="12" r="10.5" fill="${color}" stroke="white" stroke-width="1.5"/>`
+    return makeSvgMarker(content)
+  }
 
   const refreshLayer = async (layerDef: TDXLayer) => {
     layerDef.loading = true
@@ -320,7 +378,7 @@ export const useTDX = (sceneView: any, onCctvClick?: (feature: TDXFeature, scree
       items.forEach(item => {
         const graphic = markRaw(new Graphic({
           geometry: new Point({ longitude: item.lon, latitude: item.lat }),
-          symbol: makeSymbol(layerDef.icon) as any,
+          symbol: makeTDXMarker(layerDef.id, layerDef.color) as any,
           attributes: { featureId: item.id, layerId: item.layerId },
         }))
         gl.add(graphic)

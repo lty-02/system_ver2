@@ -189,9 +189,7 @@ export const useAlerts = (
   const loadDatasets = async () => {
     try {
       const data = await $fetch<any>('/api/ncdr/datasets')
-      console.log('[useAlerts] datasets raw:', JSON.stringify(data).slice(0, 500))
       const arr = toArray(data)
-      console.log('[useAlerts] datasets array length:', arr.length, 'first item:', arr[0])
       datasets.value = arr
         .map((d: any): AlertDataset => ({
           id:      d.capCode || d.CAPCode || d.DataSetID || d.id || '',
@@ -204,7 +202,6 @@ export const useAlerts = (
           expanded: false,
         }))
         .filter(d => d.id)
-      console.log('[useAlerts] datasets parsed:', datasets.value.length)
     } catch (e) {
       console.error('[useAlerts] loadDatasets:', e)
     }
@@ -260,6 +257,26 @@ export const useAlerts = (
     return base
   }
 
+  // ==================== 地圖符號（SVG） ====================
+
+  const makeSvgMarker = (svgContent: string, size = 28): any => ({
+    type: 'picture-marker',
+    url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${svgContent}</svg>`
+    )}`,
+    width: `${size}px`,
+    height: `${size}px`,
+  })
+
+  const makeAlertPointMarker = (severity: AlertSeverity): any => {
+    const c = SEVERITY_CONFIG[severity].color
+    return makeSvgMarker(
+      `<circle cx="12" cy="12" r="10.5" fill="${c}" stroke="white" stroke-width="1.5"/>` +
+      `<line x1="12" y1="7" x2="12" y2="13.5" stroke="white" stroke-width="2.5" stroke-linecap="round"/>` +
+      `<circle cx="12" cy="17.5" r="1.5" fill="white"/>`
+    )
+  }
+
   // ==================== ArcGIS 圖層操作 ====================
 
   const getOrCreateLayer = (datasetId: string, name: string): GraphicsLayer => {
@@ -299,7 +316,7 @@ export const useAlerts = (
     } else if (alert.geoType === 'point' && alert.lon !== undefined && alert.lat !== undefined) {
       graphic = markRaw(new Graphic({
         geometry: new Point({ longitude: alert.lon, latitude: alert.lat }),
-        symbol:   { type: 'text', text: sv.icon, font: { size: 22 } } as any,
+        symbol:   makeAlertPointMarker(alert.severity),
         attributes: { alertIdentifier: alert.identifier, datasetId: alert.datasetId },
       }))
     }

@@ -176,16 +176,7 @@ const severityFilter = ref('')
 const msgTypeFilter  = ref('')
 const apiKeyMissing  = ref(false)
 
-const filteredDatasets = computed(() =>
-  datasets.value.filter(d => {
-    if (!severityFilter.value && !msgTypeFilter.value) return true
-    if (!d.enabled) return true
-    return d.alerts.some(a =>
-      (!severityFilter.value || a.severity === severityFilter.value) &&
-      (!msgTypeFilter.value  || a.msgType  === msgTypeFilter.value)
-    )
-  })
-)
+const filteredDatasets = computed(() => datasets.value)
 
 const filteredAlerts = (dataset: AlertDataset) =>
   dataset.alerts.filter(a =>
