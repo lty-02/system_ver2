@@ -163,6 +163,28 @@
                       class="opacity-slider"
                     />
                   </div>
+
+                  <!-- 3D 建物屬性渲染 -->
+                  <div v-if="layer.visible && layer.title === BUILDING_LAYER_TITLE" class="renderer-controls">
+                    <div class="renderer-header">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                        <circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/>
+                        <line x1="12" y1="3" x2="12" y2="1"/><line x1="12" y1="23" x2="12" y2="21"/>
+                        <line x1="3" y1="12" x2="1" y2="12"/><line x1="23" y1="12" x2="21" y2="12"/>
+                      </svg>
+                      <span>屬性渲染</span>
+                      <div v-if="rendererLoading" class="mini-spinner" />
+                    </div>
+                    <select
+                      class="renderer-select"
+                      :value="activeRendererField"
+                      @change="onRendererFieldChange"
+                    >
+                      <option v-for="f in RENDERER_FIELDS" :key="f.value" :value="f.value">
+                        {{ f.label }}
+                      </option>
+                    </select>
+                  </div>
                 </div>
               </div>
             </transition>
@@ -267,10 +289,28 @@ import { ref, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useLayerStore, LayerCategory } from '@/stores/layerStore'
 import { useMapStore } from '@/stores/mapStore'
+import {
+  useBuilding3DRenderer,
+  RENDERER_FIELDS,
+  type RendererField,
+} from '@/composables/useBuilding3DRenderer'
+
+const BUILDING_LAYER_TITLE = '臺南市分棟建物框三維建物'
 
 // ==================== Stores ====================
 const layerStore = useLayerStore()
 const mapStore = useMapStore()
+
+// ==================== 3D 建物渲染 ====================
+const {
+  activeField: activeRendererField,
+  isLoading:   rendererLoading,
+  applyRenderer,
+} = useBuilding3DRenderer(mapStore.getSceneView())
+
+const onRendererFieldChange = (event: Event) => {
+  applyRenderer((event.target as HTMLSelectElement).value as RendererField)
+}
 
 const {
   addedLayers,
@@ -1054,6 +1094,48 @@ const clearSearch = () => {
   cursor: pointer;
   border: none;
 }
+
+/* ---- 3D 建物渲染控制 ---- */
+.renderer-controls {
+  padding: 8px 24px 10px;
+  border-top: 1px solid #f1f5f9;
+  background: #fafcff;
+}
+
+.renderer-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 6px;
+}
+
+.renderer-select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  font-size: 12px;
+  color: #1e293b;
+  background: #fff;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.renderer-select:focus { border-color: #93c5fd; }
+
+.mini-spinner {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid #dbeafe;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin-r 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin-r { to { transform: rotate(360deg); } }
 
 /* 空狀態 */
 .empty-state {
