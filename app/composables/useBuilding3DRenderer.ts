@@ -5,7 +5,7 @@
 
 import { ref } from 'vue'
 
-export type RendererField = '' | '分區簡稱' | '建蔽率' | '容積率' | '分區類別'
+export type RendererField = '' | '分區簡' | '建蔽率' | '容積率' | '分區類'
 
 export interface LegendItem {
   label: string
@@ -13,18 +13,18 @@ export interface LegendItem {
 }
 
 export const RENDERER_FIELDS: { value: RendererField; label: string }[] = [
-  { value: '',      label: '預設（不渲染）' },
-  { value: '分區簡稱', label: '分區簡稱' },
-  { value: '建蔽率',  label: '建蔽率 (%)' },
-  { value: '容積率',  label: '容積率 (%)' },
-  { value: '分區類別', label: '分區類別' },
+  { value: '',     label: '預設（不渲染）' },
+  { value: '分區簡', label: '分區簡稱' },
+  { value: '建蔽率', label: '建蔽率 (%)' },
+  { value: '容積率', label: '容積率 (%)' },
+  { value: '分區類', label: '分區類別' },
 ]
 
 export const FIELD_LABELS: Record<string, string> = {
-  '分區簡稱': '分區簡稱',
-  '建蔽率':   '建蔽率 (%)',
-  '容積率':   '容積率 (%)',
-  '分區類別': '分區類別',
+  '分區簡': '分區簡稱',
+  '建蔽率': '建蔽率 (%)',
+  '容積率': '容積率 (%)',
+  '分區類': '分區類別',
 }
 
 const BUILDING_LAYER_TITLE = '臺南市分棟建物框三維建物'
@@ -65,11 +65,11 @@ const _uvCache      = new Map<string, string[]>()
 
 // Fallback values when SceneLayer query is unavailable
 const PREDEFINED_VALUES: Record<string, string[]> = {
-  '分區類別': [
+  '分區類': [
     '住宅區', '商業區', '工業區', '農業區', '保護區',
     '機關用地', '公共設施用地', '科學工業園區',
   ],
-  '分區簡稱': [
+  '分區簡': [
     '住一', '住二', '住三', '住四',
     '住二之一', '住二之二', '住三之一', '住三之二',
     '商一', '商二', '商三', '商四',
@@ -199,7 +199,7 @@ export const useBuilding3DRenderer = (sceneView?: any) => {
     const layer = getBuildingLayer()
     if (!layer) return
 
-    if (field === '分區簡稱' || field === '分區類別') {
+    if (field === '分區簡' || field === '分區類') {
       await applyUniqueValueRenderer(layer, field)
     } else if (field === '建蔽率') {
       await applyClassBreaksRenderer(layer, field, COVERAGE_BREAKS)
