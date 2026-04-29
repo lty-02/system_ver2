@@ -194,9 +194,9 @@ export const useAlerts = (
       console.log('[useAlerts] datasets array length:', arr.length, 'first item:', arr[0])
       datasets.value = arr
         .map((d: any): AlertDataset => ({
-          id:       d.DataSetID || d.CAPCode || d.capcode || d.datasetId || d.id || '',
-          name:     d.DataSetName || d.CAPName || d.capname || d.datasetName || d.name || '',
-          govName:  d.GovernmentName || d.GovName || d.govName || d.Govname || '',
+          id:      d.capCode || d.CAPCode || d.DataSetID || d.id || '',
+          name:    d.name    || d.DataSetName || '',
+          govName: d.gov     || d.GovernmentName || d.GovName || '',
           enabled:  false,
           loading:  false,
           count:    0,
