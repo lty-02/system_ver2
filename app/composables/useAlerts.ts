@@ -123,14 +123,15 @@ const hexToRgb = (hex: string): [number, number, number] => {
 }
 
 const normalizeAlert = (raw: any, fallbackDatasetId = ''): AlertItem | null => {
-  const identifier = raw.Identifier || raw.identifier || raw.ID || ''
+  // NCDR 的示警 ID 欄位可能叫 CAPID / CAPId / Identifier / identifier
+  const identifier = raw.CAPID || raw.CAPId || raw.capid || raw.Identifier || raw.identifier || raw.ID || ''
   if (!identifier) return null
   return {
     identifier,
-    datasetId:   raw.DataSetID || raw.datasetId || fallbackDatasetId,
-    datasetName: raw.DataSetName || raw.datasetName || '',
-    govName:     raw.GovernmentName || raw.GovName || raw.govName || '',
-    sendTime:    raw.SentTime || raw.sent || raw.SendTime || '',
+    datasetId:   raw.CAPCode || raw.DataSetID || raw.datasetId || fallbackDatasetId,
+    datasetName: raw.CAPName || raw.DataSetName || raw.datasetName || '',
+    govName:     raw.Govname || raw.GovernmentName || raw.GovName || raw.govName || '',
+    sendTime:    raw.SendTime || raw.SentTime || raw.sent || '',
     msgType:     raw.MsgType || raw.msgType || '',
     severity:    normalizeSeverity(raw.Severity || raw.severity || ''),
     urgency:     raw.Urgency || raw.urgency || '',
@@ -188,11 +189,14 @@ export const useAlerts = (
   const loadDatasets = async () => {
     try {
       const data = await $fetch<any>('/api/ncdr/datasets')
-      datasets.value = toArray(data)
+      console.log('[useAlerts] datasets raw:', JSON.stringify(data).slice(0, 500))
+      const arr = toArray(data)
+      console.log('[useAlerts] datasets array length:', arr.length, 'first item:', arr[0])
+      datasets.value = arr
         .map((d: any): AlertDataset => ({
-          id:       d.DataSetID || d.datasetId || d.id || '',
-          name:     d.DataSetName || d.datasetName || d.name || '',
-          govName:  d.GovernmentName || d.GovName || d.govName || '',
+          id:       d.DataSetID || d.CAPCode || d.capcode || d.datasetId || d.id || '',
+          name:     d.DataSetName || d.CAPName || d.capname || d.datasetName || d.name || '',
+          govName:  d.GovernmentName || d.GovName || d.govName || d.Govname || '',
           enabled:  false,
           loading:  false,
           count:    0,
@@ -200,24 +204,29 @@ export const useAlerts = (
           expanded: false,
         }))
         .filter(d => d.id)
+      console.log('[useAlerts] datasets parsed:', datasets.value.length)
     } catch (e) {
       console.error('[useAlerts] loadDatasets:', e)
     }
   }
 
-  const fetchAlertList = async (datasetId: string): Promise<AlertItem[]> => {
+  const fetchAlertList = async (capcode: string): Promise<AlertItem[]> => {
     const data = await $fetch<any>('/api/ncdr/alerts', {
-      query: { datasetId, top: '100' },
+      query: { capcode, limit: '100' },
     })
-    return toArray(data)
-      .map((raw: any) => normalizeAlert(raw, datasetId))
+    console.log('[useAlerts] alerts raw:', JSON.stringify(data).slice(0, 500))
+    const arr = toArray(data)
+    console.log('[useAlerts] alerts array length:', arr.length, 'first item:', arr[0])
+    return arr
+      .map((raw: any) => normalizeAlert(raw, capcode))
       .filter(Boolean) as AlertItem[]
   }
 
-  const fetchAlertDetail = async (identifier: string): Promise<AlertDetail | null> => {
+  const fetchAlertDetail = async (capid: string): Promise<AlertDetail | null> => {
     try {
-      const data = await $fetch<any>('/api/ncdr/dump', { query: { identifier } })
-      return normalizeDetail(data, identifier)
+      const data = await $fetch<any>('/api/ncdr/dump', { query: { capid } })
+      console.log('[useAlerts] dump raw:', JSON.stringify(data).slice(0, 500))
+      return normalizeDetail(data, capid)
     } catch (e) {
       console.error('[useAlerts] fetchAlertDetail:', e)
       return null

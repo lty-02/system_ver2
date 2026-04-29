@@ -6,10 +6,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 503, statusMessage: 'NCDR API key 未設定，請設定 NUXT_NCDR_API_KEY 環境變數' })
   }
 
-  // NCDR API key 參數名稱為 apikey（全小寫）
-  const params = new URLSearchParams({ apikey: config.ncdrApiKey })
-  if (query.datasetId) params.set('datasetId', String(query.datasetId))
-  if (query.top) params.set('top', String(query.top))
+  const params = new URLSearchParams({ apikey: config.ncdrApiKey, format: 'json' })
+  if (query.capcode) params.set('capcode', String(query.capcode))
+  if (query.govcode) params.set('govcode', String(query.govcode))
+  if (query.limit)   params.set('limit', String(query.limit))
+  if (query.offset)  params.set('offset', String(query.offset))
 
   try {
     return await $fetch(`https://alerts.ncdr.nat.gov.tw/api/datastore?${params}`, {
