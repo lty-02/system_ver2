@@ -6,7 +6,7 @@
       <select v-model="severityFilter" class="filter-select">
         <option value="">全部嚴重度</option>
         <option v-for="(cfg, key) in SEVERITY_CONFIG" :key="key" :value="key">
-          {{ cfg.icon }} {{ cfg.label }}
+          {{ cfg.label }}
         </option>
       </select>
 
@@ -106,7 +106,10 @@
                   <span v-if="alert.msgType" class="msgtype-tag" :class="alert.msgType.toLowerCase()">{{ alert.msgType }}</span>
                 </span>
               </div>
-              <span v-if="alert.hasGeo" class="geo-indicator" title="有位置資訊，點擊可定位">📍</span>
+              <svg v-if="alert.hasGeo" class="geo-indicator" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" title="有位置資訊，點擊可定位">
+                <path d="M12 2a7 7 0 0 1 7 7c0 5.25-7 13-7 13S5 14.25 5 9a7 7 0 0 1 7-7z"/>
+                <circle cx="12" cy="9" r="2.5" fill="currentColor" stroke="none"/>
+              </svg>
             </div>
 
             <div v-if="filteredAlerts(dataset).length === 0" class="empty-alert">
@@ -388,7 +391,7 @@ const formatTime = (d: Date) =>
 .msgtype-tag.update { background: #fef3c7; color: #d97706; }
 .msgtype-tag.cancel { background: #f1f5f9; color: #64748b; }
 
-.geo-indicator { font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+.geo-indicator { flex-shrink: 0; margin-top: 2px; color: #64748b; }
 
 .empty-alert {
   padding: 14px 16px 14px 36px;

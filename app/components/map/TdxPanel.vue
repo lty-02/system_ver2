@@ -8,7 +8,7 @@
         :class="['tab-btn', { active: activeTab === tab.id }]"
         @click="activeTab = tab.id"
       >
-        <span>{{ tab.icon }}</span>
+        <span class="tab-icon" v-html="tab.icon" />
         <span>{{ tab.label }}</span>
       </button>
     </div>
@@ -22,7 +22,7 @@
         :class="{ active: layer.enabled }"
       >
         <div class="layer-left">
-          <span class="layer-icon">{{ layer.icon }}</span>
+          <span class="layer-icon" :style="{ color: layer.color }" v-html="layer.icon" />
           <div class="layer-info">
             <span class="layer-name">{{ layer.label }}</span>
             <span class="layer-count" v-if="layer.enabled">{{ layer.count }} 筆</span>
@@ -102,10 +102,10 @@ const { layerDefs, selectedFeature, toggleLayer } = useTDX(sceneView, (feature, 
 })
 
 const tabs = [
-  { id: 'transport', label: '公共運輸', icon: '🚌' },
-  { id: 'event',     label: '道路事件', icon: '⚠️' },
-  { id: 'traffic',   label: '路況資訊', icon: '🚦' },
-  { id: 'parking',   label: '停車資訊', icon: '🅿️' },
+  { id: 'transport', label: '公共運輸', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><rect x="3" y="5" width="18" height="14" rx="2"/><line x1="3" y1="11" x2="21" y2="11"/><circle cx="7.5" cy="18.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="16.5" cy="18.5" r="1.5" fill="currentColor" stroke="none"/></svg>' },
+  { id: 'event',     label: '道路事件', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>' },
+  { id: 'traffic',   label: '路況資訊', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><rect x="6" y="2" width="12" height="20" rx="3"/><circle cx="12" cy="7" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="17" r="2" fill="currentColor" stroke="none"/></svg>' },
+  { id: 'parking',   label: '停車資訊', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 17V7h5a3 3 0 0 1 0 6H9"/></svg>' },
 ]
 
 const activeTab = ref('transport')
@@ -156,7 +156,10 @@ const openUrl = (url: string) => window.open(url, '_blank')
 }
 .layer-item:hover { background: #f8fafc; }
 .layer-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
-.layer-icon { font-size: 18px; flex-shrink: 0; }
+.layer-icon { width: 20px; height: 20px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.layer-icon :deep(svg) { width: 20px; height: 20px; }
+.tab-icon { display: flex; align-items: center; justify-content: center; }
+.tab-icon :deep(svg) { width: 18px; height: 18px; }
 .layer-info { display: flex; flex-direction: column; gap: 1px; }
 .layer-name { font-size: 13px; font-weight: 500; color: #1e293b; }
 .layer-count { font-size: 11px; color: #64748b; }

@@ -14,7 +14,7 @@
         <div class="popup-header" :style="{ background: severityCfg.bg }">
           <div class="header-left">
             <span class="severity-badge" :style="{ background: severityCfg.color, color: '#fff' }">
-              {{ severityCfg.icon }} {{ severityCfg.label }}
+              {{ severityCfg.label }}
             </span>
             <span v-if="alert.msgType" class="msgtype-badge" :class="alert.msgType.toLowerCase()">
               {{ alert.msgType }}

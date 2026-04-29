@@ -15,13 +15,13 @@ import Polygon from '@arcgis/core/geometry/Polygon'
 export type AlertSeverity = 'Extreme' | 'Severe' | 'Moderate' | 'Minor' | 'Unknown'
 
 export const SEVERITY_CONFIG: Record<AlertSeverity, {
-  color: string; bg: string; textColor: string; icon: string; label: string
+  color: string; bg: string; textColor: string; label: string
 }> = {
-  Extreme:  { color: '#DC2626', bg: '#FEE2E2', textColor: '#991B1B', icon: '🔴', label: '極端' },
-  Severe:   { color: '#EA580C', bg: '#FFEDD5', textColor: '#9A3412', icon: '🟠', label: '嚴重' },
-  Moderate: { color: '#D97706', bg: '#FEF3C7', textColor: '#92400E', icon: '🟡', label: '中度' },
-  Minor:    { color: '#2563EB', bg: '#DBEAFE', textColor: '#1E40AF', icon: '🔵', label: '輕度' },
-  Unknown:  { color: '#64748B', bg: '#F1F5F9', textColor: '#334155', icon: '⚫', label: '未知' },
+  Extreme:  { color: '#DC2626', bg: '#FEE2E2', textColor: '#991B1B', label: '極端' },
+  Severe:   { color: '#EA580C', bg: '#FFEDD5', textColor: '#9A3412', label: '嚴重' },
+  Moderate: { color: '#D97706', bg: '#FEF3C7', textColor: '#92400E', label: '中度' },
+  Minor:    { color: '#2563EB', bg: '#DBEAFE', textColor: '#1E40AF', label: '輕度' },
+  Unknown:  { color: '#64748B', bg: '#F1F5F9', textColor: '#334155', label: '未知' },
 }
 
 // ==================== 類型定義 ====================
