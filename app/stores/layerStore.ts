@@ -134,7 +134,6 @@ const LAYER_CATEGORY_MAP: Record<string, LayerCategory> = {
   '2017年臺南市地下水二級管制區':       LayerCategory.Environment,
   '2025年臺南市地下水區分範圍':         LayerCategory.Environment,
   '2025年臺南市保安林分布':             LayerCategory.Environment,
-  '2025年海嘯溢淹潛勢模擬':             LayerCategory.Environment,
 
 }
 
