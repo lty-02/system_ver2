@@ -34,187 +34,19 @@
     </div>
 
     <!-- ═══════════════ 模式一：單時期 ═══════════════ -->
-    <div v-if="activeMode === 'single'" class="mode-panel single-panel">
-      <div class="single-controls">
-        <div class="time-selector">
-          <div class="time-chips">
-            <button
-              v-for="p in activeTheme?.periods ?? []"
-              :key="p.value"
-              class="time-chip"
-              :class="{ active: selectedSingle === p.value }"
-              @click="selectSinglePeriod(p.value)"
-            >{{ p.label }}</button>
-          </div>
-        </div>
-        <div class="field-selector">
-          <span class="selector-label">指標</span>
-          <div class="field-chips">
-            <button
-              v-for="f in activeTheme?.fields ?? []"
-              :key="f.key"
-              class="field-chip"
-              :class="{ active: selectedField === f.key }"
-              @click="selectField(f.key)"
-            >{{ f.shortLabel }}</button>
-          </div>
-        </div>
-      </div>
-      <div class="single-body">
-        <div class="single-map-col">
-          <div class="map-wrapper" style="height:100%; overflow:hidden">
-            <div ref="singleMapDiv" class="map-div"></div>
-            <div class="map-badge">{{ getPeriodLabel(selectedSingle) }}・{{ getFieldLabel(selectedField) }}</div>
-            <div v-if="isRendering" class="map-spinner"><div class="spinner"></div></div>
-          </div>
-        </div>
-        <div class="single-data-col">
-          <div v-if="isLoadingData" class="data-loading">
-            <div class="spinner sm"></div><span>查詢資料中...</span>
-          </div>
-          <template v-else-if="singleFeatures.length > 0">
-            <div class="summary-cards">
-              <div class="summary-card">
-                <div class="sc-label">最高</div>
-                <div class="sc-value">{{ formatValue(singleSummary.max, selectedField) }}</div>
-                <div class="sc-sub">{{ singleSummary.maxName }}</div>
-              </div>
-              <div class="summary-card">
-                <div class="sc-label">中位數</div>
-                <div class="sc-value">{{ formatValue(singleSummary.median, selectedField) }}</div>
-              </div>
-              <div class="summary-card">
-                <div class="sc-label">最低</div>
-                <div class="sc-value">{{ formatValue(singleSummary.min, selectedField) }}</div>
-                <div class="sc-sub">{{ singleSummary.minName }}</div>
-              </div>
-            </div>
-            <div class="table-title">{{ getFieldLabel(selectedField) }}（{{ getFieldUnit(selectedField) }}）</div>
-            <div class="table-wrapper">
-              <table class="data-table">
-                <thead>
-                  <tr><th class="left">行政區</th><th>數值</th></tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row in singleFeatures" :key="row.name">
-                    <td class="left name-cell">{{ row.name }}</td>
-                    <td class="num-cell">{{ formatValue(row.value, selectedField) }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </template>
-          <div v-else class="data-empty">選擇時期與指標後顯示資料</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ═══════════════ 模式二：雙時期差異 ═══════════════ -->
-    <div v-else-if="activeMode === 'dual'" class="mode-panel dual-panel">
-      <div class="dual-controls">
-        <!-- 年份比較選取器 -->
-        <div class="dual-compare-hero">
-          <div class="dcp-grid">
-            <!-- 起始年份 -->
-            <div class="dcp-card dcp-card-a">
-              <div class="dcp-role">起始年份</div>
-              <div class="dcp-value">{{ getPeriodLabel(selectedDualA) || '請選擇' }}</div>
-              <div class="dcp-cta">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="11" height="11"><path d="M6 9l6 6 6-6"/></svg>
-                點擊切換
-              </div>
-              <select v-model="selectedDualA" class="dcp-select" @change="onDualChange">
-                <option v-for="p in activeTheme?.periods ?? []" :key="p.value" :value="p.value">{{ p.label }}</option>
-              </select>
-            </div>
-
-            <!-- 連接箭頭 -->
-            <div class="dcp-connector">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-                <path d="M5 12h14M12 5l7 7-7 7"/>
-              </svg>
-            </div>
-
-            <!-- 比較年份 -->
-            <div class="dcp-card dcp-card-b">
-              <div class="dcp-role">比較年份</div>
-              <div class="dcp-value">{{ getPeriodLabel(selectedDualB) || '請選擇' }}</div>
-              <div class="dcp-cta">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="11" height="11"><path d="M6 9l6 6 6-6"/></svg>
-                點擊切換
-              </div>
-              <select v-model="selectedDualB" class="dcp-select" @change="onDualChange">
-                <option v-for="p in activeTheme?.periods ?? []" :key="p.value" :value="p.value">{{ p.label }}</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div class="field-chips" style="padding: 0 12px 10px;">
+    <div v-if="activeMode === 'single'" class="mode-panel">
+      <!-- 控制列 -->
+      <div class="tv-controls-bar">
+        <div class="time-chips">
           <button
-            v-for="f in activeTheme?.fields ?? []"
-            :key="f.key"
-            class="field-chip"
-            :class="{ active: selectedField === f.key }"
-            @click="selectField(f.key)"
-          >{{ f.shortLabel }}</button>
+            v-for="p in activeTheme?.periods ?? []"
+            :key="p.value"
+            class="time-chip"
+            :class="{ active: selectedSingle === p.value }"
+            @click="selectSinglePeriod(p.value)"
+          >{{ p.label }}</button>
         </div>
-        <!-- 色階說明 -->
-        <div class="diff-scale-bar">
-          <span class="diff-scale-label neg">減少</span>
-          <div class="diff-scale-gradient"></div>
-          <span class="diff-scale-label pos">增加</span>
-        </div>
-      </div>
-      <div class="dual-body">
-        <div class="dual-map-full">
-          <div ref="dualMapDivA" class="map-div"></div>
-          <div class="map-badge">{{ getPeriodLabel(selectedDualA) }} → {{ getPeriodLabel(selectedDualB) }}・{{ getFieldLabel(selectedField) }}</div>
-          <div v-if="isRendering" class="map-spinner"><div class="spinner"></div></div>
-        </div>
-        <!-- 差異數據表 -->
-        <div class="data-section">
-        <div v-if="isLoadingData" class="data-loading">
-          <div class="spinner sm"></div><span>計算差異中...</span>
-        </div>
-        <template v-else-if="dualRows.length > 0">
-          <div class="table-wrapper">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th class="left">行政區</th>
-                  <th>{{ getPeriodLabel(selectedDualA) }}</th>
-                  <th>{{ getPeriodLabel(selectedDualB) }}</th>
-                  <th>差異</th>
-                  <th>變動%</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in dualRows" :key="row.name">
-                  <td class="left name-cell">{{ row.name }}</td>
-                  <td class="num-cell">{{ formatValue(row.valA, selectedField) }}</td>
-                  <td class="num-cell">{{ formatValue(row.valB, selectedField) }}</td>
-                  <td class="num-cell" :class="row.delta >= 0 ? 'pos' : 'neg'">
-                    {{ row.delta >= 0 ? '+' : '' }}{{ formatValue(row.delta, selectedField) }}
-                  </td>
-                  <td class="num-cell" :class="row.pct >= 0 ? 'pos' : 'neg'">
-                    {{ row.pct >= 0 ? '+' : '' }}{{ row.pct.toFixed(1) }}%
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </template>
-        <div v-else class="data-empty">選擇兩個時期與指標後顯示差異</div>
-        </div><!-- end data-section -->
-      </div><!-- end dual-body -->
-    </div><!-- end dual-panel -->
-
-    <!-- ═══════════════ 模式三：多時期趨勢 ═══════════════ -->
-    <div v-else-if="activeMode === 'multi'" class="mode-panel multi-panel">
-
-      <!-- 指標選擇列（頂部，固定） -->
-      <div class="multi-field-bar">
+        <div class="tv-sep"></div>
         <span class="selector-label">指標</span>
         <div class="field-chips">
           <button
@@ -226,83 +58,224 @@
           >{{ f.shortLabel }}</button>
         </div>
       </div>
+      <!-- 地圖 + 資料 -->
+      <div class="tv-split">
+        <div class="tv-map-wrap">
+          <div ref="singleMapDiv" class="map-div"></div>
+          <div class="map-badge">{{ getPeriodLabel(selectedSingle) }}・{{ getFieldLabel(selectedField) }}</div>
+          <div v-if="isRendering" class="map-spinner"><div class="spinner"></div></div>
+        </div>
+        <div class="tv-data-card">
+          <div v-if="isLoadingData" class="data-loading" style="padding:16px 14px">
+            <div class="spinner sm"></div><span>查詢資料中...</span>
+          </div>
+          <template v-else-if="singleFeatures.length > 0">
+            <div class="tv-card-section">
+              <div class="summary-cards">
+                <div class="summary-card">
+                  <div class="sc-label">最高</div>
+                  <div class="sc-value">{{ formatValue(singleSummary.max, selectedField) }}</div>
+                  <div class="sc-sub">{{ singleSummary.maxName }}</div>
+                </div>
+                <div class="summary-card">
+                  <div class="sc-label">中位數</div>
+                  <div class="sc-value">{{ formatValue(singleSummary.median, selectedField) }}</div>
+                </div>
+                <div class="summary-card">
+                  <div class="sc-label">最低</div>
+                  <div class="sc-value">{{ formatValue(singleSummary.min, selectedField) }}</div>
+                  <div class="sc-sub">{{ singleSummary.minName }}</div>
+                </div>
+              </div>
+            </div>
+            <div class="tv-card-section tv-table-section">
+              <div class="table-title">{{ getFieldLabel(selectedField) }}（{{ getFieldUnit(selectedField) }}）</div>
+              <div class="table-wrapper">
+                <table class="data-table">
+                  <thead>
+                    <tr><th class="left">行政區</th><th>數值</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in singleFeatures" :key="row.name">
+                      <td class="left name-cell">{{ row.name }}</td>
+                      <td class="num-cell">{{ formatValue(row.value, selectedField) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </template>
+          <div v-else class="data-empty">選擇時期與指標後顯示資料</div>
+        </div>
+      </div>
+    </div>
 
-      <!-- 中段：左欄行政區 + 右側地圖 -->
-      <div class="multi-mid">
+    <!-- ═══════════════ 模式二：雙時期差異 ═══════════════ -->
+    <div v-else-if="activeMode === 'dual'" class="mode-panel">
+      <!-- 控制列：緊湊年份選取器 + 指標 + 色階 -->
+      <div class="tv-controls-bar">
+        <div class="dcp-row">
+          <div class="dcp-group">
+            <span class="dcp-role-label">起始</span>
+            <select v-model="selectedDualA" class="dcp-select-inline" @change="onDualChange">
+              <option v-for="p in activeTheme?.periods ?? []" :key="p.value" :value="p.value">{{ p.label }}</option>
+            </select>
+          </div>
+          <svg class="dcp-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+          <div class="dcp-group">
+            <span class="dcp-role-label">比較</span>
+            <select v-model="selectedDualB" class="dcp-select-inline" @change="onDualChange">
+              <option v-for="p in activeTheme?.periods ?? []" :key="p.value" :value="p.value">{{ p.label }}</option>
+            </select>
+          </div>
+        </div>
+        <div class="tv-sep"></div>
+        <div class="field-chips">
+          <button
+            v-for="f in activeTheme?.fields ?? []"
+            :key="f.key"
+            class="field-chip"
+            :class="{ active: selectedField === f.key }"
+            @click="selectField(f.key)"
+          >{{ f.shortLabel }}</button>
+        </div>
+        <div class="diff-scale-inline">
+          <span class="diff-scale-label neg">減</span>
+          <div class="diff-scale-gradient"></div>
+          <span class="diff-scale-label pos">增</span>
+        </div>
+      </div>
+      <!-- 地圖 + 資料 -->
+      <div class="tv-split">
+        <div class="tv-map-wrap">
+          <div ref="dualMapDivA" class="map-div"></div>
+          <div class="map-badge">{{ getPeriodLabel(selectedDualA) }} → {{ getPeriodLabel(selectedDualB) }}・{{ getFieldLabel(selectedField) }}</div>
+          <div v-if="isRendering" class="map-spinner"><div class="spinner"></div></div>
+        </div>
+        <div class="tv-data-card">
+          <div v-if="isLoadingData" class="data-loading" style="padding:16px 14px">
+            <div class="spinner sm"></div><span>計算差異中...</span>
+          </div>
+          <template v-else-if="dualRows.length > 0">
+            <div class="tv-card-section tv-table-section">
+              <div class="table-wrapper">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th class="left">行政區</th>
+                      <th>{{ getPeriodLabel(selectedDualA) }}</th>
+                      <th>{{ getPeriodLabel(selectedDualB) }}</th>
+                      <th>差異</th>
+                      <th>變動%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in dualRows" :key="row.name">
+                      <td class="left name-cell">{{ row.name }}</td>
+                      <td class="num-cell">{{ formatValue(row.valA, selectedField) }}</td>
+                      <td class="num-cell">{{ formatValue(row.valB, selectedField) }}</td>
+                      <td class="num-cell" :class="row.delta >= 0 ? 'pos' : 'neg'">
+                        {{ row.delta >= 0 ? '+' : '' }}{{ formatValue(row.delta, selectedField) }}
+                      </td>
+                      <td class="num-cell" :class="row.pct >= 0 ? 'pos' : 'neg'">
+                        {{ row.pct >= 0 ? '+' : '' }}{{ row.pct.toFixed(1) }}%
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </template>
+          <div v-else class="data-empty">選擇兩個時期與指標後顯示差異</div>
+        </div>
+      </div>
+    </div>
 
-        <!-- 左側地圖 -->
-        <div class="multi-map-col">
+    <!-- ═══════════════ 模式三：多時期趨勢 ═══════════════ -->
+    <div v-else-if="activeMode === 'multi'" class="mode-panel">
+      <!-- 指標控制列 -->
+      <div class="tv-controls-bar">
+        <span class="selector-label">指標</span>
+        <div class="field-chips">
+          <button
+            v-for="f in activeTheme?.fields ?? []"
+            :key="f.key"
+            class="field-chip"
+            :class="{ active: selectedField === f.key }"
+            @click="selectField(f.key)"
+          >{{ f.shortLabel }}</button>
+        </div>
+      </div>
+      <!-- 地圖 + 資料 -->
+      <div class="tv-split">
+        <div class="tv-map-wrap">
           <div ref="multiMapDiv" class="map-div"></div>
           <div class="map-badge">{{ getPeriodLabel(latestPeriod) }}・{{ getFieldLabel(selectedField) }}</div>
           <div v-if="isRendering" class="map-spinner"><div class="spinner"></div></div>
         </div>
-
-        <!-- 右側行政區列表 -->
-        <div class="multi-area-col">
-          <div class="multi-area-header">
-            <span class="selector-label" style="padding:0">行政區</span>
-            <span class="multi-area-count">{{ areaNames.length }} 個</span>
+        <div class="tv-data-card">
+          <!-- 行政區選取 -->
+          <div class="tv-card-section">
+            <div class="tv-section-hd">
+              <span class="tv-section-label">行政區</span>
+              <span class="tv-count-badge">{{ areaNames.length }}</span>
+            </div>
+            <div class="multi-area-chips">
+              <button
+                v-for="name in areaNames"
+                :key="name"
+                class="multi-area-chip"
+                :class="{ active: selectedArea === name }"
+                @click="selectArea(name)"
+              >{{ name }}</button>
+            </div>
           </div>
-          <div class="multi-area-list">
-            <button
-              v-for="name in areaNames"
-              :key="name"
-              class="multi-area-item"
-              :class="{ active: selectedArea === name }"
-              @click="selectArea(name)"
-            >{{ name }}</button>
+          <!-- 趨勢圖 + 數據表 -->
+          <div v-if="isLoadingData" class="data-loading" style="padding:16px 14px">
+            <div class="spinner sm"></div><span>載入趨勢資料中...</span>
           </div>
+          <template v-else-if="multiRows.length > 0">
+            <div class="tv-card-section">
+              <div class="tv-section-hd" style="margin-bottom:8px">
+                <span class="tv-section-label">{{ selectedArea }}・{{ getFieldLabel(selectedField) }}</span>
+              </div>
+              <div style="height:130px; position:relative;">
+                <canvas id="trendChart"></canvas>
+              </div>
+            </div>
+            <div class="tv-card-section tv-table-section">
+              <div class="table-wrapper">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th class="left">時期</th>
+                      <th
+                        v-for="f in activeTheme?.fields ?? []"
+                        :key="f.key"
+                        :class="{ 'col-active': selectedField === f.key }"
+                      >{{ f.shortLabel }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in multiRows" :key="row.period">
+                      <td class="left name-cell">{{ getPeriodLabel(row.period) }}</td>
+                      <td
+                        v-for="f in activeTheme?.fields ?? []"
+                        :key="f.key"
+                        class="num-cell"
+                        :class="{ 'col-active': selectedField === f.key }"
+                      >{{ formatValue(row.values[f.key], f.key) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </template>
+          <div v-else class="data-empty">選擇行政區後顯示趨勢</div>
         </div>
-
       </div>
-
-      <!-- 下方：趨勢圖 + 數據表 -->
-      <div class="multi-bottom">
-        <div v-if="isLoadingData" class="data-loading" style="padding:16px 12px">
-          <div class="spinner sm"></div><span>載入趨勢資料中...</span>
-        </div>
-        <template v-else-if="multiRows.length > 0">
-          <!-- 折線圖 -->
-          <div class="trend-section">
-            <div class="trend-title">
-              {{ selectedArea }} ・ {{ getFieldLabel(selectedField) }} 趨勢
-            </div>
-            <div style="height:140px; position:relative;">
-              <canvas id="trendChart"></canvas>
-            </div>
-          </div>
-          <!-- 數據表 -->
-          <div class="data-section" style="padding-top:0; flex:1; overflow-y:auto;">
-            <div class="table-wrapper">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th class="left">時期</th>
-                    <th
-                      v-for="f in activeTheme?.fields ?? []"
-                      :key="f.key"
-                      :class="{ 'col-active': selectedField === f.key }"
-                    >{{ f.shortLabel }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row in multiRows" :key="row.period">
-                    <td class="left name-cell">{{ getPeriodLabel(row.period) }}</td>
-                    <td
-                      v-for="f in activeTheme?.fields ?? []"
-                      :key="f.key"
-                      class="num-cell"
-                      :class="{ 'col-active': selectedField === f.key }"
-                    >{{ formatValue(row.values[f.key], f.key) }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </template>
-        <div v-else class="data-empty">選擇行政區後顯示趨勢</div>
-      </div>
-
     </div>
 
   </div>
@@ -1218,369 +1191,264 @@ const modes = [
 <style scoped>
 :deep(.esri-ui-bottom-left) { display: none; }
 
+/* ════════════════════════════════════════════
+   Layout
+   ════════════════════════════════════════════ */
 .temporal-view {
-  width:100%; height:100%; display:flex; flex-direction:column;
-  overflow:hidden; font-family:var(--font-sans,system-ui,sans-serif);
-  background:var(--color-background-primary);
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  font-family: var(--font-sans, system-ui, sans-serif);
+  background: var(--color-background-secondary, #f8fafc);
 }
 
-/* ── 圖層標題列 ── */
+/* ── 標題列 ── */
 .layer-title-bar {
-  display:flex; align-items:center; gap:8px;
-  padding:6px 14px;
-  background:var(--color-background-info, #f0f4ff);
-  border-bottom:0.5px solid var(--color-border-tertiary);
-  flex-shrink:0;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px;
+  background: var(--color-background-primary, #fff);
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  flex-shrink: 0;
 }
-.layer-title-label {
-  font-size:12px; font-weight:600; color:#3B5BDB;
-}
+.layer-title-label { font-size: 12px; font-weight: 600; color: #3B5BDB; }
 .layer-title-periods {
-  font-size:10px; color:var(--color-text-tertiary);
-  background:var(--color-background-secondary);
-  padding:1px 7px; border-radius:10px;
+  font-size: 10px; color: var(--color-text-tertiary);
+  background: var(--color-background-secondary);
+  padding: 1px 7px; border-radius: 10px;
 }
 .scanning-badge {
-  display:flex; align-items:center; gap:5px;
-  font-size:10px; color:var(--color-text-tertiary);
-  margin-left:auto;
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px; color: var(--color-text-tertiary); margin-left: auto;
 }
 
 /* ── 模式 Tab ── */
 .mode-tabs {
-  display:flex; border-bottom:0.5px solid var(--color-border-tertiary);
-  background:var(--color-background-primary); flex-shrink:0;
+  display: flex; border-bottom: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-primary, #fff); flex-shrink: 0;
 }
 .mode-tab {
-  flex:1; display:flex; flex-direction:column; align-items:center;
-  gap:2px; padding:9px 6px; border:none; background:transparent;
-  cursor:pointer; color:var(--color-text-secondary); font-size:12px;
-  border-right:0.5px solid var(--color-border-tertiary);
-  position:relative; transition:background 0.15s;
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  gap: 2px; padding: 9px 6px; border: none; background: transparent;
+  cursor: pointer; color: var(--color-text-secondary);
+  border-right: 0.5px solid var(--color-border-tertiary);
+  position: relative; transition: background 0.15s;
 }
-.mode-tab:last-child { border-right:none; }
-.mode-tab:hover { background:var(--color-background-secondary); }
-.mode-tab.active { color:#3B5BDB; background:var(--color-background-info); }
+.mode-tab:last-child { border-right: none; }
+.mode-tab:hover { background: var(--color-background-secondary); }
+.mode-tab.active { color: #3B5BDB; background: var(--color-background-primary); }
 .mode-tab.active::after {
-  content:''; position:absolute; bottom:0; left:0; right:0;
-  height:2px; background:#3B5BDB;
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0;
+  height: 2px; background: #3B5BDB;
 }
-.mode-tab-icon  { display:flex; align-items:center; }
-.mode-tab-label { font-size:12px; font-weight:500; }
-.mode-tab-desc  { font-size:10px; color:var(--color-text-tertiary); }
+.mode-tab-icon  { display: flex; align-items: center; }
+.mode-tab-label { font-size: 12px; font-weight: 500; }
+.mode-tab-desc  { font-size: 10px; color: var(--color-text-tertiary); }
 
-/* ── 通用 panel ── */
-.mode-panel {
-  flex:1; display:flex; flex-direction:column; overflow-y:auto;
-}
-.mode-panel::-webkit-scrollbar { width:4px; }
-.mode-panel::-webkit-scrollbar-thumb { background:var(--color-border-secondary); border-radius:2px; }
+/* ════════════════════════════════════════════
+   2-column layout
+   ════════════════════════════════════════════ */
+.mode-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
-/* ── 時期/欄位選擇器 ── */
-.time-selector {
-  padding:10px 12px; border-bottom:0.5px solid var(--color-border-tertiary); flex-shrink:0;
-}
-.time-chips  { display:flex; gap:5px; flex-wrap:wrap; }
-.time-chip {
-  padding:4px 10px; border:0.5px solid var(--color-border-secondary);
-  border-radius:14px; background:var(--color-background-secondary);
-  color:var(--color-text-secondary); font-size:11px; cursor:pointer; transition:all 0.13s;
-}
-.time-chip:hover { border-color:#3B5BDB; color:#3B5BDB; }
-.time-chip.active { background:#3B5BDB; border-color:#3B5BDB; color:#fff; font-weight:500; }
-.field-selector {
-  display:flex; align-items:flex-start; gap:8px; padding:8px 12px;
-  border-bottom:0.5px solid var(--color-border-tertiary); flex-shrink:0;
-}
-.selector-label {
-  font-size:10px; font-weight:500; color:var(--color-text-tertiary);
-  padding-top:5px; white-space:nowrap;
-}
-.field-chips { display:flex; gap:4px; flex-wrap:wrap; }
-.field-chip {
-  padding:3px 9px; border:0.5px solid var(--color-border-secondary);
-  border-radius:12px; background:var(--color-background-secondary);
-  color:var(--color-text-secondary); font-size:11px; cursor:pointer; transition:all 0.13s;
-}
-.field-chip.sm { font-size:10px; padding:2px 7px; }
-.field-chip:hover { border-color:#3B5BDB; color:#3B5BDB; }
-.field-chip.active { background:#3B5BDB; border-color:#3B5BDB; color:#fff; font-weight:500; }
-
-/* ── 地圖 ── */
-.map-wrapper { position:relative; flex-shrink:0; background:#e0e8f0; overflow:hidden; }
-.map-div     { width:100%; height:100%; }
-.map-badge {
-  position:absolute; top:8px; left:8px;
-  background:rgba(255,255,255,0.92); border:0.5px solid var(--color-border-secondary);
-  border-radius:6px; padding:3px 9px;
-  font-size:11px; font-weight:500; color:var(--color-text-primary); pointer-events:none;
-}
-.map-spinner {
-  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-  background:rgba(255,255,255,0.5);
-}
-
-/* ── 雙時期 ── */
-.dual-controls { border-bottom:0.5px solid var(--color-border-tertiary); flex-shrink:0; }
-
-/* 年份比較選取器 */
-.dual-compare-hero {
-  padding: 14px 14px 10px;
-}
-.dcp-grid {
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-}
-.dcp-card {
-  flex: 1;
-  position: relative;
-  border-radius: 12px;
-  padding: 14px 14px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: filter 0.15s, transform 0.15s;
-}
-.dcp-card:hover { filter: brightness(0.97); transform: translateY(-1px); }
-.dcp-card-a {
-  background: #EEF2FF;
-  border: 2px solid #3B5BDB;
-}
-.dcp-card-b {
-  background: #F0FFF4;
-  border: 2px solid #12B886;
-}
-.dcp-role {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-.dcp-card-a .dcp-role { color: #3B5BDB; }
-.dcp-card-b .dcp-role { color: #0d9b6e; }
-.dcp-value {
-  font-size: 20px;
-  font-weight: 800;
-  line-height: 1.1;
-  margin-top: 2px;
-}
-.dcp-card-a .dcp-value { color: #1e3a8a; }
-.dcp-card-b .dcp-value { color: #064e3b; }
-.dcp-cta {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 10px;
-  color: var(--color-text-tertiary);
-  margin-top: 4px;
-}
-.dcp-select {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
-  width: 100%;
-  height: 100%;
-  font-size: 14px;
-}
-.dcp-connector {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 10px;
-  color: var(--color-text-tertiary);
-  flex-shrink: 0;
-}
-.dual-maps    { display:flex; height:360px; flex-shrink:0; }
-.dual-map-wrap { flex:1; position:relative; overflow:hidden; }
-.dual-divider  { width:2px; background:var(--color-background-primary); flex-shrink:0; }
-.badge-a { border-color:#3B5BDB !important; color:#3B5BDB !important; }
-.badge-b { border-color:#12B886 !important; color:#12B886 !important; }
-.diff-legend {
-  display:flex; align-items:center; gap:4px;
-  font-size:11px; color:var(--color-text-secondary); margin-bottom:8px;
-}
-.diff-legend .dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
-
-/* ── 資料區 ── */
-.data-section { padding:12px; }
-.data-loading {
-  display:flex; align-items:center; gap:8px;
-  padding:16px 0; color:var(--color-text-secondary); font-size:12px;
-}
-.data-empty { padding:20px 0; font-size:12px; color:var(--color-text-tertiary); text-align:center; }
-.summary-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:14px; }
-.summary-card  { background:var(--color-background-secondary); border-radius:8px; padding:9px 10px; }
-.sc-label { font-size:10px; color:var(--color-text-secondary); margin-bottom:2px; }
-.sc-value { font-size:16px; font-weight:500; color:var(--color-text-primary); line-height:1.2; }
-.sc-sub   { font-size:10px; color:var(--color-text-tertiary); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.table-title { font-size:11px; font-weight:500; color:var(--color-text-secondary); margin-bottom:6px; }
-.table-wrapper { overflow-x:auto; }
-.data-table { width:100%; border-collapse:collapse; font-size:12px; }
-.data-table th {
-  background:var(--color-background-secondary); color:var(--color-text-secondary);
-  font-weight:500; padding:4px 8px; text-align:right;
-  border-bottom:0.5px solid var(--color-border-secondary); white-space:nowrap;
-}
-.data-table th.left { text-align:left; }
-.data-table td {
-  padding:2px 8px; text-align:right;
-  border-bottom:0.5px solid var(--color-border-tertiary); color:var(--color-text-secondary);
-}
-.data-table tbody tr:last-child td { border-bottom:none; }
-.name-cell  { text-align:left !important; font-weight:500; color:var(--color-text-primary) !important; white-space:nowrap; }
-.num-cell   { font-variant-numeric:tabular-nums; }
-.col-active { background:var(--color-background-info) !important; color:var(--color-text-info) !important; font-weight:500; }
-.pos { color:#12B886; }
-.neg { color:#E03131; }
-
-/* ── 多時期 ── */
-/* ── 多時期趨勢 ── */
-.multi-panel {
-  flex-direction: column; overflow: hidden;
-}
-
-/* 指標選擇列 */
-.multi-field-bar {
-  display: flex; align-items: flex-start; gap: 8px;
-  padding: 8px 12px;
+/* ── 控制列 ── */
+.tv-controls-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px;
   border-bottom: 0.5px solid var(--color-border-tertiary);
   flex-shrink: 0; flex-wrap: wrap;
+  background: var(--color-background-primary, #fff);
+}
+.tv-sep { width: 0.5px; height: 16px; background: var(--color-border-secondary); flex-shrink: 0; }
+
+/* ── 地圖 + 資料 分割 ── */
+.tv-split { flex: 1; display: flex; min-height: 0; overflow: hidden; }
+
+/* ── 地圖浮動卡 ── */
+.tv-map-wrap {
+  flex: 1; min-width: 0; position: relative;
+  margin: 12px 0 12px 12px;
+  border-radius: 14px; overflow: hidden;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.10), 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+.map-div { width: 100%; height: 100%; }
+.map-badge {
+  position: absolute; top: 10px; left: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: 8px; padding: 4px 10px;
+  font-size: 11px; font-weight: 500; color: var(--color-text-primary);
+  pointer-events: none; backdrop-filter: blur(4px);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+.map-spinner {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, 0.5);
 }
 
-/* 中段：行政區 + 地圖 */
-.multi-mid {
-  flex: 1; display: flex; min-height: 0; overflow: hidden;
-}
-
-/* 右側行政區列表 */
-.multi-area-col {
-  width: 140px; flex-shrink: 0;
+/* ── 右側資料卡 ── */
+.tv-data-card {
+  width: 260px; flex-shrink: 0;
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  background: var(--color-background-primary, #fff);
   border-left: 0.5px solid var(--color-border-tertiary);
-  display: flex; flex-direction: column; overflow: hidden;
-  background: var(--color-background-primary);
 }
-.multi-area-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 10px; flex-shrink: 0;
-  border-bottom: 0.5px solid var(--color-border-tertiary);
-  background: var(--color-background-secondary);
-}
-.multi-area-count {
-  font-size: 10px; color: var(--color-text-tertiary);
-  background: var(--color-background-primary);
-  padding: 1px 6px; border-radius: 10px;
-}
-.multi-area-list {
-  flex: 1; overflow-y: auto; padding: 4px 0;
-}
-.multi-area-list::-webkit-scrollbar { width: 3px; }
-.multi-area-list::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 2px; }
+.tv-data-card::-webkit-scrollbar { width: 4px; }
+.tv-data-card::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 2px; }
 
-.multi-area-item {
-  display: flex; align-items: center; gap: 6px;
-  width: 100%; padding: 7px 10px; text-align: left;
-  font-size: 12px; font-weight: 400;
-  color: var(--color-text-secondary);
-  background: transparent; border: none; cursor: pointer;
-  transition: background 0.12s; border-left: 2px solid transparent;
-  line-height: 1.3;
-}
-.multi-area-item::before {
-  content: '';
-  width: 5px; height: 5px; border-radius: 50%;
-  background: var(--color-border-secondary);
+.tv-card-section {
+  padding: 12px 14px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
   flex-shrink: 0;
 }
-.multi-area-item:hover {
+.tv-table-section {
+  flex: 1; overflow-y: auto; border-bottom: none; padding: 0;
+}
+.tv-table-section::-webkit-scrollbar { width: 4px; }
+.tv-table-section::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 2px; }
+
+.tv-section-hd {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.tv-section-label {
+  font-size: 10px; font-weight: 700;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.tv-count-badge {
+  font-size: 10px; font-weight: 600; color: var(--color-text-tertiary);
   background: var(--color-background-secondary);
+  border: 0.5px solid var(--color-border-secondary);
+  padding: 1px 7px; border-radius: 10px;
+}
+
+/* ════════════════════════════════════════════
+   Controls — chips
+   ════════════════════════════════════════════ */
+.selector-label {
+  font-size: 10px; font-weight: 600;
+  color: var(--color-text-tertiary); white-space: nowrap;
+}
+.time-chips  { display: flex; gap: 5px; flex-wrap: wrap; }
+.time-chip {
+  padding: 4px 10px; border: 0.5px solid var(--color-border-secondary);
+  border-radius: 14px; background: var(--color-background-secondary);
+  color: var(--color-text-secondary); font-size: 11px; cursor: pointer; transition: all 0.13s;
+}
+.time-chip:hover  { border-color: #3B5BDB; color: #3B5BDB; }
+.time-chip.active { background: #3B5BDB; border-color: #3B5BDB; color: #fff; font-weight: 500; }
+
+.field-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.field-chip {
+  padding: 3px 9px; border: 0.5px solid var(--color-border-secondary);
+  border-radius: 12px; background: var(--color-background-secondary);
+  color: var(--color-text-secondary); font-size: 11px; cursor: pointer; transition: all 0.13s;
+}
+.field-chip:hover  { border-color: #3B5BDB; color: #3B5BDB; }
+.field-chip.active { background: #3B5BDB; border-color: #3B5BDB; color: #fff; font-weight: 500; }
+
+/* ════════════════════════════════════════════
+   Dual — compact year picker
+   ════════════════════════════════════════════ */
+.dcp-row { display: flex; align-items: center; gap: 6px; }
+.dcp-group {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--color-background-secondary, #f3f4f6);
+  border: 1px solid var(--color-border-secondary, #e5e7eb);
+  border-radius: 8px; padding: 5px 10px 5px 12px;
+  transition: border-color 0.13s; cursor: pointer;
+}
+.dcp-group:hover        { border-color: #3B5BDB; }
+.dcp-group:focus-within {
+  border-color: #3B5BDB;
+  box-shadow: 0 0 0 2px rgba(59, 91, 219, 0.12);
+}
+.dcp-role-label {
+  font-size: 10px; font-weight: 700;
+  color: var(--color-text-tertiary); white-space: nowrap;
+}
+.dcp-select-inline {
+  border: none; background: transparent;
   color: var(--color-text-primary);
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; outline: none; padding: 0;
 }
-.multi-area-item.active {
-  background: #EEF2FF;
-  color: #3B5BDB; font-weight: 600;
-  border-left-color: #3B5BDB;
-}
-.multi-area-item.active::before {
-  background: #3B5BDB;
-}
+.dcp-arrow { color: var(--color-text-tertiary); flex-shrink: 0; }
 
-/* 右側地圖 */
-.multi-map-col {
-  flex: 1; position: relative; overflow: hidden; min-width: 0;
-}
-
-/* 下方：趨勢圖 + 數據表 */
-.multi-bottom {
-  height: 300px; flex-shrink: 0;
-  border-top: 0.5px solid var(--color-border-tertiary);
-  display: flex; flex-direction: column; overflow: hidden;
-}
-.multi-bottom::-webkit-scrollbar { width: 4px; }
-.multi-bottom::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 2px; }
-
-.trend-section { padding: 10px 12px 6px; flex-shrink: 0; }
-.trend-title { font-size: 11px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 6px; }
-
-/* ── 單時期：左右分割 ── */
-.single-panel { flex-direction:column; overflow:hidden; }
-.single-controls { flex-shrink:0; }
-.single-body { flex:1; display:flex; min-height:0; overflow:hidden; }
-.single-map-col { flex:1; min-width:0; position:relative; }
-.single-data-col {
-  width:280px; flex-shrink:0;
-  border-left:0.5px solid var(--color-border-tertiary);
-  overflow-y:auto; padding:12px;
-}
-.single-data-col::-webkit-scrollbar { width:4px; }
-.single-data-col::-webkit-scrollbar-thumb { background:var(--color-border-secondary); border-radius:2px; }
-
-/* ── 雙時期差異 ── */
-.dual-panel {
-  flex-direction:column; overflow:hidden;
-  display:flex;
-}
-.dual-controls { flex-shrink:0; }
-.dual-body {
-  flex:1; display:flex; flex-direction:column;
-  min-height:0; overflow:hidden;
-}
-.dual-map-full {
-  height:380px; flex-shrink:0;
-  position:relative; overflow:hidden;
-}
-.dual-panel .data-section {
-  flex:1; overflow-y:auto; min-height:0;
-  border-top:0.5px solid var(--color-border-tertiary);
-}
-.dual-panel .data-section::-webkit-scrollbar { width:4px; }
-.dual-panel .data-section::-webkit-scrollbar-thumb { background:var(--color-border-secondary); border-radius:2px; }
-
-.diff-scale-bar {
-  display:flex; align-items:center; gap:8px;
-  padding:6px 12px 8px;
-  border-top:0.5px solid var(--color-border-tertiary);
+/* ── 色階說明 ── */
+.diff-scale-inline {
+  display: flex; align-items: center; gap: 5px; margin-left: auto;
 }
 .diff-scale-gradient {
-  flex:1; height:10px; border-radius:5px;
+  width: 56px; height: 8px; border-radius: 4px;
   background: linear-gradient(to right,
-    #2166ac, #4393c3, #92c5de, #d1e5f0,
-    #f7f7f7,
+    #2166ac, #4393c3, #92c5de, #d1e5f0, #f7f7f7,
     #fddbc7, #f4a582, #d6604d, #b2182b
   );
 }
-.diff-scale-label { font-size:10px; font-weight:500; }
-.diff-scale-label.neg { color:#2166ac; }
-.diff-scale-label.pos { color:#b2182b; }
+.diff-scale-label { font-size: 10px; font-weight: 600; }
+.diff-scale-label.neg { color: #2166ac; }
+.diff-scale-label.pos { color: #b2182b; }
+
+/* ════════════════════════════════════════════
+   Data card content
+   ════════════════════════════════════════════ */
+.summary-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.summary-card  { background: var(--color-background-secondary); border-radius: 8px; padding: 9px 8px; }
+.sc-label { font-size: 10px; color: var(--color-text-secondary); margin-bottom: 3px; }
+.sc-value { font-size: 15px; font-weight: 700; color: var(--color-text-primary); line-height: 1.2; }
+.sc-sub   { font-size: 10px; color: var(--color-text-tertiary); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.table-title { font-size: 11px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 6px; }
+.table-wrapper { overflow-x: auto; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.data-table th {
+  background: var(--color-background-secondary); color: var(--color-text-secondary);
+  font-weight: 600; padding: 5px 8px; text-align: right;
+  border-bottom: 0.5px solid var(--color-border-secondary); white-space: nowrap;
+  position: sticky; top: 0; z-index: 1;
+}
+.data-table th.left { text-align: left; }
+.data-table td {
+  padding: 3px 8px; text-align: right;
+  border-bottom: 0.5px solid var(--color-border-tertiary); color: var(--color-text-secondary);
+}
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr:hover td { background: var(--color-background-secondary); }
+.name-cell  { text-align: left !important; font-weight: 500; color: var(--color-text-primary) !important; white-space: nowrap; }
+.num-cell   { font-variant-numeric: tabular-nums; }
+.col-active { background: var(--color-background-info) !important; color: var(--color-text-info) !important; font-weight: 500; }
+.pos { color: #12B886; }
+.neg { color: #E03131; }
+
+/* ── Multi: 行政區 chips ── */
+.multi-area-chips {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  max-height: 108px; overflow-y: auto;
+}
+.multi-area-chips::-webkit-scrollbar { width: 3px; }
+.multi-area-chips::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 2px; }
+.multi-area-chip {
+  padding: 3px 9px; border-radius: 12px;
+  border: 0.5px solid var(--color-border-secondary);
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary); font-size: 11px; cursor: pointer; transition: all 0.12s;
+}
+.multi-area-chip:hover  { border-color: #3B5BDB; color: #3B5BDB; background: #EEF2FF; }
+.multi-area-chip.active { background: #3B5BDB; border-color: #3B5BDB; color: #fff; font-weight: 500; }
+
+/* ── 載入 / 空態 ── */
+.data-loading {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--color-text-secondary); font-size: 12px;
+}
+.data-empty { padding: 24px 14px; font-size: 12px; color: var(--color-text-tertiary); text-align: center; }
 
 /* ── Spinner ── */
 .spinner {
-  width:28px; height:28px; border:2.5px solid var(--color-border-secondary);
-  border-top-color:#3B5BDB; border-radius:50%; animation:spin 0.7s linear infinite;
+  width: 28px; height: 28px; border: 2.5px solid var(--color-border-secondary);
+  border-top-color: #3B5BDB; border-radius: 50%; animation: spin 0.7s linear infinite;
 }
-.spinner.sm { width:16px; height:16px; border-width:2px; }
-@keyframes spin { to { transform:rotate(360deg); } }
+.spinner.sm { width: 16px; height: 16px; border-width: 2px; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
