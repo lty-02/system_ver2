@@ -35,7 +35,6 @@
 
     <!-- ═══════════════ 模式一：單時期 ═══════════════ -->
     <div v-if="activeMode === 'single'" class="mode-panel">
-      <!-- 控制列 -->
       <div class="tv-controls-bar">
         <div class="time-chips">
           <button
@@ -58,39 +57,46 @@
           >{{ f.shortLabel }}</button>
         </div>
       </div>
-      <!-- 地圖 + 資料 -->
       <div class="tv-split">
+        <!-- 地圖：全寬 -->
         <div class="tv-map-wrap">
           <div ref="singleMapDiv" class="map-div"></div>
           <div class="map-badge">{{ getPeriodLabel(selectedSingle) }}・{{ getFieldLabel(selectedField) }}</div>
           <div v-if="isRendering" class="map-spinner"><div class="spinner"></div></div>
         </div>
-        <div class="tv-data-card">
-          <div v-if="isLoadingData" class="data-loading" style="padding:16px 14px">
-            <div class="spinner sm"></div><span>查詢資料中...</span>
+        <!-- 浮動資料卡 -->
+        <div class="tv-float-card" :class="{ collapsed: dataCardCollapsed }">
+          <div class="tfc-handle" @click="dataCardCollapsed = !dataCardCollapsed">
+            <span class="tfc-title">數值統計</span>
+            <svg class="tfc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><path d="M6 9l6 6 6-6"/></svg>
           </div>
-          <template v-else-if="singleFeatures.length > 0">
-            <div class="tv-card-section">
-              <div class="summary-cards">
-                <div class="summary-card">
-                  <div class="sc-label">最高</div>
-                  <div class="sc-value">{{ formatValue(singleSummary.max, selectedField) }}</div>
-                  <div class="sc-sub">{{ singleSummary.maxName }}</div>
-                </div>
-                <div class="summary-card">
-                  <div class="sc-label">中位數</div>
-                  <div class="sc-value">{{ formatValue(singleSummary.median, selectedField) }}</div>
-                </div>
-                <div class="summary-card">
-                  <div class="sc-label">最低</div>
-                  <div class="sc-value">{{ formatValue(singleSummary.min, selectedField) }}</div>
-                  <div class="sc-sub">{{ singleSummary.minName }}</div>
+          <div class="tfc-body">
+            <div v-if="isLoadingData" class="data-loading">
+              <div class="spinner sm"></div><span>查詢資料中...</span>
+            </div>
+            <template v-else-if="singleFeatures.length > 0">
+              <!-- 摘要卡 -->
+              <div class="tfc-section">
+                <div class="summary-cards">
+                  <div class="summary-card">
+                    <div class="sc-label">最高</div>
+                    <div class="sc-value">{{ formatValue(singleSummary.max, selectedField) }}</div>
+                    <div class="sc-sub">{{ singleSummary.maxName }}</div>
+                  </div>
+                  <div class="summary-card">
+                    <div class="sc-label">中位數</div>
+                    <div class="sc-value">{{ formatValue(singleSummary.median, selectedField) }}</div>
+                  </div>
+                  <div class="summary-card">
+                    <div class="sc-label">最低</div>
+                    <div class="sc-value">{{ formatValue(singleSummary.min, selectedField) }}</div>
+                    <div class="sc-sub">{{ singleSummary.minName }}</div>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div class="tv-card-section tv-table-section">
-              <div class="table-title">{{ getFieldLabel(selectedField) }}（{{ getFieldUnit(selectedField) }}）</div>
-              <div class="table-wrapper">
+              <!-- 數據表 -->
+              <div class="tfc-section tfc-table-section">
+                <div class="table-title">{{ getFieldLabel(selectedField) }}（{{ getFieldUnit(selectedField) }}）</div>
                 <table class="data-table">
                   <thead>
                     <tr><th class="left">行政區</th><th>數值</th></tr>
@@ -103,16 +109,15 @@
                   </tbody>
                 </table>
               </div>
-            </div>
-          </template>
-          <div v-else class="data-empty">選擇時期與指標後顯示資料</div>
+            </template>
+            <div v-else class="data-empty">選擇時期與指標後顯示資料</div>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- ═══════════════ 模式二：雙時期差異 ═══════════════ -->
     <div v-else-if="activeMode === 'dual'" class="mode-panel">
-      <!-- 控制列：緊湊年份選取器 + 指標 + 色階 -->
       <div class="tv-controls-bar">
         <div class="dcp-row">
           <div class="dcp-group">
@@ -147,20 +152,23 @@
           <span class="diff-scale-label pos">增</span>
         </div>
       </div>
-      <!-- 地圖 + 資料 -->
       <div class="tv-split">
         <div class="tv-map-wrap">
           <div ref="dualMapDivA" class="map-div"></div>
           <div class="map-badge">{{ getPeriodLabel(selectedDualA) }} → {{ getPeriodLabel(selectedDualB) }}・{{ getFieldLabel(selectedField) }}</div>
           <div v-if="isRendering" class="map-spinner"><div class="spinner"></div></div>
         </div>
-        <div class="tv-data-card">
-          <div v-if="isLoadingData" class="data-loading" style="padding:16px 14px">
-            <div class="spinner sm"></div><span>計算差異中...</span>
+        <div class="tv-float-card" :class="{ collapsed: dataCardCollapsed }">
+          <div class="tfc-handle" @click="dataCardCollapsed = !dataCardCollapsed">
+            <span class="tfc-title">差異分析</span>
+            <svg class="tfc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><path d="M6 9l6 6 6-6"/></svg>
           </div>
-          <template v-else-if="dualRows.length > 0">
-            <div class="tv-card-section tv-table-section">
-              <div class="table-wrapper">
+          <div class="tfc-body">
+            <div v-if="isLoadingData" class="data-loading">
+              <div class="spinner sm"></div><span>計算差異中...</span>
+            </div>
+            <template v-else-if="dualRows.length > 0">
+              <div class="tfc-section tfc-table-section">
                 <table class="data-table">
                   <thead>
                     <tr>
@@ -186,16 +194,15 @@
                   </tbody>
                 </table>
               </div>
-            </div>
-          </template>
-          <div v-else class="data-empty">選擇兩個時期與指標後顯示差異</div>
+            </template>
+            <div v-else class="data-empty">選擇兩個時期與指標後顯示差異</div>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- ═══════════════ 模式三：多時期趨勢 ═══════════════ -->
     <div v-else-if="activeMode === 'multi'" class="mode-panel">
-      <!-- 指標控制列 -->
       <div class="tv-controls-bar">
         <span class="selector-label">指標</span>
         <div class="field-chips">
@@ -208,45 +215,48 @@
           >{{ f.shortLabel }}</button>
         </div>
       </div>
-      <!-- 地圖 + 資料 -->
       <div class="tv-split">
         <div class="tv-map-wrap">
           <div ref="multiMapDiv" class="map-div"></div>
           <div class="map-badge">{{ getPeriodLabel(latestPeriod) }}・{{ getFieldLabel(selectedField) }}</div>
           <div v-if="isRendering" class="map-spinner"><div class="spinner"></div></div>
         </div>
-        <div class="tv-data-card">
-          <!-- 行政區選取 -->
-          <div class="tv-card-section">
-            <div class="tv-section-hd">
-              <span class="tv-section-label">行政區</span>
-              <span class="tv-count-badge">{{ areaNames.length }}</span>
-            </div>
-            <div class="multi-area-chips">
-              <button
-                v-for="name in areaNames"
-                :key="name"
-                class="multi-area-chip"
-                :class="{ active: selectedArea === name }"
-                @click="selectArea(name)"
-              >{{ name }}</button>
-            </div>
+        <div class="tv-float-card" :class="{ collapsed: dataCardCollapsed }">
+          <div class="tfc-handle" @click="dataCardCollapsed = !dataCardCollapsed">
+            <span class="tfc-title">趨勢分析</span>
+            <svg class="tfc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><path d="M6 9l6 6 6-6"/></svg>
           </div>
-          <!-- 趨勢圖 + 數據表 -->
-          <div v-if="isLoadingData" class="data-loading" style="padding:16px 14px">
-            <div class="spinner sm"></div><span>載入趨勢資料中...</span>
-          </div>
-          <template v-else-if="multiRows.length > 0">
-            <div class="tv-card-section">
-              <div class="tv-section-hd" style="margin-bottom:8px">
-                <span class="tv-section-label">{{ selectedArea }}・{{ getFieldLabel(selectedField) }}</span>
+          <div class="tfc-body">
+            <!-- 行政區選取 -->
+            <div class="tfc-section">
+              <div class="tfc-section-hd">
+                <span class="tfc-section-label">選擇行政區</span>
+                <span class="tv-count-badge">{{ areaNames.length }}</span>
               </div>
-              <div style="height:130px; position:relative;">
-                <canvas id="trendChart"></canvas>
+              <div class="multi-area-chips">
+                <button
+                  v-for="name in areaNames"
+                  :key="name"
+                  class="multi-area-chip"
+                  :class="{ active: selectedArea === name }"
+                  @click="selectArea(name)"
+                >{{ name }}</button>
               </div>
             </div>
-            <div class="tv-card-section tv-table-section">
-              <div class="table-wrapper">
+            <!-- 趨勢圖 + 數據表 -->
+            <div v-if="isLoadingData" class="data-loading">
+              <div class="spinner sm"></div><span>載入趨勢資料中...</span>
+            </div>
+            <template v-else-if="multiRows.length > 0">
+              <div class="tfc-section">
+                <div class="tfc-section-hd" style="margin-bottom:8px">
+                  <span class="tfc-section-label">{{ selectedArea }}・{{ getFieldLabel(selectedField) }}</span>
+                </div>
+                <div style="height:130px; position:relative;">
+                  <canvas id="trendChart"></canvas>
+                </div>
+              </div>
+              <div class="tfc-section tfc-table-section">
                 <table class="data-table">
                   <thead>
                     <tr>
@@ -271,9 +281,9 @@
                   </tbody>
                 </table>
               </div>
-            </div>
-          </template>
-          <div v-else class="data-empty">選擇行政區後顯示趨勢</div>
+            </template>
+            <div v-else class="data-empty">選擇行政區後顯示趨勢</div>
+          </div>
         </div>
       </div>
     </div>
@@ -319,8 +329,9 @@ const props = withDefaults(defineProps<{
 })
 
 // ==================== 狀態 ====================
-const activeMode     = ref<ModeType>('single')
-const selectedField  = ref<string>('fld01')
+const activeMode          = ref<ModeType>('single')
+const dataCardCollapsed   = ref(false)
+const selectedField       = ref<string>('fld01')
 const selectedSingle = ref<string>('')
 const selectedDualA  = ref<string>('')
 const selectedDualB  = ref<string>('')
@@ -1260,12 +1271,12 @@ const modes = [
 .tv-sep { width: 0.5px; height: 16px; background: var(--color-border-secondary); flex-shrink: 0; }
 
 /* ── 地圖 + 資料 分割 ── */
-.tv-split { flex: 1; display: flex; min-height: 0; overflow: hidden; }
+.tv-split { flex: 1; display: flex; min-height: 0; overflow: hidden; position: relative; }
 
 /* ── 地圖浮動卡 ── */
 .tv-map-wrap {
   flex: 1; min-width: 0; position: relative;
-  margin: 12px 0 12px 12px;
+  margin: 12px 12px 12px 12px;
   border-radius: 14px; overflow: hidden;
   box-shadow: 0 2px 16px rgba(0, 0, 0, 0.10), 0 0 0 1px rgba(0, 0, 0, 0.04);
 }
@@ -1284,33 +1295,72 @@ const modes = [
   background: rgba(255, 255, 255, 0.5);
 }
 
-/* ── 右側資料卡 ── */
-.tv-data-card {
-  width: 260px; flex-shrink: 0;
+/* ── 浮動資料卡 ── */
+.tv-float-card {
+  position: absolute;
+  right: 20px; bottom: 20px;
+  width: 340px;
+  max-height: calc(100% - 40px);
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 14px;
+  box-shadow: 0 4px 28px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
   display: flex; flex-direction: column;
-  overflow-y: auto;
-  background: var(--color-background-primary, #fff);
-  border-left: 0.5px solid var(--color-border-tertiary);
+  overflow: hidden;
+  z-index: 10;
+  transition: max-height 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.15s ease;
 }
-.tv-data-card::-webkit-scrollbar { width: 4px; }
-.tv-data-card::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 2px; }
+.tv-float-card.collapsed { max-height: 44px; }
+.tv-float-card:not(.collapsed) { box-shadow: 0 8px 36px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.08); }
 
-.tv-card-section {
+.tfc-handle {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 14px 11px;
+  cursor: pointer; user-select: none;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.98);
+}
+.tfc-handle:hover { background: var(--color-background-secondary); }
+
+.tfc-title {
+  flex: 1;
+  font-size: 12px; font-weight: 700;
+  color: var(--color-text-primary); letter-spacing: 0.01em;
+}
+.tfc-chevron {
+  color: var(--color-text-tertiary);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+.tv-float-card.collapsed .tfc-chevron { transform: rotate(-90deg); }
+
+.tfc-body {
+  flex: 1; overflow-y: auto;
+  display: flex; flex-direction: column;
+}
+.tfc-body::-webkit-scrollbar { width: 4px; }
+.tfc-body::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 2px; }
+
+.tfc-section {
   padding: 12px 14px;
   border-bottom: 0.5px solid var(--color-border-tertiary);
   flex-shrink: 0;
 }
-.tv-table-section {
+.tfc-table-section {
   flex: 1; overflow-y: auto; border-bottom: none; padding: 0;
+  padding-bottom: 4px;
 }
-.tv-table-section::-webkit-scrollbar { width: 4px; }
-.tv-table-section::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 2px; }
+.tfc-table-section::-webkit-scrollbar { width: 4px; }
+.tfc-table-section::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 2px; }
 
-.tv-section-hd {
+.tfc-section-hd {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 8px;
 }
-.tv-section-label {
+.tfc-section-label {
   font-size: 10px; font-weight: 700;
   color: var(--color-text-tertiary);
   text-transform: uppercase; letter-spacing: 0.08em;
@@ -1399,18 +1449,17 @@ const modes = [
 .sc-value { font-size: 15px; font-weight: 700; color: var(--color-text-primary); line-height: 1.2; }
 .sc-sub   { font-size: 10px; color: var(--color-text-tertiary); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.table-title { font-size: 11px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 6px; }
-.table-wrapper { overflow-x: auto; }
+.table-title { font-size: 11px; font-weight: 500; color: var(--color-text-secondary); margin: 10px 14px 6px; }
 .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .data-table th {
   background: var(--color-background-secondary); color: var(--color-text-secondary);
-  font-weight: 600; padding: 5px 8px; text-align: right;
+  font-weight: 600; padding: 6px 10px; text-align: right;
   border-bottom: 0.5px solid var(--color-border-secondary); white-space: nowrap;
   position: sticky; top: 0; z-index: 1;
 }
 .data-table th.left { text-align: left; }
 .data-table td {
-  padding: 3px 8px; text-align: right;
+  padding: 5px 10px; text-align: right;
   border-bottom: 0.5px solid var(--color-border-tertiary); color: var(--color-text-secondary);
 }
 .data-table tbody tr:last-child td { border-bottom: none; }
@@ -1440,9 +1489,10 @@ const modes = [
 /* ── 載入 / 空態 ── */
 .data-loading {
   display: flex; align-items: center; gap: 8px;
+  padding: 16px 14px;
   color: var(--color-text-secondary); font-size: 12px;
 }
-.data-empty { padding: 24px 14px; font-size: 12px; color: var(--color-text-tertiary); text-align: center; }
+.data-empty { padding: 28px 14px; font-size: 12px; color: var(--color-text-tertiary); text-align: center; }
 
 /* ── Spinner ── */
 .spinner {
