@@ -19,32 +19,39 @@ import { useMapStore } from '@/stores/mapStore'
  * 可以輕鬆添加或移除要查詢的圖層
  */
 const ANALYSIS_LAYER_TITLES = [
-  // 醫療照護 (25分)
+  // 醫療照護
   '2024年臺南市醫院位置',
   '2024年臺南市衛生所位置',
-  
-  // 日常採買 (20分)
+
+  // 日常採買
   '2024年臺南市連鎖便利商店位置',
   '2024年臺南市大賣場位置',
-  
-  // 教育資源 (15分)
+
+  // 教育資源
   '2024年臺南市國民小學位置',
   '2024年國中及高中位置',
+  '2024年臺南市國中及高中位置',
   '2024年臺南市幼兒園位置',
-  
-  // 休閒綠地 (20分)
+
+  // 休閒綠地
+  '2024年臺南市公園位置',
   '2024年臺南市公園位置_shp',
+  '2024年臺南市活動中心位置',
   '2024年臺南市活動中心位置_shp',
+  '2024年臺南市體育場位置',
   '2024年臺南市體育場位置_shp',
   '2024年臺南市古蹟位置',
-  
-  // 金融服務 (20分)
+
+  // 金融服務
   '2024年臺南市金融機構位置',
+  '2024年臺南市郵局位置',
   '2024年臺南市郵局位置_shp',
-  '2024年臺南市停車場位置',
-  
+  '2022年臺南市停車場位置',
+
   // 風險圖層
   '2021年臺南市活動斷層線',
+  '2021年臺南市土壤液化潛勢地區',
+  '2021年土壤液化潛勢地區',
   '2024年臺南市土壤液化潛勢地區',
   '2020年淹水點位',
   '2022年臺南市焚化爐煙囪位置',
@@ -146,139 +153,69 @@ export const useMapQuery = (sceneView?: any) => {
   }
 
   /**
-   * 執行 LayerView 查詢 - 使用圖層標題列表
+   * 直接對 FeatureLayer 執行查詢（不依賴 LayerView，圖層無須可見）
    */
   const performLayerViewQuery = async (geometry: any): Promise<QueryResult[]> => {
-    if (!sceneView) {
-      throw new Error('SceneView 未初始化')
-    }
+    if (!sceneView) throw new Error('SceneView 未初始化')
 
     const results: QueryResult[] = []
+    const allLayers = sceneView.map.allLayers.toArray()
 
-    try {
-      // 方法：從所有圖層中篩選出標題在列表中的圖層
-      const allLayers = sceneView.map.allLayers.toArray()
-      
-      const targetLayers = allLayers.filter((layer: __esri.Layer) => 
-        layer.title && ANALYSIS_LAYER_TITLES.includes(layer.title) && 
-        layer.type === 'feature'
-      )
+    const targetLayers = allLayers.filter((layer: any) =>
+      layer.title && ANALYSIS_LAYER_TITLES.includes(layer.title) &&
+      layer.type === 'feature'
+    )
 
-      console.log(`🔍 查詢 ${targetLayers.length} 個生活圈分析圖層`)
-      console.log(`📋 圖層列表:`, targetLayers.map((l: __esri.Layer) => l.title))
+    console.log(`🔍 直接查詢 ${targetLayers.length} 個生活機能圖層（不需開啟圖層）`)
 
-      if (targetLayers.length === 0) {
-        console.warn('⚠️ 沒有找到任何生活圈分析圖層，請確認：')
-        console.warn('1. 圖層是否已在圖層管理中添加')
-        console.warn('2. 圖層標題是否與 ANALYSIS_LAYER_TITLES 匹配')
-        console.warn(`📋 可用圖層:`, allLayers.map((l: __esri.Layer) => l.title))
-        return results
-      }
+    for (const layer of targetLayers) {
+      try {
+        if (layer.loadStatus !== 'loaded') await layer.load()
 
-      // 獲取 LayerView 並查詢
-      const layerViewPromises = targetLayers.map((layer: __esri.Layer) => {
-        try {
-          return sceneView.whenLayerView(layer).catch(() => null)
-        } catch {
-          return Promise.resolve(null)
+        const objectIds: number[] = await layer.queryObjectIds({
+          geometry,
+          spatialRelationship: 'intersects',
+          returnGeometry: false,
+        })
+
+        results.push({
+          layerTitle: String(layer.title || layer.id),
+          layerId:    String(layer.id),
+          count:      objectIds.length,
+          features:   objectIds.map(id => ({ id, attributes: { OBJECTID: id } })),
+          attributes: [],
+        })
+
+        if (objectIds.length > 0) {
+          console.log(`✅ "${layer.title}": ${objectIds.length} 個`)
         }
-      })
-
-      const layerViews = await Promise.all(layerViewPromises)
-
-      // 執行查詢
-      for (let i = 0; i < layerViews.length; i++) {
-        const layerView = layerViews[i]
-        if (!layerView) continue
-
-        try {
-          const query = layerView.createQuery()
-          query.geometry = geometry
-
-          const objectIds: number[] = await layerView.queryObjectIds(query)
-
-          const layer = layerView.layer
-          const layerTitle = String(layer.title || layer.id)
-          const layerId = String(layer.id)
-
-          const features = objectIds.map((id) => ({
-            id: id,
-            attributes: { OBJECTID: id },
-          }))
-
-          results.push({
-            layerTitle,
-            layerId,
-            count: objectIds.length,
-            features,
-            attributes: []
-          })
-
-          if (objectIds.length > 0) {
-            console.log(`✅ 圖層 "${layerTitle}": ${objectIds.length} 個特徵`)
-          }
-        } catch (e: any) {
-          console.warn(`⚠️ 查詢圖層失敗:`, e)
-        }
+      } catch (e: any) {
+        console.warn(`⚠️ 查詢失敗 "${layer.title}":`, e)
       }
-
-      return results
-
-    } catch (error: any) {
-      console.error('❌ 查詢失敗:', error)
-      return results
     }
+
+    return results
   }
 
   /**
-   * 高亮特徵
+   * 高亮特徵（只對已可見的圖層高亮，不強制開啟圖層）
    */
   const highlightFeaturesOnMap = (results: QueryResult[]): void => {
-    if (!sceneView || !results || results.length === 0) {
-      return
-    }
+    if (!sceneView || !results.length) return
+    clearHighlight()
 
-    try {
-      clearHighlight()
-      let totalHighlighted = 0
+    results
+      .filter(r => r.count > 0 && r.features.length > 0)
+      .forEach(result => {
+        const layer = sceneView.map.allLayers.find((l: any) => l.id === result.layerId)
+        if (!layer?.visible) return   // 只高亮使用者已開啟的圖層
 
-      results.forEach(result => {
-        if (result.count === 0 || !result.features || result.features.length === 0) {
-          return
-        }
-
-        try {
-          const layer = sceneView.map.allLayers.find((l: any) => l.id === result.layerId)
-          if (!layer) {
-            console.warn(`⚠️ 找不到圖層: ${result.layerId}`)
-            return
-          }
-
-          sceneView.whenLayerView(layer).then((layerView: any) => {
-            if (layerView && layerView.highlight) {
-              const objectIds = result.features.map(f => f.id).filter(id => id !== undefined)
-              
-              if (objectIds.length > 0) {
-                const handle = layerView.highlight(objectIds)
-                highlightHandles.push(handle)
-                totalHighlighted += objectIds.length
-                
-                console.log(`✨ 高亮圖層 "${result.layerTitle}": ${objectIds.length} 個特徵`)
-              }
-            }
-          }).catch((error: any) => {
-            console.warn(`⚠️ 高亮圖層失敗 "${result.layerTitle}":`, error)
-          })
-        } catch (error: any) {
-          console.warn(`⚠️ 處理圖層高亮時出錯 "${result.layerTitle}":`, error)
-        }
+        sceneView.whenLayerView(layer).then((layerView: any) => {
+          if (!layerView?.highlight) return
+          const ids = result.features.map((f: any) => f.id).filter(Boolean)
+          if (ids.length) highlightHandles.push(layerView.highlight(ids))
+        }).catch(() => {})
       })
-
-      console.log(`✅ 總共高亮 ${totalHighlighted} 個特徵`)
-
-    } catch (error: any) {
-      console.warn('❌ 高亮失敗:', error)
-    }
   }
 
   /**

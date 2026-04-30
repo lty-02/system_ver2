@@ -91,6 +91,7 @@
       <!-- 地圖容器 -->
       <div class="map-container">
         <div ref="viewDiv" class="scene-view"></div>
+        <Building3DLegend />
       </div>
 
       <!-- 右側面板 -->
@@ -103,6 +104,7 @@
 import { ref, shallowRef, onMounted, onUnmounted, computed, markRaw } from 'vue'
 import TdxPanel from '@/components/map/TdxPanel.vue'
 import AlertsPanel from '@/components/map/AlertsPanel.vue'
+import Building3DLegend from '@/components/map/Building3DLegend.vue'
 import SceneView from '@arcgis/core/views/SceneView'
 import WebScene from '@arcgis/core/WebScene'
 import Portal from '@arcgis/core/portal/Portal'
@@ -137,7 +139,7 @@ const modules = [
   },
   {
     id: 'buffer-analysis',
-    label: '生活圈分析',
+    label: '區域分析',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>'
   },
   {
