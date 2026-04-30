@@ -112,21 +112,44 @@
     <!-- ═══════════════ 模式二：雙時期差異 ═══════════════ -->
     <div v-else-if="activeMode === 'dual'" class="mode-panel dual-panel">
       <div class="dual-controls">
-        <div class="dual-period-row">
-          <div class="dual-period-group">
-            <span class="period-dot dot-a"></span>
-            <select v-model="selectedDualA" class="period-select" @change="onDualChange">
-              <option v-for="p in activeTheme?.periods ?? []" :key="p.value" :value="p.value">{{ p.label }}</option>
-            </select>
-          </div>
-          <span class="dual-vs">→</span>
-          <div class="dual-period-group">
-            <span class="period-dot dot-b"></span>
-            <select v-model="selectedDualB" class="period-select" @change="onDualChange">
-              <option v-for="p in activeTheme?.periods ?? []" :key="p.value" :value="p.value">{{ p.label }}</option>
-            </select>
+        <!-- 年份比較選取器 -->
+        <div class="dual-compare-hero">
+          <div class="dcp-grid">
+            <!-- 起始年份 -->
+            <div class="dcp-card dcp-card-a">
+              <div class="dcp-role">起始年份</div>
+              <div class="dcp-value">{{ getPeriodLabel(selectedDualA) || '請選擇' }}</div>
+              <div class="dcp-cta">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="11" height="11"><path d="M6 9l6 6 6-6"/></svg>
+                點擊切換
+              </div>
+              <select v-model="selectedDualA" class="dcp-select" @change="onDualChange">
+                <option v-for="p in activeTheme?.periods ?? []" :key="p.value" :value="p.value">{{ p.label }}</option>
+              </select>
+            </div>
+
+            <!-- 連接箭頭 -->
+            <div class="dcp-connector">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </div>
+
+            <!-- 比較年份 -->
+            <div class="dcp-card dcp-card-b">
+              <div class="dcp-role">比較年份</div>
+              <div class="dcp-value">{{ getPeriodLabel(selectedDualB) || '請選擇' }}</div>
+              <div class="dcp-cta">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="11" height="11"><path d="M6 9l6 6 6-6"/></svg>
+                點擊切換
+              </div>
+              <select v-model="selectedDualB" class="dcp-select" @change="onDualChange">
+                <option v-for="p in activeTheme?.periods ?? []" :key="p.value" :value="p.value">{{ p.label }}</option>
+              </select>
+            </div>
           </div>
         </div>
+
         <div class="field-chips" style="padding: 0 12px 10px;">
           <button
             v-for="f in activeTheme?.fields ?? []"
@@ -1299,18 +1322,77 @@ const modes = [
 
 /* ── 雙時期 ── */
 .dual-controls { border-bottom:0.5px solid var(--color-border-tertiary); flex-shrink:0; }
-.dual-period-row {
-  display:flex; align-items:center; gap:8px; padding:10px 12px 8px;
+
+/* 年份比較選取器 */
+.dual-compare-hero {
+  padding: 14px 14px 10px;
 }
-.dual-period-group { display:flex; align-items:center; gap:6px; flex:1; }
-.period-dot  { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-.dot-a { background:#3B5BDB; }
-.dot-b { background:#12B886; }
-.dual-vs { font-size:11px; color:var(--color-text-tertiary); flex-shrink:0; }
-.period-select {
-  flex:1; padding:5px 8px; border:0.5px solid var(--color-border-secondary);
-  border-radius:6px; font-size:12px;
-  background:var(--color-background-primary); color:var(--color-text-primary); cursor:pointer;
+.dcp-grid {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.dcp-card {
+  flex: 1;
+  position: relative;
+  border-radius: 12px;
+  padding: 14px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.15s;
+}
+.dcp-card:hover { filter: brightness(0.97); transform: translateY(-1px); }
+.dcp-card-a {
+  background: #EEF2FF;
+  border: 2px solid #3B5BDB;
+}
+.dcp-card-b {
+  background: #F0FFF4;
+  border: 2px solid #12B886;
+}
+.dcp-role {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.dcp-card-a .dcp-role { color: #3B5BDB; }
+.dcp-card-b .dcp-role { color: #0d9b6e; }
+.dcp-value {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-top: 2px;
+}
+.dcp-card-a .dcp-value { color: #1e3a8a; }
+.dcp-card-b .dcp-value { color: #064e3b; }
+.dcp-cta {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  margin-top: 4px;
+}
+.dcp-select {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+  font-size: 14px;
+}
+.dcp-connector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
 }
 .dual-maps    { display:flex; height:360px; flex-shrink:0; }
 .dual-map-wrap { flex:1; position:relative; overflow:hidden; }
@@ -1337,15 +1419,15 @@ const modes = [
 .sc-sub   { font-size:10px; color:var(--color-text-tertiary); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .table-title { font-size:11px; font-weight:500; color:var(--color-text-secondary); margin-bottom:6px; }
 .table-wrapper { overflow-x:auto; }
-.data-table { width:100%; border-collapse:collapse; font-size:13px; }
+.data-table { width:100%; border-collapse:collapse; font-size:12px; }
 .data-table th {
   background:var(--color-background-secondary); color:var(--color-text-secondary);
-  font-weight:500; padding:5px 10px; text-align:right;
+  font-weight:500; padding:4px 8px; text-align:right;
   border-bottom:0.5px solid var(--color-border-secondary); white-space:nowrap;
 }
 .data-table th.left { text-align:left; }
 .data-table td {
-  padding:3px 10px; text-align:right;
+  padding:2px 8px; text-align:right;
   border-bottom:0.5px solid var(--color-border-tertiary); color:var(--color-text-secondary);
 }
 .data-table tbody tr:last-child td { border-bottom:none; }
