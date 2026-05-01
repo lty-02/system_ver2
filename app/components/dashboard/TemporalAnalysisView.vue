@@ -521,10 +521,9 @@ async function createMapView(container: HTMLDivElement): Promise<MapView> {
   // 用 WebMap 只取底圖設定，建立後立即移除所有業務圖層
   const webMap  = new WebMap({ portalItem: { id: WEBMAP_ID, portal } })
   await webMap.load()
-  // 取得底圖 ID 後用乾淨的 Map 重建，只保留 basemap
-  const basemap = webMap.basemap
   const { default: Map } = await import('@arcgis/core/Map')
-  const cleanMap = new Map({ basemap })
+  const { default: Basemap } = await import('@arcgis/core/Basemap')
+  const cleanMap = new Map({ basemap: Basemap.fromId('gray-vector') })
   const view = new MapView({
     container,
     map: cleanMap,

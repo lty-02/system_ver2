@@ -80,6 +80,12 @@
             <!-- 示警資訊模組 -->
             <AlertsPanel v-else-if="activeModule === 'alerts'" />
 
+            <!-- 社會經濟資訊模組 -->
+            <SocioEconomicPanel
+              v-else-if="activeModule === 'socio-economic'"
+              @select-layer="onSocioLayerSelect"
+            />
+
             <!-- 其他模組 -->
             <div v-else class="module-placeholder">
               <p>{{ currentModuleLabel }} 功能開發中...</p>
@@ -90,8 +96,40 @@
 
       <!-- 地圖容器 -->
       <div class="map-container">
-        <div ref="viewDiv" class="scene-view"></div>
-        <Building3DLegend />
+        <div ref="viewDiv" class="scene-view" :style="activeModule === 'socio-economic' ? { opacity: 0, pointerEvents: 'none' } : {}"></div>
+
+        <!-- 社會經濟 2D 地圖覆蓋層 -->
+        <div
+          v-show="activeModule === 'socio-economic'"
+          ref="socioViewDiv"
+          class="scene-view socio-overlay"
+        ></div>
+
+        <!-- 社會經濟：懸浮指標選單 -->
+        <Transition name="se-float">
+          <div
+            v-if="activeModule === 'socio-economic' && activeSocioLayerDef"
+            class="socio-field-float"
+          >
+            <div class="sff-header">
+              <span class="sff-title">{{ activeSocioLayerDef.label }}</span>
+              <span v-if="isSocioLoading" class="sff-loading">載入中…</span>
+            </div>
+            <div class="sff-chips">
+              <button
+                v-for="f in activeSocioLayerDef.fields"
+                :key="f.key"
+                class="sff-chip"
+                :class="{ active: activeSocioFieldKey === f.key }"
+                @click="onSocioFieldSelect(f.key)"
+              >
+                {{ f.shortLabel }}
+              </button>
+            </div>
+          </div>
+        </Transition>
+
+        <Building3DLegend v-show="activeModule !== 'socio-economic'" />
       </div>
 
       <!-- 右側面板 -->
@@ -101,21 +139,32 @@
 </template>
 
 <script setup lang="ts">
-import { ref, shallowRef, onMounted, onUnmounted, computed, markRaw } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted, computed, markRaw, watch, nextTick } from 'vue'
 import TdxPanel from '@/components/map/TdxPanel.vue'
 import AlertsPanel from '@/components/map/AlertsPanel.vue'
 import Building3DLegend from '@/components/map/Building3DLegend.vue'
+import SocioEconomicPanel from '@/components/map/SocioEconomicPanel.vue'
 import SceneView from '@arcgis/core/views/SceneView'
+import MapView from '@arcgis/core/views/MapView'
+import ArcMap from '@arcgis/core/Map'
 import WebScene from '@arcgis/core/WebScene'
 import Portal from '@arcgis/core/portal/Portal'
+import FeatureLayer from '@arcgis/core/layers/FeatureLayer'
 import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer'
 import Graphic from '@arcgis/core/Graphic'
 import SketchViewModel from '@arcgis/core/widgets/Sketch/SketchViewModel'
 import * as geometryEngine from '@arcgis/core/geometry/geometryEngine'
+import ClassBreaksRenderer from '@arcgis/core/renderers/ClassBreaksRenderer'
+import SimpleFillSymbol from '@arcgis/core/symbols/SimpleFillSymbol'
 import { useMapQuery } from '@/composables/useMapQuery'
 import { useMapStore } from '@/stores/mapStore'
 import { useLayerStore, LayerCategory } from '@/stores/layerStore'
 import { useQueryStore } from '@/stores/queryStore'
+import {
+  ALL_LAYER_DEFS,
+  scanPeriodsFromLayers,
+} from '@/composables/temporalLayerConfig'
+import type { TemporalLayerDef } from '@/composables/temporalLayerConfig'
 import RightSidePanel from '@/components/map/RightSidePanel.vue'
 import LayerManagementPanel from '@/components/map/LayerManagementPanel.vue'
 import LegendBasemapPanel from '@/components/map/LegendBasemapPanel.vue'
@@ -152,7 +201,12 @@ const modules = [
     id: 'alerts',
     label: '示警資訊',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>'
-  }
+  },
+  {
+    id: 'socio-economic',
+    label: '社會經濟資訊',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'
+  },
 ]
 
 
@@ -203,6 +257,196 @@ let mapQueryComposable: ReturnType<typeof useMapQuery> | null = null
 //地籍圖
 const { getAllWmsLayers, setupMidnightRefresh } = useSignCode()
 let refreshController: { stop: () => void } | null = null
+
+// ==================== 社會經濟資訊 ====================
+const socioViewDiv         = ref<HTMLDivElement | null>(null)
+const socioMapView         = shallowRef<MapView | null>(null)
+const activeSocioLayerKey  = ref<string>('')
+const activeSocioFieldKey  = ref<string>('')
+const isSocioLoading       = ref(false)
+let activeSocioLayer: FeatureLayer | null = null
+
+const SOCIO_PORTAL_URL  = 'https://igisportal.geomatics.ncku.edu.tw/portal'
+const SOCIO_WEBSCENE_ID = 'b8749c5de8e44fe08306d1a03d764f04'
+const socioLayerUrlMap  = new Map<string, string>()
+let socioCatalogLoaded  = false
+
+const activeSocioLayerDef = computed<TemporalLayerDef | null>(() =>
+  ALL_LAYER_DEFS.find(d => d.key === activeSocioLayerKey.value) ?? null
+)
+
+const CHOROPLETH_COLORS = ['#f7fbff', '#c6dbef', '#6baed6', '#2171b5', '#084594']
+
+// ==================== 社會經濟：監聽模組切換 ====================
+
+watch(activeModule, async (newMod, oldMod) => {
+  if (newMod === 'socio-economic') {
+    await nextTick()
+    await initSocioMap()
+  } else if (oldMod === 'socio-economic') {
+    destroySocioMap()
+  }
+})
+
+const initSocioMap = async (): Promise<void> => {
+  if (socioMapView.value || !socioViewDiv.value) return
+  try {
+    // 載入 WebScene 目錄以取得圖層 URL
+    if (!socioCatalogLoaded) {
+      const portal = new Portal({ url: SOCIO_PORTAL_URL })
+      const ws = new WebScene({ portalItem: { id: SOCIO_WEBSCENE_ID, portal } })
+      await ws.load()
+      ws.allLayers.forEach((l: any) => {
+        if (l.title && (l.url || l.parsedUrl)) {
+          const raw = l.url ?? l.parsedUrl?.path ?? ''
+          const url = raw.replace(/\/+$/, '').endsWith('/0')
+            ? raw.replace(/\/+$/, '')
+            : `${raw.replace(/\/+$/, '')}/0`
+          socioLayerUrlMap.set(l.title, url)
+        }
+      })
+      socioCatalogLoaded = true
+    }
+
+    const grayMap = new ArcMap({ basemap: Basemap.fromId('gray-vector') })
+    const view = new MapView({
+      container: socioViewDiv.value,
+      map: grayMap,
+      center: [120.25, 23.0],
+      zoom: 10,
+    })
+    await view.when()
+    view.ui.move('zoom', 'top-left')
+    view.ui.remove('attribution')
+    view.popupEnabled = false
+    socioMapView.value = markRaw(view)
+  } catch (e) {
+    console.error('社會經濟地圖初始化失敗:', e)
+  }
+}
+
+const destroySocioMap = (): void => {
+  if (activeSocioLayer) {
+    socioMapView.value?.map?.remove(activeSocioLayer)
+    activeSocioLayer = null
+  }
+  if (socioMapView.value) {
+    socioMapView.value.destroy()
+    socioMapView.value = null
+  }
+  activeSocioLayerKey.value = ''
+  activeSocioFieldKey.value = ''
+}
+
+const onSocioLayerSelect = async (layerKey: string): Promise<void> => {
+  const def = ALL_LAYER_DEFS.find(d => d.key === layerKey)
+  if (!def || !socioMapView.value) return
+
+  activeSocioLayerKey.value = layerKey
+  activeSocioFieldKey.value = def.defaultField
+  isSocioLoading.value = true
+
+  try {
+    const allTitles = Array.from(socioLayerUrlMap.keys())
+    const periods   = scanPeriodsFromLayers(allTitles, def.layerSuffix)
+    if (!periods.length) {
+      console.warn('找不到圖層時期:', def.layerSuffix)
+      return
+    }
+
+    const latestPeriod = periods[periods.length - 1]
+    const url = socioLayerUrlMap.get(latestPeriod.layerName)
+    if (!url) {
+      console.warn('找不到圖層 URL:', latestPeriod.layerName)
+      return
+    }
+
+    // 移除前一個圖層
+    if (activeSocioLayer) {
+      socioMapView.value.map?.remove(activeSocioLayer)
+      activeSocioLayer = null
+    }
+
+    const fl = new FeatureLayer({ url, outFields: ['*'], visible: true })
+    await fl.load()
+    await applySocioChoropleth(fl, def.defaultField)
+
+    socioMapView.value.map?.add(fl)
+    activeSocioLayer = fl
+
+    try {
+      const ext = await fl.queryExtent({ where: '1=1' })
+      if (ext?.extent) socioMapView.value.goTo(ext.extent.expand(1.1))
+    } catch { /* ignore extent errors */ }
+
+  } catch (e) {
+    console.error('社會經濟圖層載入失敗:', e)
+  } finally {
+    isSocioLoading.value = false
+  }
+}
+
+const onSocioFieldSelect = async (fieldKey: string): Promise<void> => {
+  activeSocioFieldKey.value = fieldKey
+  if (activeSocioLayer) {
+    isSocioLoading.value = true
+    try {
+      await applySocioChoropleth(activeSocioLayer, fieldKey)
+    } finally {
+      isSocioLoading.value = false
+    }
+  }
+}
+
+const applySocioChoropleth = async (layer: FeatureLayer, fieldKey: string): Promise<void> => {
+  const fs = await layer.queryFeatures({
+    where: '1=1',
+    outFields: [fieldKey, '*'],
+    returnGeometry: false,
+  })
+  if (!fs.features.length) return
+
+  const sampleAttrs = fs.features[0]?.attributes ?? {}
+  const actualKey   = Object.keys(sampleAttrs).find(
+    k => k.toUpperCase() === fieldKey.toUpperCase()
+  ) ?? fieldKey
+
+  const values = fs.features
+    .map((f: any) => Number(f.attributes[actualKey] ?? 0))
+    .filter((v: number) => !isNaN(v) && v > 0)
+    .sort((a: number, b: number) => a - b)
+
+  if (!values.length) return
+
+  const n = values.length
+  const q = (p: number) => values[Math.floor(p * (n - 1))]
+
+  const breaks = [
+    { min: values[0]!,  max: q(0.2) },
+    { min: q(0.2),      max: q(0.4) },
+    { min: q(0.4),      max: q(0.6) },
+    { min: q(0.6),      max: q(0.8) },
+    { min: q(0.8),      max: values[n - 1]! + 1 },
+  ]
+
+  const renderer = new ClassBreaksRenderer({
+    field: actualKey,
+    classBreakInfos: breaks.map((b, i) => ({
+      minValue: b.min,
+      maxValue: b.max,
+      symbol:   new SimpleFillSymbol({
+        color: CHOROPLETH_COLORS[i] as any,
+        outline: { color: '#ffffff', width: 0.5 } as any,
+      }),
+    })),
+    defaultSymbol: new SimpleFillSymbol({
+      color: '#e2e8f0' as any,
+      outline: { color: '#ffffff', width: 0.5 } as any,
+    }) as any,
+  })
+
+  layer.renderer = renderer as any
+}
 
 // ==================== 生命週期 ====================
 
@@ -259,6 +503,7 @@ onUnmounted(() => {
   if (sceneView.value) {
     sceneView.value.destroy()
   }
+  destroySocioMap()
   document.removeEventListener('input', handleInputEvent)
   document.removeEventListener('click', handleClickEvent)
   refreshController?.stop()
@@ -620,6 +865,93 @@ const updateBufferGraphic = (geometry: any): void => {
 /* ==================== 地圖容器 ==================== */
 .map-container { flex: 1; position: relative; overflow: hidden; }
 .scene-view { width: 100%; height: 100%; }
+
+/* 社會經濟覆蓋層 */
+.socio-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+}
+
+/* 懸浮指標選單 */
+.socio-field-float {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  z-index: 20;
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(14px);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+  padding: 14px 16px;
+  max-width: 320px;
+}
+
+.sff-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.sff-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.sff-loading {
+  font-size: 11px;
+  color: #64748b;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.sff-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sff-chip {
+  padding: 4px 10px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 20px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.sff-chip:hover {
+  border-color: #93c5fd;
+  color: #1e293b;
+  background: #eff6ff;
+}
+.sff-chip.active {
+  background: #2171b5;
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* 社會經濟浮現動畫 */
+.se-float-enter-active,
+.se-float-leave-active {
+  transition: all 0.22s ease;
+}
+.se-float-enter-from,
+.se-float-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
 
 /* ==================== 響應式 ==================== */
 @media (max-width: 768px) {
