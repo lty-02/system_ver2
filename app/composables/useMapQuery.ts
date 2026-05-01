@@ -321,12 +321,32 @@ export const useMapQuery = (sceneView?: any) => {
       if (reLayer.loadStatus !== 'loaded') await reLayer.load()
       queryProgress.value = 40
 
-      const featureSet = await reLayer.queryFeatures({
+      // Step 1: 用幾何取 ObjectId（與生活機能查詢相同的已知可行路徑）
+      const objectIds: number[] = await reLayer.queryObjectIds({
         geometry,
         spatialRelationship: 'intersects',
+        returnGeometry: false,
+      })
+      queryProgress.value = 60
+
+      if (!objectIds.length) {
+        queryStore.updateActiveQueryResults([{
+          layerTitle: LAYER_TITLE,
+          layerId:    String(reLayer.id),
+          count:      0,
+          features:   [],
+          attributes: [],
+        }])
+        queryProgress.value = 100
+        console.log('✅ 不動產查詢完成，範圍內無資料')
+        return
+      }
+
+      // Step 2: 用 ObjectId 列表取屬性（不依賴幾何，避免 3D 相容問題）
+      const featureSet = await reLayer.queryFeatures({
+        objectIds: objectIds.slice(0, 2000),
         outFields: OUT_FIELDS,
         returnGeometry: false,
-        num: 2000,
       })
 
       const features = featureSet?.features ?? []
@@ -348,10 +368,11 @@ export const useMapQuery = (sceneView?: any) => {
       console.log(`✅ 不動產查詢完成，找到 ${features.length} 筆`)
 
     } catch (err: any) {
-      const msg = err instanceof Error ? err.message : '查詢失敗'
+      const msg = err?.message || err?.details?.message || (typeof err === 'string' ? err : '查詢失敗')
       errorMessage.value = msg
       queryStore.setError(msg)
       console.error('❌ 不動產查詢錯誤:', err)
+      console.error('  name:', err?.name, '| code:', err?.code, '| details:', JSON.stringify(err?.details))
     } finally {
       isQuerying.value = false
       queryProgress.value = 0
