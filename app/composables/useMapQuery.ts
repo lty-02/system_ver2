@@ -286,7 +286,7 @@ export const useMapQuery = (sceneView?: any) => {
     }
 
     const LAYER_TITLE = '臺南市實價登錄不動產交易'
-    const OUT_FIELDS  = ['單價__', '總面積_', '型態', '建物現', 'OBJECTID']
+    const OUT_FIELDS  = ['單價__', '總面積_', '型態', '建物現']
 
     currentGeometry = markRaw(geometry)
     isQuerying.value = true
