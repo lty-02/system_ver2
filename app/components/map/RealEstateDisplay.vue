@@ -106,9 +106,9 @@ const queryStore = useQueryStore()
 
 const LAYER_TITLE = '臺南市實價登錄不動產交易'
 const PIE_COLORS = [
-  '#8FA8B5', '#B5A49A', '#9BAA8C', '#B5A0AC',
-  '#A5B09C', '#B0A8C0', '#A8B4A0', '#C0ACA4',
-  '#96AABB', '#B8A898',
+  '#B8D4E8', '#F5C8C0', '#B8DEC8', '#E8C8E0',
+  '#C8DEB8', '#D0C8EC', '#F5DDB8', '#C8E8E4',
+  '#ECD8B8', '#D4C8E8',
 ]
 
 // 從 store 取得屬性列表
@@ -121,14 +121,14 @@ const attrs = computed(() => {
 const totalCount = computed(() => attrs.value.length)
 const hasData    = computed(() => totalCount.value > 0)
 
-// 平均單價（排除 0，原始單位 元/坪，顯示 萬元/坪）
+// 平均單價（排除 0，原始值即為萬元/坪）
 const avgUnitPrice = computed(() => {
   const vals = attrs.value
     .map(a => Number(a['單價__']))
     .filter(v => !isNaN(v) && v > 0)
   if (!vals.length) return '—'
   const avg = vals.reduce((s, v) => s + v, 0) / vals.length
-  return (avg / 10000).toLocaleString('zh-TW', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+  return avg.toLocaleString('zh-TW', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 })
 
 // 平均總面積（排除 0，原始單位 ㎡，顯示 坪，1㎡ ≈ 0.3025坪）
