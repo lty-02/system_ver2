@@ -55,12 +55,16 @@ const LAYER_CATEGORY_MAP: Record<string, LayerCategory> = {
   '南部科學園區_台南園區範圍':         LayerCategory.Infrastructure,
   '臺南市分棟建物框三維建物':           LayerCategory.Infrastructure,
   '2019年通用版電子地圖道路中心線':     LayerCategory.Infrastructure,
+  '2022年臺南市行道樹位置':             LayerCategory.Infrastructure,
   '2019年通用版電子地圖建物平面':       LayerCategory.Infrastructure,
   '2024年臺南市中央政府機關':           LayerCategory.Infrastructure,
   '2024年臺南市中央政府機關_shp':       LayerCategory.Infrastructure,
   '2024年臺南市鄉鎮市區公所位置':       LayerCategory.Infrastructure,
   '2024年臺南市縣市政府所屬單位':       LayerCategory.Infrastructure,
+  '2019年臺南市北區公有土地':           LayerCategory.Infrastructure,
   '2024年臺南市衛生所位置':             LayerCategory.Infrastructure,
+  '計畫實驗區村里界':                   LayerCategory.Infrastructure,
+  '計畫實驗區鄉鎮市區界':               LayerCategory.Infrastructure,
   '2020年臺南市河川河道':               LayerCategory.Infrastructure,
 
   // ── 公共設施與社會福利 ──
@@ -90,6 +94,7 @@ const LAYER_CATEGORY_MAP: Record<string, LayerCategory> = {
   '2024年臺南市體育場位置_shp':         LayerCategory.PublicFacilities,
 
   // ── 經濟資料 ──
+  '臺南市實價登錄不動產交易':           LayerCategory.Economic,
   '2022年臺南市自來水廠位置':           LayerCategory.Economic,
   '2022年臺南市科學園區位置':           LayerCategory.Economic,
   '2022年臺南市旅館位置':               LayerCategory.Economic,
