@@ -17,11 +17,14 @@
 
     <!-- 面板內容 -->
     <div class="panel-body">
-      <!-- 未查詢狀態 -->
-      <EmptyState v-if="!hasResults" />
-
-      <!-- 查詢結果 -->
-      <ResultDisplay v-else />
+      <!-- 未查詢狀態（不動產模式永遠用 RealEstateDisplay 處理空態） -->
+      <template v-if="isRealEstateMode">
+        <RealEstateDisplay />
+      </template>
+      <template v-else>
+        <EmptyState v-if="!hasResults" />
+        <ResultDisplay v-else />
+      </template>
     </div>
   </div>
 </template>
@@ -31,10 +34,12 @@ import { computed } from 'vue'
 import { useQueryStore } from '@/stores'
 import EmptyState from './EmptyState.vue'
 import ResultDisplay from './ResultDisplay.vue'
+import RealEstateDisplay from './RealEstateDisplay.vue'
 
 const queryStore = useQueryStore()
 
-const hasResults = computed(() => queryStore.hasResults)
+const hasResults       = computed(() => queryStore.hasResults)
+const isRealEstateMode = computed(() => queryStore.currentAnalysisMode === 'realestate')
 
 const handleClear = () => {
   queryStore.clearQueries()

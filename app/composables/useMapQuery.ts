@@ -276,6 +276,89 @@ export const useMapQuery = (sceneView?: any) => {
     }
   }
 
+  /**
+   * 不動產交易查詢（取完整欄位屬性）
+   */
+  const executeRealEstateQuery = async (geometry: any): Promise<void> => {
+    if (!geometry || !sceneView) {
+      errorMessage.value = '幾何或 SceneView 無效'
+      return
+    }
+
+    const LAYER_TITLE = '臺南市實價登錄不動產交易'
+    const OUT_FIELDS  = ['單價__', '總面積_', '型態', '建物現', 'OBJECTID']
+
+    currentGeometry = markRaw(geometry)
+    isQuerying.value = true
+    queryProgress.value = 0
+    errorMessage.value = null
+
+    try {
+      const queryId = `realestate-${Date.now()}`
+      const queryDef: QueryDefinition = {
+        id: queryId,
+        timestamp: new Date(),
+        buffer: 0,
+        results: [],
+        score: null,
+        isQuerying: true,
+      }
+      queryStore.addQuery(queryDef)
+      queryStore.setActiveQueryingState(true)
+      queryProgress.value = 20
+
+      const allLayers = sceneView.map.allLayers.toArray()
+      const reLayer = allLayers.find(
+        (l: any) => l.title === LAYER_TITLE && l.type === 'feature'
+      )
+
+      if (!reLayer) {
+        errorMessage.value = `找不到圖層「${LAYER_TITLE}」`
+        queryStore.setError(errorMessage.value)
+        return
+      }
+
+      if (reLayer.loadStatus !== 'loaded') await reLayer.load()
+      queryProgress.value = 40
+
+      const featureSet = await reLayer.queryFeatures({
+        geometry,
+        spatialRelationship: 'intersects',
+        outFields: OUT_FIELDS,
+        returnGeometry: false,
+        num: 2000,
+      })
+
+      const features = featureSet?.features ?? []
+      queryProgress.value = 80
+
+      const plainResults: QueryResult[] = [{
+        layerTitle: LAYER_TITLE,
+        layerId:    String(reLayer.id),
+        count:      features.length,
+        features:   features.map((f: any, i: number) => ({
+          id:         f.attributes?.OBJECTID ?? i,
+          attributes: { ...f.attributes },
+        })),
+        attributes: features.map((f: any) => ({ ...f.attributes })),
+      }]
+
+      queryStore.updateActiveQueryResults(plainResults)
+      queryProgress.value = 100
+      console.log(`✅ 不動產查詢完成，找到 ${features.length} 筆`)
+
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : '查詢失敗'
+      errorMessage.value = msg
+      queryStore.setError(msg)
+      console.error('❌ 不動產查詢錯誤:', err)
+    } finally {
+      isQuerying.value = false
+      queryProgress.value = 0
+      queryStore.setActiveQueryingState(false)
+    }
+  }
+
   const debouncedUpdateGeometry = useDebounceFn(
     (geometry: any) => {
       executeQuery(geometry)
@@ -340,6 +423,7 @@ export const useMapQuery = (sceneView?: any) => {
     hasResults,
     featureCount,
     executeQuery,
+    executeRealEstateQuery,
     debouncedUpdateGeometry,
     calculateScores,
     clearQuery,

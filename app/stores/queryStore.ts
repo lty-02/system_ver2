@@ -52,6 +52,7 @@ export const useQueryStore = defineStore('query', () => {
   const activeQueryId = ref<string | null>(null)
   const isQuerying = ref(false)
   const error = ref<string | null>(null)
+  const currentAnalysisMode = ref<'livability' | 'realestate'>('livability')
 
   // ==================== Getters ====================
   const getActiveQuery = computed(() => {
@@ -184,6 +185,13 @@ export const useQueryStore = defineStore('query', () => {
   }
 
   /**
+   * 設置分析模式
+   */
+  const setAnalysisMode = (mode: 'livability' | 'realestate') => {
+    currentAnalysisMode.value = mode
+  }
+
+  /**
    * 導出查詢為 JSON
    */
   const exportQuery = (queryId: string): string => {
@@ -257,6 +265,7 @@ export const useQueryStore = defineStore('query', () => {
     activeQueryId,
     isQuerying,
     error,
+    currentAnalysisMode,
 
     // Getters
     getActiveQuery,
@@ -270,6 +279,7 @@ export const useQueryStore = defineStore('query', () => {
     // Actions
     addQuery,
     setActiveQuery,
+    setAnalysisMode,
     updateActiveQueryResults,
     updateActiveQueryScore,
     setActiveQueryingState,

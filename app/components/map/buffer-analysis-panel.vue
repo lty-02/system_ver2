@@ -96,15 +96,63 @@
         </div>
       </template>
 
-      <!-- 買賣租賃（預留） -->
+      <!-- 不動產交易 -->
       <template v-else-if="selectedMode === 'realestate'">
-        <div class="placeholder-content">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40">
-            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-            <polyline points="9 22 9 12 15 12 15 22"/>
-          </svg>
-          <p>買賣租賃分析</p>
-          <span>開發中</span>
+        <div class="tools-content">
+          <p class="tools-hint">在地圖上繪製要查詢的範圍</p>
+          <div class="geometry-buttons">
+            <button id="point-btn" class="tool-btn" title="以點查詢">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                <circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" stroke-dasharray="3 2"/>
+              </svg>
+              <span>點</span>
+            </button>
+            <button id="line-btn" class="tool-btn" title="以線查詢">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                <path d="M4 20 L20 4"/><circle cx="4" cy="20" r="2" fill="currentColor"/><circle cx="20" cy="4" r="2" fill="currentColor"/>
+              </svg>
+              <span>線</span>
+            </button>
+            <button id="polygon-btn" class="tool-btn" title="以多邊形查詢">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                <polygon points="12,3 21,9 17,20 7,20 3,9"/>
+              </svg>
+              <span>面</span>
+            </button>
+            <button id="clear-btn" class="tool-btn danger" title="清除">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+              <span>清除</span>
+            </button>
+          </div>
+          <div class="buffer-group">
+            <label class="buffer-label">
+              緩衝距離：<strong>{{ bufferDistance }} m</strong>
+            </label>
+            <input
+              type="range"
+              id="buffer-slider"
+              v-model.number="bufferDistance"
+              min="0" max="500" step="10"
+              class="buffer-slider"
+            />
+            <div class="quick-buttons">
+              <button
+                v-for="p in PRESETS"
+                :key="p"
+                class="preset-btn"
+                :class="{ active: bufferDistance === p }"
+                @click="bufferDistance = p"
+              >{{ p }}m</button>
+            </div>
+          </div>
+          <div class="query-note re-note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span>將統計範圍內：平均單價、平均總面積、型態分布、建物現況比例</span>
+          </div>
         </div>
       </template>
 
@@ -123,7 +171,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+import { useQueryStore } from '@/stores/queryStore'
+
+const queryStore = useQueryStore()
 
 const MODES: Array<{ id: 'livability' | 'realestate'; label: string; desc: string; icon: string }> = [
   {
@@ -134,16 +185,22 @@ const MODES: Array<{ id: 'livability' | 'realestate'; label: string; desc: strin
   },
   {
     id: 'realestate',
-    label: '買賣租賃',
-    desc: '房產交易資訊分析',
+    label: '不動產交易',
+    desc: '買賣實價登錄資訊統計',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>',
   },
 ]
 
 const PRESETS = [50, 100, 200, 300, 500]
 
-const selectedMode  = ref<'livability' | 'realestate' | ''>('')
+const selectedMode   = ref<'livability' | 'realestate' | ''>('')
 const bufferDistance = ref(0)
+
+watch(selectedMode, (mode) => {
+  if (mode === 'livability' || mode === 'realestate') {
+    queryStore.setAnalysisMode(mode)
+  }
+})
 </script>
 
 <style scoped>
@@ -326,6 +383,10 @@ const bufferDistance = ref(0)
 .placeholder-content span { font-size: 12px; color: #94a3b8; }
 .placeholder-content.muted { color: #cbd5e1; }
 .placeholder-content.muted span { font-size: 12px; }
+
+.re-note {
+  background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8;
+}
 
 /* Scrollbar */
 .analysis-panel::-webkit-scrollbar { width: 5px; }

@@ -115,6 +115,7 @@ import * as geometryEngine from '@arcgis/core/geometry/geometryEngine'
 import { useMapQuery } from '@/composables/useMapQuery'
 import { useMapStore } from '@/stores/mapStore'
 import { useLayerStore, LayerCategory } from '@/stores/layerStore'
+import { useQueryStore } from '@/stores/queryStore'
 import RightSidePanel from '@/components/map/RightSidePanel.vue'
 import LayerManagementPanel from '@/components/map/LayerManagementPanel.vue'
 import LegendBasemapPanel from '@/components/map/LegendBasemapPanel.vue'
@@ -172,8 +173,9 @@ definePageMeta({ layout: 'blank' })
 const viewDiv = ref<HTMLDivElement | null>(null)
 
 // ==================== Store ====================
-const mapStore  = useMapStore()
+const mapStore   = useMapStore()
 const layerStore = useLayerStore()
+const queryStore = useQueryStore()
 
 // ==================== 排除的圖層列表 ====================
 const EXCLUDED_LAYERS = ['樹', '地點和標籤', '建築物']
@@ -444,7 +446,11 @@ const runQuery = async (): Promise<void> => {
       if (buffered) queryGeometry = markRaw(buffered)
     }
     updateBufferGraphic(queryGeometry)
-    await mapQueryComposable?.executeQuery(queryGeometry)
+    if (queryStore.currentAnalysisMode === 'realestate') {
+      await mapQueryComposable?.executeRealEstateQuery(queryGeometry)
+    } else {
+      await mapQueryComposable?.executeQuery(queryGeometry)
+    }
   } catch (error) {
     console.error('查詢執行錯誤:', error)
   }
