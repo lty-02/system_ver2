@@ -33,12 +33,12 @@
           <div class="re-stat-card">
             <div class="re-stat-label">平均單價</div>
             <div class="re-stat-value">{{ avgUnitPrice }}</div>
-            <div class="re-stat-unit">元 / 坪</div>
+            <div class="re-stat-unit">萬元 / 坪</div>
           </div>
           <div class="re-stat-card">
             <div class="re-stat-label">平均總面積</div>
             <div class="re-stat-value">{{ avgArea }}</div>
-            <div class="re-stat-unit">㎡</div>
+            <div class="re-stat-unit">坪</div>
           </div>
         </div>
       </div>
@@ -105,10 +105,10 @@ import { useQueryStore } from '@/stores/queryStore'
 const queryStore = useQueryStore()
 
 const LAYER_TITLE = '臺南市實價登錄不動產交易'
-const PIE_COLORS  = [
-  '#3B82F6', '#F59E0B', '#10B981', '#EF4444',
-  '#8B5CF6', '#F97316', '#06B6D4', '#84CC16',
-  '#EC4899', '#6366F1',
+const PIE_COLORS = [
+  '#8FA8B5', '#B5A49A', '#9BAA8C', '#B5A0AC',
+  '#A5B09C', '#B0A8C0', '#A8B4A0', '#C0ACA4',
+  '#96AABB', '#B8A898',
 ]
 
 // 從 store 取得屬性列表
@@ -121,24 +121,24 @@ const attrs = computed(() => {
 const totalCount = computed(() => attrs.value.length)
 const hasData    = computed(() => totalCount.value > 0)
 
-// 平均單價（排除 0 及 null）
+// 平均單價（排除 0，原始單位 元/坪，顯示 萬元/坪）
 const avgUnitPrice = computed(() => {
   const vals = attrs.value
     .map(a => Number(a['單價__']))
     .filter(v => !isNaN(v) && v > 0)
   if (!vals.length) return '—'
   const avg = vals.reduce((s, v) => s + v, 0) / vals.length
-  return avg.toLocaleString('zh-TW', { maximumFractionDigits: 0 })
+  return (avg / 10000).toLocaleString('zh-TW', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 })
 
-// 平均總面積（排除 0 及 null）
+// 平均總面積（排除 0，原始單位 ㎡，顯示 坪，1㎡ ≈ 0.3025坪）
 const avgArea = computed(() => {
   const vals = attrs.value
     .map(a => Number(a['總面積_']))
     .filter(v => !isNaN(v) && v > 0)
   if (!vals.length) return '—'
   const avg = vals.reduce((s, v) => s + v, 0) / vals.length
-  return avg.toLocaleString('zh-TW', { maximumFractionDigits: 2 })
+  return (avg * 0.3025).toLocaleString('zh-TW', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 })
 
 // 計算圓餅圖切片（SVG arc path）
