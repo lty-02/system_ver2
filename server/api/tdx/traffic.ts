@@ -1,17 +1,20 @@
 /**
  * @file server/api/tdx/traffic.ts
  * @description 路況資訊 API proxy
- * query param: type = road_live | cms | cctv
- *   road_live: 可選 sectionId (path param) 篩選特定路段
- *   cctv:      可選 cctvId    (path param) 篩選特定攝影機
+ * query param: type = road_live | cms | cms_static | cctv
+ *   road_live:  可選 sectionId (path param) 篩選特定路段
+ *   cms:        資訊可變標誌即時資訊
+ *   cms_static: 資訊可變標誌基本資料（靜態）
+ *   cctv:       可選 cctvId    (path param) 篩選特定攝影機
  */
 
 import { getTDXToken } from './token'
 
 const ENDPOINTS: Record<string, string> = {
-  road_live: 'https://tdx.transportdata.tw/api/basic/v2/Road/Traffic/Live/City/Tainan',
-  cms:       'https://tdx.transportdata.tw/api/basic/v2/Road/Traffic/Live/CMS/City/Tainan',
-  cctv:      'https://tdx.transportdata.tw/api/basic/v2/Road/Traffic/CCTV/City/Tainan',
+  road_live:  'https://tdx.transportdata.tw/api/basic/v2/Road/Traffic/Live/City/Tainan',
+  cms:        'https://tdx.transportdata.tw/api/basic/v2/Road/Traffic/Live/CMS/City/Tainan',
+  cms_static: 'https://tdx.transportdata.tw/api/basic/v2/Road/Traffic/CMS/City/Tainan',
+  cctv:       'https://tdx.transportdata.tw/api/basic/v2/Road/Traffic/CCTV/City/Tainan',
 }
 
 // 支援路徑參數的 type -> query key 對應

@@ -1,7 +1,7 @@
 /**
  * @file server/api/tdx/transport.ts
  * @description 公共運輸 API proxy
- * query param: type = bus_intercity | bus_nearstop | bike | bus_tainan | bus_alert
+ * query param: type = bus_intercity | bus_nearstop | bike_station | bike | bus_tainan | bus_alert | cycling | bus_route
  */
 
 import { getTDXToken } from './token'
@@ -9,9 +9,12 @@ import { getTDXToken } from './token'
 const ENDPOINTS: Record<string, string> = {
   bus_intercity: 'https://tdx.transportdata.tw/api/basic/v2/Bus/RealTimeByFrequency/InterCity',
   bus_nearstop:  'https://tdx.transportdata.tw/api/basic/v2/Bus/RealTimeNearStop/Streaming/InterCity',
+  bike_station:  'https://tdx.transportdata.tw/api/basic/v2/Bike/Station/City/Tainan',
   bike:          'https://tdx.transportdata.tw/api/basic/v2/Bike/Availability/City/Tainan',
   bus_tainan:    'https://tdx.transportdata.tw/api/basic/v2/Bus/RealTimeByFrequency/City/Tainan',
   bus_alert:     'https://tdx.transportdata.tw/api/basic/v3/Bus/Alert/City/Tainan',
+  cycling:       'https://tdx.transportdata.tw/api/basic/v2/Cycling/Shape/City/Tainan',
+  bus_route:     'https://tdx.transportdata.tw/api/basic/V3/Map/Bus/Network/Station/City/Tainan',
 }
 
 export default defineEventHandler(async (event) => {

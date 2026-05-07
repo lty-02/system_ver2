@@ -1,7 +1,7 @@
 /**
  * @file server/api/tdx/parking.ts
- * @description 停車資訊 + 充電站 API proxy
- * query param: type = availability | entrance | carpark | spot | segment_avail | ev
+ * @description 停車資訊 API proxy
+ * query param: type = availability | entrance | carpark | spot | segment_avail
  */
 
 import { getTDXToken } from './token'
@@ -12,7 +12,6 @@ const ENDPOINTS: Record<string, string> = {
   carpark:        'https://tdx.transportdata.tw/api/basic/v1/Parking/OffStreet/CarPark/City/Tainan',
   spot:           'https://tdx.transportdata.tw/api/basic/v1/Parking/OnStreet/ParkingSpot/City/Tainan',
   segment_avail:  'https://tdx.transportdata.tw/api/basic/v1/Parking/OnStreet/ParkingSegmentAvailability/City/Tainan',
-  ev:             'https://tdx.transportdata.tw/api/basic/v1/EV/Connector/City/Tainan',
 }
 
 export default defineEventHandler(async (event) => {
