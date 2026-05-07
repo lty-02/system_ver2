@@ -15,13 +15,13 @@
       </NuxtLink>
     </div>
 
-    <div class="se-scroll">
+    <div ref="scrollEl" class="se-scroll">
 
       <!-- ── 指標選擇（選好圖層後展開）── -->
-      <div v-if="activeDef" class="se-field-block" :style="{ '--cat-color': categoryTag }">
+      <div v-if="localLayerKey" class="se-field-block" :style="{ '--cat-color': catColor }">
         <div class="se-field-header">
-          <span class="se-field-cat-tag">{{ activeCatLabel }}</span>
-          <span class="se-field-layer">{{ activeDef.label }}</span>
+          <span class="se-field-cat-tag">{{ catLabel }}</span>
+          <span class="se-field-layer">{{ activeDef?.label }}</span>
           <svg v-if="isLoading" class="se-spinner" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2.5" width="14" height="14">
             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/>
@@ -30,11 +30,11 @@
 
         <div class="se-field-chips">
           <button
-            v-for="f in activeDef.fields"
+            v-for="f in (activeDef?.fields ?? [])"
             :key="f.key"
             class="se-field-chip"
-            :class="{ active: activeFieldKey === f.key }"
-            @click="$emit('select-field', f.key)"
+            :class="{ active: localFieldKey === f.key }"
+            @click="selectField(f.key)"
           >{{ f.shortLabel }}</button>
         </div>
 
@@ -55,12 +55,12 @@
           v-for="layer in cat.layers"
           :key="layer.key"
           class="se-layer-btn"
-          :class="{ active: activeLayerKey === layer.key }"
-          @click="$emit('select-layer', layer.key)"
+          :class="{ active: localLayerKey === layer.key }"
+          @click="selectLayer(layer.key)"
         >
           <span class="se-layer-dot" />
           <span class="se-layer-name">{{ layer.label }}</span>
-          <svg v-if="activeLayerKey === layer.key" viewBox="0 0 24 24" fill="none"
+          <svg v-if="localLayerKey === layer.key" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2.5" width="13" height="13" class="se-check">
             <polyline points="20 6 9 17 4 12"/>
           </svg>
@@ -72,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import {
   TEMPORAL_CATEGORIES,
   ALL_LAYER_DEFS,
@@ -86,20 +86,57 @@ const props = defineProps<{
   breaks:         Array<{ color: string; label: string }>
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   'select-layer': [key: string]
   'select-field': [key: string]
 }>()
 
+// ── 本地狀態（不依賴 prop 更新時序）──────────────────────
+const scrollEl     = ref<HTMLElement | null>(null)
+const localLayerKey = ref(props.activeLayerKey)
+const localFieldKey = ref(props.activeFieldKey)
+
+// 父層重設（例如關閉模組 → key 變空）時同步
+watch(() => props.activeLayerKey, (k) => { localLayerKey.value = k })
+watch(() => props.activeFieldKey, (k) => { localFieldKey.value = k })
+
+// ── 計算 ─────────────────────────────────────────────────
 const activeDef = computed(() =>
-  ALL_LAYER_DEFS.find(d => d.key === props.activeLayerKey) ?? null
+  localLayerKey.value
+    ? ALL_LAYER_DEFS.find(d => d.key === localLayerKey.value) ?? null
+    : null
 )
 
-const activeCatLabel = computed(() =>
+const catLabel = computed(() =>
   TEMPORAL_CATEGORIES.find(cat =>
-    cat.layers.some(l => l.key === props.activeLayerKey)
+    cat.layers.some(l => l.key === localLayerKey.value)
   )?.label ?? ''
 )
+
+const CAT_COLORS: Record<string, string> = {
+  '人口': '#3b82f6',
+  '社福': '#16a34a',
+  '住宅': '#ea580c',
+  '銀髮': '#9333ea',
+}
+const catColor = computed(() => CAT_COLORS[catLabel.value] ?? props.categoryTag ?? '#3b82f6')
+
+// ── 事件處理 ──────────────────────────────────────────────
+const selectLayer = async (key: string) => {
+  const def = ALL_LAYER_DEFS.find(d => d.key === key)
+  if (!def) return
+  localLayerKey.value = key
+  localFieldKey.value = def.defaultField
+  // 滾回頂端，確保指標區塊可見
+  await nextTick()
+  scrollEl.value?.scrollTo({ top: 0, behavior: 'smooth' })
+  emit('select-layer', key)
+}
+
+const selectField = (key: string) => {
+  localFieldKey.value = key
+  emit('select-field', key)
+}
 </script>
 
 <style scoped>
