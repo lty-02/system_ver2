@@ -28,13 +28,22 @@
       </div>
     </header>
 
-    <!-- 自訂 Popup -->
+    <!-- 自訂 Popup（SceneView 模式） -->
     <MapPopup
       :visible="popupVisible"
       :data="popupData"
       :screen-x="popupScreenX"
       :screen-y="popupScreenY"
       @close="closePopup"
+    />
+
+    <!-- 社會經濟 Popup -->
+    <MapPopup
+      :visible="socioPopupVisible"
+      :data="socioPopupData"
+      :screen-x="socioPopupX"
+      :screen-y="socioPopupY"
+      @close="socioPopupVisible = false"
     />
 
     <!-- ========== 功能模組按鈕列 ========== -->
@@ -109,46 +118,45 @@
 
       <!-- 地圖容器 -->
       <div class="map-container">
-        <div ref="viewDiv" class="scene-view" :style="(activeModule === 'socio-economic' || isFullscreenModule) ? { opacity: 0, pointerEvents: 'none' } : {}"></div>
-
-        <!-- 社會經濟 2D 地圖覆蓋層 -->
+        <!-- 3D SceneView（社會經濟 / 全螢幕模式時隱藏） -->
         <div
-          v-show="activeModule === 'socio-economic'"
-          ref="socioViewDiv"
-          class="scene-view socio-overlay"
+          ref="viewDiv"
+          class="scene-view"
+          :style="(activeModule === 'socio-economic' || isFullscreenModule)
+            ? { opacity: 0, pointerEvents: 'none' } : {}"
         ></div>
 
-        <!-- 社會經濟：懸浮指標卡 -->
-        <Transition name="se-float">
+        <!-- ── 社會經濟 2D 地圖 + 懸浮卡片（同一個定位容器）── -->
+        <div v-show="activeModule === 'socio-economic'" class="socio-overlay">
+
+          <!-- MapView 渲染容器 -->
+          <div ref="socioViewDiv" class="socio-map"></div>
+
+          <!-- 懸浮指標卡（放在 overlay 內，確保在 MapView canvas 之上） -->
           <div
-            v-if="activeModule === 'socio-economic' && activeSocioLayerDef"
+            v-show="activeSocioLayerDef"
             class="socio-float-card"
             :class="{ collapsed: socioFloatCollapsed }"
           >
-            <!-- 標題列（點擊收折） -->
+            <!-- 標題列 -->
             <div class="sfc-handle" @click="socioFloatCollapsed = !socioFloatCollapsed">
-              <span
-                class="sfc-cat-tag"
-                :style="{ background: activeCategoryMeta.tag }"
-              >{{ activeSocioCategory?.label }}</span>
-              <span class="sfc-layer-name">{{ activeSocioLayerDef.label }}</span>
+              <span class="sfc-cat-tag" :style="{ background: activeCategoryMeta.tag }">
+                {{ activeSocioCategory?.label }}
+              </span>
+              <span class="sfc-layer-name">{{ activeSocioLayerDef?.label }}</span>
               <span v-if="isSocioLoading" class="sfc-spinner" />
-              <svg
-                class="sfc-chevron"
-                viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2.5" width="14" height="14"
-              >
+              <svg class="sfc-chevron" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2.5" width="14" height="14">
                 <polyline points="6 9 12 15 18 9"/>
               </svg>
             </div>
 
             <!-- 可折疊內容 -->
             <div class="sfc-body">
-              <!-- 指標選擇 -->
               <div class="sfc-section-label">指標選擇</div>
               <div class="sfc-chips">
                 <button
-                  v-for="f in activeSocioLayerDef.fields"
+                  v-for="f in activeSocioLayerDef?.fields ?? []"
                   :key="f.key"
                   class="sfc-chip"
                   :class="{ active: activeSocioFieldKey === f.key }"
@@ -159,23 +167,25 @@
                 >{{ f.shortLabel }}</button>
               </div>
 
-              <!-- 圖例 -->
-              <div v-if="socioBreaks.length" class="sfc-section-label" style="margin-top:10px">圖例</div>
-              <div v-if="socioBreaks.length" class="sfc-legend">
-                <div v-for="b in socioBreaks" :key="b.label" class="sfc-legend-row">
-                  <span class="sfc-legend-swatch" :style="{ background: b.color }"></span>
-                  <span class="sfc-legend-label">{{ b.label }}</span>
+              <template v-if="socioBreaks.length">
+                <div class="sfc-section-label" style="margin-top:10px">圖例</div>
+                <div class="sfc-legend">
+                  <div v-for="b in socioBreaks" :key="b.label" class="sfc-legend-row">
+                    <span class="sfc-legend-swatch" :style="{ background: b.color }"></span>
+                    <span class="sfc-legend-label">{{ b.label }}</span>
+                  </div>
                 </div>
-              </div>
+              </template>
             </div>
           </div>
-        </Transition>
+
+        </div><!-- /socio-overlay -->
 
         <Building3DLegend v-show="activeModule !== 'socio-economic'" />
       </div>
 
-      <!-- 右側面板 -->
-      <RightSidePanel />
+      <!-- 右側面板（全螢幕模組時隱藏） -->
+      <RightSidePanel v-show="!isFullscreenModule" />
     </div>
   </div>
 </template>
@@ -319,6 +329,12 @@ const activeSocioFieldKey  = ref<string>('')
 const isSocioLoading       = ref(false)
 let activeSocioLayer: FeatureLayer | null = null
 
+// 社會經濟 Popup
+const socioPopupVisible = ref(false)
+const socioPopupData    = ref<any>(null)
+const socioPopupX       = ref(0)
+const socioPopupY       = ref(0)
+
 const SOCIO_PORTAL_URL  = 'https://igisportal.geomatics.ncku.edu.tw/portal'
 const SOCIO_WEBSCENE_ID = 'b8749c5de8e44fe08306d1a03d764f04'
 const socioLayerUrlMap  = new Map<string, string>()
@@ -405,6 +421,41 @@ const initSocioMap = async (): Promise<void> => {
     view.ui.move('zoom', 'top-left')
     view.ui.remove('attribution')
     view.popupEnabled = false
+
+    // 點擊 feature → 顯示 popup
+    view.on('click', async (event: any) => {
+      if (!activeSocioLayerDef.value || !activeSocioLayer) {
+        socioPopupVisible.value = false
+        return
+      }
+      const hit = await view.hitTest(event)
+      const graphic = hit.results.find(
+        (r: any) => r.type === 'graphic' && r.graphic?.layer === activeSocioLayer
+      ) as any
+      if (!graphic) { socioPopupVisible.value = false; return }
+
+      const attrs  = graphic.graphic.attributes ?? {}
+      const def    = activeSocioLayerDef.value
+      const lblKey = Object.keys(attrs).find(
+        k => k.toLowerCase() === def.labelField.toLowerCase()
+      ) ?? Object.keys(attrs)[0] ?? ''
+      const title  = String(attrs[lblKey] ?? '')
+
+      const rows = def.fields
+        .map(f => {
+          const ak  = Object.keys(attrs).find(k => k.toUpperCase() === f.key.toUpperCase()) ?? f.key
+          const val = attrs[ak]
+          if (val === undefined || val === null) return null
+          return { key: f.key, label: f.shortLabel, value: fmtVal(Number(val), f.isRatio), unit: f.unit }
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null)
+
+      socioPopupData.value    = { title, mode: 'fields', rows }
+      socioPopupX.value       = event.native?.clientX ?? event.x ?? 0
+      socioPopupY.value       = event.native?.clientY ?? event.y ?? 0
+      socioPopupVisible.value = true
+    })
+
     socioMapView.value = markRaw(view)
   } catch (e) {
     console.error('社會經濟地圖初始化失敗:', e)
@@ -412,6 +463,7 @@ const initSocioMap = async (): Promise<void> => {
 }
 
 const destroySocioMap = (): void => {
+  socioPopupVisible.value = false
   if (activeSocioLayer) {
     socioMapView.value?.map?.remove(activeSocioLayer)
     activeSocioLayer = null
@@ -422,6 +474,7 @@ const destroySocioMap = (): void => {
   }
   activeSocioLayerKey.value = ''
   activeSocioFieldKey.value = ''
+  socioBreaks.value = []
 }
 
 const onSocioLayerSelect = async (layerKey: string): Promise<void> => {
@@ -986,11 +1039,20 @@ const updateBufferGraphic = (geometry: any): void => {
 .map-container { flex: 1; position: relative; overflow: hidden; }
 .scene-view { width: 100%; height: 100%; }
 
-/* 社會經濟覆蓋層 */
+/* 社會經濟覆蓋層（同時是懸浮卡的定位容器） */
 .socio-overlay {
   position: absolute;
   inset: 0;
   z-index: 10;
+  /* 建立新的 stacking context，讓內部 z-index 獨立 */
+  isolation: isolate;
+}
+
+/* MapView 填滿覆蓋層 */
+.socio-map {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
 }
 
 /* ==================== 社會經濟懸浮指標卡 ==================== */
@@ -998,7 +1060,7 @@ const updateBufferGraphic = (geometry: any): void => {
   position: absolute;
   bottom: 24px;
   right: 24px;
-  z-index: 20;
+  z-index: 20;  /* 相對於 .socio-overlay 的 stacking context */
   width: 300px;
   max-height: calc(100% - 48px);
   background: rgba(255, 255, 255, 0.98);
@@ -1152,16 +1214,6 @@ const updateBufferGraphic = (geometry: any): void => {
   color: #475569;
 }
 
-/* 浮現動畫 */
-.se-float-enter-active,
-.se-float-leave-active {
-  transition: all 0.22s ease;
-}
-.se-float-enter-from,
-.se-float-leave-to {
-  opacity: 0;
-  transform: translateY(10px);
-}
 
 /* ==================== 全螢幕內嵌模組 ==================== */
 .fullscreen-embed {
