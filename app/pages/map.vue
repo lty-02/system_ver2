@@ -53,9 +53,22 @@
 
     <!-- ========== 主要內容區 ========== -->
     <div class="map-content">
+      <!-- 全螢幕內嵌模組（如健康路徑規劃） -->
+      <transition name="fade-fullscreen">
+        <div v-if="isFullscreenModule" class="fullscreen-embed">
+          <iframe
+            v-if="activeModule === 'health-route'"
+            src="https://route-frontend-995293427533.asia-east1.run.app/"
+            class="embed-frame"
+            allow="geolocation"
+            loading="lazy"
+          ></iframe>
+        </div>
+      </transition>
+
       <!-- 左側面板容器 -->
       <transition name="slide-left">
-        <aside v-if="activeModule" class="side-panel left-panel">
+        <aside v-if="activeModule && !isFullscreenModule" class="side-panel left-panel">
           <div class="panel-header">
             <h3>{{ currentModuleLabel }}</h3>
             <button class="panel-close" @click="activeModule = null">
@@ -96,7 +109,7 @@
 
       <!-- 地圖容器 -->
       <div class="map-container">
-        <div ref="viewDiv" class="scene-view" :style="activeModule === 'socio-economic' ? { opacity: 0, pointerEvents: 'none' } : {}"></div>
+        <div ref="viewDiv" class="scene-view" :style="(activeModule === 'socio-economic' || isFullscreenModule) ? { opacity: 0, pointerEvents: 'none' } : {}"></div>
 
         <!-- 社會經濟 2D 地圖覆蓋層 -->
         <div
@@ -207,10 +220,20 @@ const modules = [
     label: '社會經濟資訊',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'
   },
+  {
+    id: 'health-route',
+    label: '健康路徑規劃',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>',
+    fullscreen: true,
+  },
 ]
 
 
 const activeModule = ref<string | null>(null)
+
+const isFullscreenModule = computed(() =>
+  (modules as any[]).find(m => m.id === activeModule.value)?.fullscreen ?? false
+)
 
 const currentModuleLabel = computed(() => {
   const module = modules.find(m => m.id === activeModule.value)
@@ -951,6 +974,30 @@ const updateBufferGraphic = (geometry: any): void => {
 .se-float-leave-to {
   opacity: 0;
   transform: translateY(10px);
+}
+
+/* ==================== 全螢幕內嵌模組 ==================== */
+.fullscreen-embed {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  background: #fff;
+}
+
+.embed-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+.fade-fullscreen-enter-active,
+.fade-fullscreen-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-fullscreen-enter-from,
+.fade-fullscreen-leave-to {
+  opacity: 0;
 }
 
 /* ==================== 響應式 ==================== */
