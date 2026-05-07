@@ -118,26 +118,55 @@
           class="scene-view socio-overlay"
         ></div>
 
-        <!-- 社會經濟：懸浮指標選單 -->
+        <!-- 社會經濟：懸浮指標卡 -->
         <Transition name="se-float">
           <div
             v-if="activeModule === 'socio-economic' && activeSocioLayerDef"
-            class="socio-field-float"
+            class="socio-float-card"
+            :class="{ collapsed: socioFloatCollapsed }"
           >
-            <div class="sff-header">
-              <span class="sff-title">{{ activeSocioLayerDef.label }}</span>
-              <span v-if="isSocioLoading" class="sff-loading">載入中…</span>
-            </div>
-            <div class="sff-chips">
-              <button
-                v-for="f in activeSocioLayerDef.fields"
-                :key="f.key"
-                class="sff-chip"
-                :class="{ active: activeSocioFieldKey === f.key }"
-                @click="onSocioFieldSelect(f.key)"
+            <!-- 標題列（點擊收折） -->
+            <div class="sfc-handle" @click="socioFloatCollapsed = !socioFloatCollapsed">
+              <span
+                class="sfc-cat-tag"
+                :style="{ background: activeCategoryMeta.tag }"
+              >{{ activeSocioCategory?.label }}</span>
+              <span class="sfc-layer-name">{{ activeSocioLayerDef.label }}</span>
+              <span v-if="isSocioLoading" class="sfc-spinner" />
+              <svg
+                class="sfc-chevron"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" width="14" height="14"
               >
-                {{ f.shortLabel }}
-              </button>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
+
+            <!-- 可折疊內容 -->
+            <div class="sfc-body">
+              <!-- 指標選擇 -->
+              <div class="sfc-section-label">指標選擇</div>
+              <div class="sfc-chips">
+                <button
+                  v-for="f in activeSocioLayerDef.fields"
+                  :key="f.key"
+                  class="sfc-chip"
+                  :class="{ active: activeSocioFieldKey === f.key }"
+                  :style="activeSocioFieldKey === f.key
+                    ? { background: activeCategoryMeta.tag, borderColor: activeCategoryMeta.tag }
+                    : {}"
+                  @click="onSocioFieldSelect(f.key)"
+                >{{ f.shortLabel }}</button>
+              </div>
+
+              <!-- 圖例 -->
+              <div v-if="socioBreaks.length" class="sfc-section-label" style="margin-top:10px">圖例</div>
+              <div v-if="socioBreaks.length" class="sfc-legend">
+                <div v-for="b in socioBreaks" :key="b.label" class="sfc-legend-row">
+                  <span class="sfc-legend-swatch" :style="{ background: b.color }"></span>
+                  <span class="sfc-legend-label">{{ b.label }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </Transition>
@@ -175,6 +204,7 @@ import { useLayerStore, LayerCategory } from '@/stores/layerStore'
 import { useQueryStore } from '@/stores/queryStore'
 import {
   ALL_LAYER_DEFS,
+  TEMPORAL_CATEGORIES,
   scanPeriodsFromLayers,
 } from '@/composables/temporalLayerConfig'
 import type { TemporalLayerDef } from '@/composables/temporalLayerConfig'
@@ -294,11 +324,44 @@ const SOCIO_WEBSCENE_ID = 'b8749c5de8e44fe08306d1a03d764f04'
 const socioLayerUrlMap  = new Map<string, string>()
 let socioCatalogLoaded  = false
 
+const socioFloatCollapsed = ref(false)
+
+interface SocioBreak { min: number; max: number; color: string; label: string }
+const socioBreaks = ref<SocioBreak[]>([])
+
 const activeSocioLayerDef = computed<TemporalLayerDef | null>(() =>
   ALL_LAYER_DEFS.find(d => d.key === activeSocioLayerKey.value) ?? null
 )
 
-const CHOROPLETH_COLORS = ['#f7fbff', '#c6dbef', '#6baed6', '#2171b5', '#084594']
+const activeSocioCategory = computed(() =>
+  TEMPORAL_CATEGORIES.find(cat =>
+    cat.layers.some(l => l.key === activeSocioLayerKey.value)
+  ) ?? null
+)
+
+const CATEGORY_META: Record<string, { palette: string[]; tag: string }> = {
+  '人口': {
+    tag: '#3b82f6',
+    palette: ['#eff6ff', '#bfdbfe', '#60a5fa', '#2563eb', '#1e3a8a'],
+  },
+  '社福': {
+    tag: '#16a34a',
+    palette: ['#f0fdf4', '#bbf7d0', '#4ade80', '#16a34a', '#14532d'],
+  },
+  '住宅': {
+    tag: '#ea580c',
+    palette: ['#fff7ed', '#fed7aa', '#fb923c', '#ea580c', '#7c2d12'],
+  },
+  '銀髮': {
+    tag: '#9333ea',
+    palette: ['#faf5ff', '#e9d5ff', '#c084fc', '#9333ea', '#581c87'],
+  },
+}
+
+const activeCategoryMeta = computed(() => {
+  const label = activeSocioCategory.value?.label ?? ''
+  return CATEGORY_META[label] ?? CATEGORY_META['人口']
+})
 
 // ==================== 社會經濟：監聽模組切換 ====================
 
@@ -367,6 +430,8 @@ const onSocioLayerSelect = async (layerKey: string): Promise<void> => {
 
   activeSocioLayerKey.value = layerKey
   activeSocioFieldKey.value = def.defaultField
+  socioBreaks.value = []
+  socioFloatCollapsed.value = false
   isSocioLoading.value = true
 
   try {
@@ -421,10 +486,17 @@ const onSocioFieldSelect = async (fieldKey: string): Promise<void> => {
   }
 }
 
+const fmtVal = (v: number, isRatio?: boolean): string => {
+  if (isRatio) return v.toFixed(2)
+  if (v >= 10000) return `${(v / 10000).toFixed(1)}萬`
+  if (Number.isInteger(v)) return v.toLocaleString('zh-TW')
+  return v.toFixed(1)
+}
+
 const applySocioChoropleth = async (layer: FeatureLayer, fieldKey: string): Promise<void> => {
   const fs = await layer.queryFeatures({
     where: '1=1',
-    outFields: [fieldKey, '*'],
+    outFields: ['*'],
     returnGeometry: false,
   })
   if (!fs.features.length) return
@@ -434,6 +506,9 @@ const applySocioChoropleth = async (layer: FeatureLayer, fieldKey: string): Prom
     k => k.toUpperCase() === fieldKey.toUpperCase()
   ) ?? fieldKey
 
+  const fieldDef = activeSocioLayerDef.value?.fields.find(f => f.key === fieldKey)
+  const isRatio  = fieldDef?.isRatio ?? false
+
   const values = fs.features
     .map((f: any) => Number(f.attributes[actualKey] ?? 0))
     .filter((v: number) => !isNaN(v) && v > 0)
@@ -441,24 +516,34 @@ const applySocioChoropleth = async (layer: FeatureLayer, fieldKey: string): Prom
 
   if (!values.length) return
 
-  const n = values.length
-  const q = (p: number) => values[Math.floor(p * (n - 1))]
+  const n       = values.length
+  const q       = (p: number) => values[Math.floor(p * (n - 1))] ?? 0
+  const palette = activeCategoryMeta.value.palette
 
-  const breaks = [
+  const rawBreaks = [
     { min: values[0]!,  max: q(0.2) },
     { min: q(0.2),      max: q(0.4) },
     { min: q(0.4),      max: q(0.6) },
     { min: q(0.6),      max: q(0.8) },
-    { min: q(0.8),      max: values[n - 1]! + 1 },
+    { min: q(0.8),      max: values[n - 1]! },
   ]
+
+  socioBreaks.value = rawBreaks.map((b, i) => ({
+    min:   b.min,
+    max:   b.max,
+    color: palette[i] ?? palette[0]!,
+    label: b.min === b.max
+      ? fmtVal(b.min, isRatio)
+      : `${fmtVal(b.min, isRatio)} – ${fmtVal(b.max, isRatio)}`,
+  }))
 
   const renderer = new ClassBreaksRenderer({
     field: actualKey,
-    classBreakInfos: breaks.map((b, i) => ({
+    classBreakInfos: rawBreaks.map((b, i) => ({
       minValue: b.min,
-      maxValue: b.max,
+      maxValue: i === rawBreaks.length - 1 ? b.max + 1 : b.max,
       symbol:   new SimpleFillSymbol({
-        color: CHOROPLETH_COLORS[i] as any,
+        color: palette[i] as any,
         outline: { color: '#ffffff', width: 0.5 } as any,
       }),
     })),
@@ -896,53 +981,117 @@ const updateBufferGraphic = (geometry: any): void => {
   z-index: 10;
 }
 
-/* 懸浮指標選單 */
-.socio-field-float {
+/* ==================== 社會經濟懸浮指標卡 ==================== */
+.socio-float-card {
   position: absolute;
   bottom: 24px;
   right: 24px;
   z-index: 20;
-  background: rgba(255, 255, 255, 0.97);
-  backdrop-filter: blur(14px);
+  width: 300px;
+  max-height: calc(100% - 48px);
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(16px);
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
-  padding: 14px 16px;
-  max-width: 320px;
+  border-radius: 14px;
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.13);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.socio-float-card.collapsed {
+  max-height: 46px;
 }
 
-.sff-header {
+/* 標題列 */
+.sfc-handle {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 7px;
+  padding: 12px 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  user-select: none;
+  border-bottom: 1px solid #f1f5f9;
+}
+.socio-float-card.collapsed .sfc-handle {
+  border-bottom-color: transparent;
 }
 
-.sff-title {
-  font-size: 13px;
+.sfc-cat-tag {
+  flex-shrink: 0;
+  font-size: 10px;
   font-weight: 700;
+  color: #fff;
+  padding: 2px 7px;
+  border-radius: 10px;
+  letter-spacing: 0.04em;
+}
+
+.sfc-layer-name {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
   color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.sff-loading {
-  font-size: 11px;
-  color: #64748b;
-  animation: pulse 1.2s ease-in-out infinite;
+.sfc-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #e2e8f0;
+  border-top-color: #64748b;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: spin 0.7s linear infinite;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.4; }
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
-.sff-chips {
+.sfc-chevron {
+  flex-shrink: 0;
+  color: #94a3b8;
+  transition: transform 0.25s;
+}
+.socio-float-card.collapsed .sfc-chevron {
+  transform: rotate(-90deg);
+}
+
+/* 可折疊主體 */
+.sfc-body {
+  overflow-y: auto;
+  padding: 12px 14px 16px;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
 }
+.sfc-body::-webkit-scrollbar { width: 4px; }
+.sfc-body::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 2px; }
 
-.sff-chip {
+/* 區段標籤 */
+.sfc-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+/* 指標 chips */
+.sfc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding-top: 2px;
+}
+
+.sfc-chip {
   padding: 4px 10px;
   border: 1.5px solid #e2e8f0;
   border-radius: 20px;
@@ -953,19 +1102,45 @@ const updateBufferGraphic = (geometry: any): void => {
   cursor: pointer;
   transition: all 0.15s;
 }
-.sff-chip:hover {
-  border-color: #93c5fd;
+.sfc-chip:hover:not(.active) {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
   color: #1e293b;
-  background: #eff6ff;
 }
-.sff-chip.active {
-  background: #2171b5;
-  border-color: transparent;
+.sfc-chip.active {
   color: #fff;
   font-weight: 600;
+  border-color: transparent;
 }
 
-/* 社會經濟浮現動畫 */
+/* 圖例 */
+.sfc-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 2px;
+}
+
+.sfc-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sfc-legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+.sfc-legend-label {
+  font-size: 11px;
+  color: #475569;
+}
+
+/* 浮現動畫 */
 .se-float-enter-active,
 .se-float-leave-active {
   transition: all 0.22s ease;
