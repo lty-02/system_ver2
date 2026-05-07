@@ -105,7 +105,13 @@
             <!-- 社會經濟資訊模組 -->
             <SocioEconomicPanel
               v-else-if="activeModule === 'socio-economic'"
+              :active-layer-key="activeSocioLayerKey"
+              :active-field-key="activeSocioFieldKey"
+              :is-loading="isSocioLoading"
+              :category-tag="activeCategoryMeta.tag"
+              :breaks="socioBreaks"
               @select-layer="onSocioLayerSelect"
+              @select-field="onSocioFieldSelect"
             />
 
             <!-- 其他模組 -->
@@ -126,60 +132,10 @@
             ? { opacity: 0, pointerEvents: 'none' } : {}"
         ></div>
 
-        <!-- ── 社會經濟 2D 地圖 + 懸浮卡片（同一個定位容器）── -->
+        <!-- 社會經濟 2D 地圖覆蓋層 -->
         <div v-show="activeModule === 'socio-economic'" class="socio-overlay">
-
-          <!-- MapView 渲染容器 -->
           <div ref="socioViewDiv" class="socio-map"></div>
-
-          <!-- 懸浮指標卡（放在 overlay 內，確保在 MapView canvas 之上） -->
-          <div
-            v-show="activeSocioLayerDef"
-            class="socio-float-card"
-            :class="{ collapsed: socioFloatCollapsed }"
-          >
-            <!-- 標題列 -->
-            <div class="sfc-handle" @click="socioFloatCollapsed = !socioFloatCollapsed">
-              <span class="sfc-cat-tag" :style="{ background: activeCategoryMeta.tag }">
-                {{ activeSocioCategory?.label }}
-              </span>
-              <span class="sfc-layer-name">{{ activeSocioLayerDef?.label }}</span>
-              <span v-if="isSocioLoading" class="sfc-spinner" />
-              <svg class="sfc-chevron" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2.5" width="14" height="14">
-                <polyline points="6 9 12 15 18 9"/>
-              </svg>
-            </div>
-
-            <!-- 可折疊內容 -->
-            <div class="sfc-body">
-              <div class="sfc-section-label">指標選擇</div>
-              <div class="sfc-chips">
-                <button
-                  v-for="f in activeSocioLayerDef?.fields ?? []"
-                  :key="f.key"
-                  class="sfc-chip"
-                  :class="{ active: activeSocioFieldKey === f.key }"
-                  :style="activeSocioFieldKey === f.key
-                    ? { background: activeCategoryMeta.tag, borderColor: activeCategoryMeta.tag }
-                    : {}"
-                  @click="onSocioFieldSelect(f.key)"
-                >{{ f.shortLabel }}</button>
-              </div>
-
-              <template v-if="socioBreaks.length">
-                <div class="sfc-section-label" style="margin-top:10px">圖例</div>
-                <div class="sfc-legend">
-                  <div v-for="b in socioBreaks" :key="b.label" class="sfc-legend-row">
-                    <span class="sfc-legend-swatch" :style="{ background: b.color }"></span>
-                    <span class="sfc-legend-label">{{ b.label }}</span>
-                  </div>
-                </div>
-              </template>
-            </div>
-          </div>
-
-        </div><!-- /socio-overlay -->
+        </div>
 
         <Building3DLegend v-show="activeModule !== 'socio-economic'" />
       </div>
@@ -340,8 +296,6 @@ const SOCIO_WEBSCENE_ID = 'b8749c5de8e44fe08306d1a03d764f04'
 const socioLayerUrlMap  = new Map<string, string>()
 let socioCatalogLoaded  = false
 
-const socioFloatCollapsed = ref(false)
-
 interface SocioBreak { min: number; max: number; color: string; label: string }
 const socioBreaks = ref<SocioBreak[]>([])
 
@@ -481,11 +435,10 @@ const onSocioLayerSelect = async (layerKey: string): Promise<void> => {
   const def = ALL_LAYER_DEFS.find(d => d.key === layerKey)
   if (!def) return
 
-  // 立即設定 key，讓懸浮卡片馬上顯示
-  activeSocioLayerKey.value  = layerKey
-  activeSocioFieldKey.value  = def.defaultField
-  socioBreaks.value          = []
-  socioFloatCollapsed.value  = false
+  // 立即設定 key（讓左側面板的指標區塊即時顯示）
+  activeSocioLayerKey.value = layerKey
+  activeSocioFieldKey.value = def.defaultField
+  socioBreaks.value         = []
 
   // 若地圖尚未就緒，卡片仍顯示，但等 initSocioMap 完成後才渲染
   if (!socioMapView.value) {
@@ -1055,164 +1008,6 @@ const updateBufferGraphic = (geometry: any): void => {
   z-index: 1;
 }
 
-/* ==================== 社會經濟懸浮指標卡 ==================== */
-.socio-float-card {
-  position: absolute;
-  bottom: 24px;
-  right: 24px;
-  z-index: 20;  /* 相對於 .socio-overlay 的 stacking context */
-  width: 300px;
-  max-height: calc(100% - 48px);
-  background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: blur(16px);
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.13);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  transition: max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.socio-float-card.collapsed {
-  max-height: 46px;
-}
-
-/* 標題列 */
-.sfc-handle {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 12px 14px;
-  cursor: pointer;
-  flex-shrink: 0;
-  user-select: none;
-  border-bottom: 1px solid #f1f5f9;
-}
-.socio-float-card.collapsed .sfc-handle {
-  border-bottom-color: transparent;
-}
-
-.sfc-cat-tag {
-  flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 700;
-  color: #fff;
-  padding: 2px 7px;
-  border-radius: 10px;
-  letter-spacing: 0.04em;
-}
-
-.sfc-layer-name {
-  flex: 1;
-  font-size: 12px;
-  font-weight: 600;
-  color: #1e293b;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sfc-spinner {
-  width: 12px;
-  height: 12px;
-  border: 2px solid #e2e8f0;
-  border-top-color: #64748b;
-  border-radius: 50%;
-  flex-shrink: 0;
-  animation: spin 0.7s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.sfc-chevron {
-  flex-shrink: 0;
-  color: #94a3b8;
-  transition: transform 0.25s;
-}
-.socio-float-card.collapsed .sfc-chevron {
-  transform: rotate(-90deg);
-}
-
-/* 可折疊主體 */
-.sfc-body {
-  overflow-y: auto;
-  padding: 12px 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.sfc-body::-webkit-scrollbar { width: 4px; }
-.sfc-body::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 2px; }
-
-/* 區段標籤 */
-.sfc-section-label {
-  font-size: 10px;
-  font-weight: 700;
-  color: #94a3b8;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  padding-bottom: 4px;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-/* 指標 chips */
-.sfc-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  padding-top: 2px;
-}
-
-.sfc-chip {
-  padding: 4px 10px;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 20px;
-  background: #f8fafc;
-  color: #475569;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.sfc-chip:hover:not(.active) {
-  border-color: #cbd5e1;
-  background: #f1f5f9;
-  color: #1e293b;
-}
-.sfc-chip.active {
-  color: #fff;
-  font-weight: 600;
-  border-color: transparent;
-}
-
-/* 圖例 */
-.sfc-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-top: 2px;
-}
-
-.sfc-legend-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.sfc-legend-swatch {
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
-  flex-shrink: 0;
-  border: 1px solid rgba(0,0,0,0.06);
-}
-
-.sfc-legend-label {
-  font-size: 11px;
-  color: #475569;
-}
 
 
 /* ==================== 全螢幕內嵌模組 ==================== */
