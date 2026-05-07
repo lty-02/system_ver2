@@ -426,12 +426,24 @@ const destroySocioMap = (): void => {
 
 const onSocioLayerSelect = async (layerKey: string): Promise<void> => {
   const def = ALL_LAYER_DEFS.find(d => d.key === layerKey)
-  if (!def || !socioMapView.value) return
+  if (!def) return
 
-  activeSocioLayerKey.value = layerKey
-  activeSocioFieldKey.value = def.defaultField
-  socioBreaks.value = []
-  socioFloatCollapsed.value = false
+  // 立即設定 key，讓懸浮卡片馬上顯示
+  activeSocioLayerKey.value  = layerKey
+  activeSocioFieldKey.value  = def.defaultField
+  socioBreaks.value          = []
+  socioFloatCollapsed.value  = false
+
+  // 若地圖尚未就緒，卡片仍顯示，但等 initSocioMap 完成後才渲染
+  if (!socioMapView.value) {
+    isSocioLoading.value = true
+    await initSocioMap()
+    if (!socioMapView.value) {
+      isSocioLoading.value = false
+      return
+    }
+  }
+
   isSocioLoading.value = true
 
   try {
