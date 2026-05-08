@@ -161,7 +161,7 @@ const DEP_COLORS = ['#f5f3ff','#ddd6fe','#a78bfa','#7c3aed','#4c1d95']
 
 // ── ArcGIS imports ────────────────────────────────────────────
 let MapView: any = null
-let Map: any = null
+let ArcMap: any = null
 let FeatureLayer: any = null
 let ClassBreaksRenderer: any = null
 let SimpleFillSymbol: any = null
@@ -253,7 +253,7 @@ async function loadArcGIS() {
     import('@arcgis/core/config'),
   ])
   MapView           = mvMod.default
-  Map               = mapMod.default
+  ArcMap            = mapMod.default
   FeatureLayer      = flMod.default
   ClassBreaksRenderer = cbrMod.default
   SimpleFillSymbol  = sfsMod.default
@@ -292,7 +292,7 @@ async function findLayerUrl(): Promise<string | null> {
 async function initMap(url: string) {
   if (!mapDivRef.value) return
 
-  const cleanMap = new Map({ basemap: 'gray-vector' })
+  const cleanMap = new ArcMap({ basemap: 'gray-vector' })
   mapView = markRaw(new MapView({
     container: mapDivRef.value,
     map: cleanMap,
