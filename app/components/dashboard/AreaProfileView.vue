@@ -17,6 +17,11 @@
 
     <!-- 民眾儀表板 -->
     <template v-else>
+      <!-- 人口結構：整頁 PopulationDashboard -->
+      <PopulationDashboard v-if="theme === 'population'" />
+
+      <!-- 其他主題：頁首 + 捲動面板 -->
+      <template v-else>
       <!-- 主題頁首 -->
       <div class="theme-header" :style="{ borderTopColor: currentTheme.color }">
         <div class="theme-header-inner">
@@ -31,58 +36,8 @@
       <!-- 儀表板內容 -->
       <div class="dashboard-scroll">
 
-        <!-- ── 人口結構 ── -->
-        <template v-if="theme === 'population'">
-          <div class="kpi-row">
-            <div v-for="k in populationKPIs" :key="k.label" class="kpi-card" :style="{ borderTopColor: k.color }">
-              <div class="kpi-label">{{ k.label }}</div>
-              <div class="kpi-val">—</div>
-              <div class="kpi-unit">{{ k.unit }}</div>
-            </div>
-          </div>
-          <div class="chart-grid col-2">
-            <div class="chart-card span-1">
-              <div class="chart-title">年齡結構分布</div>
-              <div class="chart-placeholder">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="28" height="28"><path d="M21 21H3V3"/><path d="M7 15l4-4 4 4 4-4"/></svg>
-                <span>圖表整備中</span>
-              </div>
-            </div>
-            <div class="chart-card span-1">
-              <div class="chart-title">出生與死亡趨勢</div>
-              <div class="chart-placeholder">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="28" height="28"><path d="M3 3v18h18"/><path d="M18 17l-5-5-4 4-3-3"/></svg>
-                <span>圖表整備中</span>
-              </div>
-            </div>
-          </div>
-          <div class="chart-grid col-3">
-            <div class="chart-card span-1">
-              <div class="chart-title">人口密度分布</div>
-              <div class="chart-placeholder sm">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="22" height="22"><circle cx="12" cy="10" r="3"/><path d="M12 21.7C17 17 20 13.6 20 10a8 8 0 1 0-16 0c0 3.6 3 7 8 11.7z"/></svg>
-                <span>圖表整備中</span>
-              </div>
-            </div>
-            <div class="chart-card span-1">
-              <div class="chart-title">性別比例</div>
-              <div class="chart-placeholder sm">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="22" height="22"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 6v6l4 2"/></svg>
-                <span>圖表整備中</span>
-              </div>
-            </div>
-            <div class="chart-card span-1">
-              <div class="chart-title">各村里人口排名</div>
-              <div class="chart-placeholder sm">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="22" height="22"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8M8 8h8M8 16h5"/></svg>
-                <span>圖表整備中</span>
-              </div>
-            </div>
-          </div>
-        </template>
-
         <!-- ── 房市交易 ── -->
-        <template v-else-if="theme === 'housing'">
+        <template v-if="theme === 'housing'">
           <div class="kpi-row">
             <div v-for="k in housingKPIs" :key="k.label" class="kpi-card" :style="{ borderTopColor: k.color }">
               <div class="kpi-label">{{ k.label }}</div>
@@ -261,6 +216,7 @@
         </template>
 
       </div>
+      </template><!-- end v-else (non-population themes) -->
     </template>
 
   </div>
@@ -268,6 +224,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import PopulationDashboard from '@/components/dashboard/PopulationDashboard.vue'
 
 const props = withDefaults(defineProps<{
   userRole?: 'public' | 'authority'
@@ -323,12 +280,6 @@ const THEMES = [
 const currentTheme = computed(() => THEMES.find(t => t.id === props.theme) ?? THEMES[0]!)
 
 // KPI configs per theme
-const populationKPIs = [
-  { label: '總人口', unit: '人', color: '#3b82f6' },
-  { label: '總戶數', unit: '戶', color: '#60a5fa' },
-  { label: '老化指數', unit: '', color: '#fb923c' },
-  { label: '扶養比', unit: '%', color: '#a78bfa' },
-]
 const housingKPIs = [
   { label: '季交易件數', unit: '件', color: '#f97316' },
   { label: '平均成交單價', unit: '萬/坪', color: '#fb923c' },
