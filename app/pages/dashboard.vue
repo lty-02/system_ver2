@@ -49,8 +49,8 @@
             />
             <AreaProfilePanel
               v-else-if="activeModule === 'area-profile'"
-              @select-village="(v: string) => { selectedVillage = v }"
-              @layer-change="(k: string) => { activeLayerKey = k }"
+              @role-change="(r: 'public' | 'authority') => { areaRole = r }"
+              @theme-change="(t: string) => { areaTheme = t }"
             />
             <!-- ★ 南科發展歷程側欄 -->
             <NankeHistoryPanel
@@ -70,8 +70,8 @@
 
         <AreaProfileView
           v-else-if="activeModule === 'area-profile'"
-          :village="selectedVillage"
-          :active-layer-key="activeLayerKey"
+          :user-role="areaRole"
+          :theme="areaTheme"
         />
 
         <!-- ★ 南科發展歷程主內容 -->
@@ -160,9 +160,11 @@ const modules = [
 // ── State ──
 const activeModule    = ref<string | null>(null)
 const websceneId      = ref('826c9dda39d941808528c80e1c0e9c07')
-const selectedVillage = ref('全區')
-const activeLayerKey  = ref('born')
 const temporalLayerKey = ref('household')
+
+// 行政區概覽
+const areaRole  = ref<'public' | 'authority'>('public')
+const areaTheme = ref('population')
 
 // ── 南科設定 ──
 const nankeSettings = ref({ mode: 'story', swipeLeft: '2000', swipeRight: '2025', eraKey: '2000' })
