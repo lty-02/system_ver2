@@ -166,7 +166,6 @@ const RD_BU = ['#b2182b','#d6604d','#f4a582','#fddbc7','#f7f7f7','#d1e5f0','#92c
 
 // ── ArcGIS 模組 ───────────────────────────────────────────────
 let MapView: any, ArcMap: any, FeatureLayer: any
-let ClassBreaksRenderer: any, SimpleFillSymbol: any, Color: any
 let GraphicsLayer: any, Graphic: any, esriConfig: any
 
 async function loadArcGIS() {
@@ -174,14 +173,11 @@ async function loadArcGIS() {
     import('@arcgis/core/views/MapView'),
     import('@arcgis/core/Map'),
     import('@arcgis/core/layers/FeatureLayer'),
-    import('@arcgis/core/renderers/ClassBreaksRenderer'),
-    import('@arcgis/core/symbols/SimpleFillSymbol'),
-    import('@arcgis/core/Color'),
     import('@arcgis/core/layers/GraphicsLayer'),
     import('@arcgis/core/Graphic'),
     import('@arcgis/core/config'),
   ])
-  ;[MapView, ArcMap, FeatureLayer, ClassBreaksRenderer, SimpleFillSymbol, Color, GraphicsLayer, Graphic, esriConfig] = m.map(x => x.default)
+  ;[MapView, ArcMap, FeatureLayer, GraphicsLayer, Graphic, esriConfig] = m.map(x => x.default)
   esriConfig.portalUrl = PORTAL_URL
 }
 
@@ -195,6 +191,7 @@ const changeMode = reactive<Record<CardKey, boolean>>({
 })
 
 let mapView: any = null, fl24: any = null
+let cachedFeatures: Array<{ geometry: any; name: string }> = []
 
 const canvasRefs = new Map<CardKey, HTMLCanvasElement>()
 function setRef(key: CardKey, el: HTMLCanvasElement | null) { if (el) canvasRefs.set(key, el) }
@@ -282,95 +279,111 @@ async function initMap(url: string) {
   mapView = markRaw(new MapView({ container: mapDivRef.value, map: m, center: [120.31,23.07], zoom: 12, ui: { components: ['zoom'] } }))
   mapView.ui.remove('attribution')
   await mapView.when()
+  // fl24 is query-only — never added to map to avoid tile cache requests
   fl24 = new FeatureLayer({ url, outFields: ['*'], definitionExpression: TOWN_FILTER })
   try { await fl24.load() } catch (e) { console.warn('[PopDash] fl24.load 失敗', e) }
-  m.add(fl24)
-  await applyChoro(F.density, CARDS.find(c=>c.key==='P_DEN')!.colors)
   try { await mapView.goTo(fl24.fullExtent.expand(1.4)) } catch {}
 }
 
-// ── 面量圖渲染 ────────────────────────────────────────────────
-async function applyChoro(fieldKey: string, colors: readonly string[]) {
-  if (!fl24) return
+// ── 取得幾何（快取）──────────────────────────────────────────
+async function getGeometries(): Promise<Array<{ geometry: any; name: string }>> {
+  if (cachedFeatures.length) return cachedFeatures
+  if (!fl24) return []
+  const res = await fl24.queryFeatures({ where:'1=1', outFields:['*'], returnGeometry:true })
+  if (!res.features.length) return []
+  const a0 = res.features[0].attributes ?? {}
+  const lk = resolveKey(a0, F.village)
+  cachedFeatures = res.features.map((f:any) => ({
+    geometry: f.geometry,
+    name: String(f.attributes[lk] ?? ''),
+  }))
+  return cachedFeatures
+}
+
+// Row 欄位取值器
+const rowFieldGetters: Record<CardKey, (r:Row)=>number> = {
+  DEPENDENCY_RAT:   r => r.dep,
+  A65_A0A14_RAT:    r => r.aging,
+  P_DEN:            r => r.density,
+  A0A14_A15A65_RAT: r => r.youth,
+  A65UP_A15A64_RAT: r => r.elder,
+}
+
+// ── 面量圖渲染（GraphicsLayer，從 villageData 取 min/max）───
+async function applyChoro(key: CardKey, colors: readonly string[]) {
+  if (!mapView || !villageData.value.length) return
   try {
-    const s1 = await fl24.queryFeatures({ where:'1=1', outFields:['*'], returnGeometry:false, num:1 })
-    if (!s1.features.length) return
-    const attrs = s1.features[0].attributes ?? {}
-    const ak = resolveKey(attrs, fieldKey)
-    const ss = await fl24.queryFeatures({
-      where:'1=1', returnGeometry:false,
-      outStatistics:[
-        { statisticType:'min', onStatisticField:ak, outStatisticFieldName:'MN' } as any,
-        { statisticType:'max', onStatisticField:ak, outStatisticFieldName:'MX' } as any,
-      ],
-    })
-    const sa = ss.features[0]?.attributes ?? {}
-    const mn = Number(sa['MN']??0), mx = Number(sa['MX']??1)
-    if (mn===mx) return
-    const breaks = Array.from({length:colors.length+1},(_,i)=>mn+(mx-mn)*(i/colors.length))
-    fl24.renderer = new ClassBreaksRenderer({
-      field: ak,
-      classBreakInfos: colors.map((hex,i) => ({
-        minValue: i===0 ? mn-0.001 : breaks[i],
-        maxValue: breaks[i+1],
-        symbol: new SimpleFillSymbol({ color: new Color(hex), outline:{color:new Color([255,255,255,180]),width:0.6} }),
-        label: `${breaks[i]?.toFixed(2)} – ${breaks[i+1]?.toFixed(2)}`,
-      })) as any,
-      defaultSymbol: new SimpleFillSymbol({ color:new Color('#e5e7eb'), outline:{color:new Color([180,180,180,100]),width:0.4} }),
-    })
-    removeCalcGL(); fl24.visible = true
+    const features = await getGeometries()
+    if (!features.length) return
+    const getter = rowFieldGetters[key]
+    const dataMap = new Map(villageData.value.map(r => [r.name, getter(r)]))
+    const vals = [...dataMap.values()].filter(v => isFinite(v))
+    const mn = Math.min(...vals), mx = Math.max(...vals)
+    if (!isFinite(mn) || mn === mx) return
+
+    const hexToRgba = (hex: string, a: number) =>
+      [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16), a]
+
+    const toColor = (v: number) => {
+      const t = (v - mn) / (mx - mn)
+      const idx = Math.min(colors.length - 1, Math.floor(t * colors.length))
+      return hexToRgba(colors[idx]!, 220)
+    }
+
+    removeAllGL()
+    const gl = new GraphicsLayer({ id: 'choro-gl' })
+    for (const f of features) {
+      const v = dataMap.get(f.name)
+      const color = v != null ? toColor(v) : [200,200,200,120]
+      gl.add(new Graphic({ geometry: f.geometry, symbol: { type:'simple-fill', color, outline:{color:[255,255,255,180],width:0.6} } as any }))
+    }
+    mapView.map.add(gl)
   } catch (e) { console.warn('[PopDash] applyChoro 失敗', e) }
 }
 
 // ── 變化量地圖（GraphicsLayer）────────────────────────────────
 async function applyChangeChoro(fieldGetter: (r: ChangeRow) => number) {
-  if (!mapView || !fl24 || !changeRows.value.length) return
+  if (!mapView || !changeRows.value.length) return
   try {
+    const features = await getGeometries()
+    if (!features.length) return
     const vals = changeRows.value.map(r => fieldGetter(r))
     const maxAbs = Math.max(...vals.map(Math.abs), 0.001)
     const toColor = (v: number) => {
-      const norm = v / maxAbs   // -1 ~ +1
+      const norm = v / maxAbs
       const idx  = Math.round((1 - norm) / 2 * 8)
       const hex  = RD_BU[Math.max(0,Math.min(8,idx))] ?? '#f7f7f7'
       return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16), 220]
     }
-    const res = await fl24.queryFeatures({ where:'1=1', outFields:['*'], returnGeometry:true })
-    const a0  = res.features[0]?.attributes ?? {}
-    const lk  = resolveKey(a0, F.village)
-    removeCalcGL()
+    const dataMap = new Map(changeRows.value.map(r => [r.name, r]))
+    removeAllGL()
     const gl = new GraphicsLayer({ id:'calc-gl' })
-    for (const f of res.features) {
-      const a    = f.attributes ?? {}
-      const name = String(a[lk] ?? '')
-      const row  = changeRows.value.find(r => r.name === name)
+    for (const f of features) {
+      const row = dataMap.get(f.name)
       if (!row) continue
       gl.add(new Graphic({ geometry: f.geometry, symbol: { type:'simple-fill', color: toColor(fieldGetter(row)), outline:{color:[255,255,255,180],width:0.6} } as any }))
     }
-    fl24.visible = false
     mapView.map.add(gl)
   } catch (e) { console.warn('[PopDash] applyChangeChoro 失敗', e) }
 }
 
-function removeCalcGL() {
-  const gl = mapView?.map?.findLayerById?.('calc-gl')
-  if (gl) mapView.map.remove(gl)
-  if (fl24) fl24.visible = true
+function removeAllGL() {
+  for (const id of ['choro-gl', 'calc-gl']) {
+    const gl = mapView?.map?.findLayerById?.(id)
+    if (gl) mapView.map.remove(gl)
+  }
 }
 
 // ── 地圖重渲染 ────────────────────────────────────────────────
 async function rerenderMap(key: CardKey) {
-  if (!fl24) return
+  if (!mapView) return
   mapLoading.value = true
   const card = CARDS.find(c => c.key === key)!
   if (changeMode[key]) {
     const getter = changeGetters[key]
     if (getter) await applyChangeChoro(getter)
   } else {
-    const fieldMap: Record<CardKey,string> = {
-      DEPENDENCY_RAT: F.dep, A65_A0A14_RAT: F.aging,
-      P_DEN: F.density, A0A14_A15A65_RAT: F.youth, A65UP_A15A64_RAT: F.elder,
-    }
-    await applyChoro(fieldMap[key], card.colors)
+    await applyChoro(key, card.colors)
   }
   mapLoading.value = false
 }
@@ -586,29 +599,29 @@ onMounted(async () => {
   const { url24, url23 } = await findLayerUrls()
   if (!url24) { mapLoading.value = false; return }
 
-  await initMap(url24)
-  mapLoading.value = false
-
-  // 載入 2024 資料
-  const rows24 = await loadYearData(url24)
+  // 先載入資料，applyChoro 需要 villageData 的 min/max
+  const [rows24] = await Promise.all([
+    loadYearData(url24),
+    url23 ? loadYearData(url23).then(r => { prevData.value = r }) : Promise.resolve(),
+  ])
   villageData.value = rows24
   buildStats(rows24)
 
-  // 載入 2023 資料（背景，不阻塞UI）
-  if (url23) {
-    loadYearData(url23).then(r => { prevData.value = r })
-  }
-
-  await nextTick()
   await loadChartJS()
+  await nextTick()
   redrawAll()
-  // 初始地圖渲染人口密度
-  await rerenderMap('P_DEN')
+
+  // 地圖初始化（fl24 query-only，不 add 到 map）
+  await initMap(url24)
+  // 初始渲染人口密度面量圖
+  await applyChoro('P_DEN', CARDS.find(c=>c.key==='P_DEN')!.colors)
+  mapLoading.value = false
 })
 
 onUnmounted(() => {
   mapView?.destroy(); mapView = null
   fl24 = null
+  cachedFeatures = []
   chartInst.forEach(c => c?.destroy())
   chartInst.clear()
 })
