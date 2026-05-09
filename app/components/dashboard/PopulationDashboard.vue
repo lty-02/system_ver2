@@ -51,18 +51,24 @@
 
     <!-- ══ 右側 2 張卡 ══ -->
     <div class="right-col">
-      <!-- 扶養比：垂直柱狀 + 平均線 -->
-      <div class="ind-card" :class="{ 'card-active': activeCard==='DEPENDENCY_RAT' }" @click="activateCard('DEPENDENCY_RAT')">
+      <!-- 扶養比：堆疊橫條 + 人口比例圓環 -->
+      <div class="ind-card dep-card" :class="{ 'card-active': activeCard==='DEPENDENCY_RAT' }" @click="activateCard('DEPENDENCY_RAT')">
         <div class="card-hd">
-          <span class="card-title"><span class="card-dot" style="background:#a855f7"></span>扶養比</span>
+          <span class="card-title"><span class="card-dot" style="background:#a855f7"></span>扶養比・人口結構</span>
           <div class="card-actions">
-            <span class="stat-mini" v-if="stats.DEPENDENCY_RAT">平均 <b :style="{color:'#a855f7'}">{{ stats.DEPENDENCY_RAT.avg }}</b></span>
+            <span class="stat-mini" v-if="stats.DEPENDENCY_RAT">均 <b :style="{color:'#a855f7'}">{{ stats.DEPENDENCY_RAT.avg }}</b></span>
             <button class="chg-btn" :class="{ on: changeMode.DEPENDENCY_RAT }" @click.stop="toggleChange('DEPENDENCY_RAT')">
               {{ changeMode.DEPENDENCY_RAT ? '現值' : '變化量' }}
             </button>
           </div>
         </div>
-        <div class="canvas-wrap"><canvas :ref="el => setRef('DEPENDENCY_RAT', el as HTMLCanvasElement)"></canvas></div>
+        <div class="dep-split">
+          <div class="canvas-wrap dep-bar"><canvas :ref="el => setRef('DEPENDENCY_RAT', el as HTMLCanvasElement)"></canvas></div>
+          <div class="dep-donut-wrap" v-show="!changeMode.DEPENDENCY_RAT">
+            <div class="donut-ttl">各齡層比例估算</div>
+            <div class="canvas-wrap"><canvas ref="depDonutRef"></canvas></div>
+          </div>
+        </div>
       </div>
 
       <!-- 老化指數：散點/泡泡圖 -->
@@ -139,16 +145,16 @@ const SUFFIX_2024  = '2024年12月臺南市村里人口指標'
 const SUFFIX_2023  = '2023年12月臺南市村里人口指標'
 const TOP_N        = 10
 
-// 實際欄位名稱
+// 實際欄位名稱（FeatureService 截斷至 10 字元）
 const F = {
   village: 'VILLAGE',
   density: 'P_DEN',
   mfRat:   'M_F_RAT',
   hhSize:  'P_H_CNT',
-  dep:     'DEPENDENCY_RAT',
-  youth:   'A0A14_A15A65_RAT',
-  elder:   'A65UP_A15A64_RAT',
-  aging:   'A65_A0A14_RAT',
+  dep:     'DEPENDENCY',   // DEPENDENCY_RAT 截斷
+  youth:   'A0A14_A15A',   // A0A14_A15A65_RAT 截斷
+  elder:   'A65UP_A15A',   // A65UP_A15A64_RAT 截斷
+  aging:   'A65_A0A14_',   // A65_A0A14_RAT 截斷
 }
 
 const CARDS = [
@@ -195,6 +201,7 @@ let cachedFeatures: Array<{ geometry: any; name: string }> = []
 
 const canvasRefs = new Map<CardKey, HTMLCanvasElement>()
 function setRef(key: CardKey, el: HTMLCanvasElement | null) { if (el) canvasRefs.set(key, el) }
+const depDonutRef = ref<HTMLCanvasElement | null>(null)
 
 const chartInst = new Map<string, any>()
 
@@ -465,30 +472,71 @@ function redrawAll() {
   drawDependency(); drawAging(); drawDensity(); drawYouth(); drawElder()
 }
 
-// ── 扶養比：垂直柱狀 + 均線 ───────────────────────────────────
+// ── 扶養比：堆疊橫條（扶幼+扶老）+ 人口比例圓環 ─────────────
 function drawDependency() {
   const canvas = canvasRefs.get('DEPENDENCY_RAT'); if (!canvas || !Chart) return
   chartInst.get('DEPENDENCY_RAT')?.destroy()
-  if (changeMode.DEPENDENCY_RAT) { drawDivBar('DEPENDENCY_RAT', changeRows.value.map(r=>({name:r.name,val:r.dep})), '#a855f7'); return }
-  const rows = [...villageData.value].sort((a,b)=>b.dep-a.dep)
-  const avg  = rows.reduce((s,r)=>s+r.dep,0)/(rows.length||1)
-  const maxV = Math.max(...rows.map(r=>r.dep))
-  const toHex = (v:number) => {
-    const t = v/maxV; const c = CARDS[0]!.colors
-    const idx = Math.min(c.length-1, Math.floor(t*(c.length)))
-    return c[idx]!
+  chartInst.get('_depDonut')?.destroy()
+
+  if (changeMode.DEPENDENCY_RAT) {
+    drawDivBar('DEPENDENCY_RAT', changeRows.value.map(r=>({name:r.name,val:r.dep})), '#a855f7')
+    return
   }
+
+  // 堆疊橫條：扶幼比（綠） + 扶老比（橘）= 扶養比，按扶養比排序
+  const rows = [...villageData.value].sort((a,b)=>b.dep-a.dep).slice(0, 9)
   chartInst.set('DEPENDENCY_RAT', new Chart(canvas, {
     type: 'bar',
     data: {
-      labels: rows.map(r=>r.name),
+      labels: rows.map(r => r.name),
       datasets: [
-        { type:'bar', data: rows.map(r=>+r.dep.toFixed(3)), backgroundColor: rows.map(r=>toHex(r.dep)+'cc'), borderColor: rows.map(r=>toHex(r.dep)), borderWidth:1, borderRadius:2, yAxisID:'y' },
-        { type:'line', data: rows.map(()=>+avg.toFixed(3)), borderColor:'#a855f788', borderDash:[4,3], borderWidth:1.5, pointRadius:0, yAxisID:'y', tension:0 },
+        {
+          label: '扶幼比', data: rows.map(r=>+r.youth.toFixed(2)),
+          backgroundColor: '#22c55ecc', borderColor: '#22c55e', borderWidth:1, borderRadius:0, stack:'dep',
+        },
+        {
+          label: '扶老比', data: rows.map(r=>+r.elder.toFixed(2)),
+          backgroundColor: '#f97316cc', borderColor: '#f97316', borderWidth:1, borderRadius:2, stack:'dep',
+        },
       ],
     },
-    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{callbacks:{label:(c:any)=>` ${Number(c.raw).toFixed(3)}`}}}, scales:{x:{ticks:{font:{size:8},maxRotation:45}},y:{grid:{color:'#f1f5f9'},ticks:{font:{size:9}}}} },
+    options: {
+      indexAxis: 'y', responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{ display:true, position:'top', labels:{font:{size:8},boxWidth:9,padding:4} },
+        tooltip:{ callbacks:{ label:(c:any)=>` ${c.dataset.label}: ${Number(c.raw).toFixed(2)}` } },
+      },
+      scales:{ x:{stacked:true,grid:{color:'#f1f5f9'},ticks:{font:{size:8}}}, y:{stacked:true,grid:{display:false},ticks:{font:{size:8}}} },
+    },
   }))
+
+  // 圓環：估算各齡層人口比例（youth_dep:100:elder_dep ≈ 0-14:15-64:65+）
+  if (depDonutRef.value) {
+    const avgY = villageData.value.reduce((s,r)=>s+r.youth,0)/(villageData.value.length||1)
+    const avgE = villageData.value.reduce((s,r)=>s+r.elder,0)/(villageData.value.length||1)
+    const total = avgY + 100 + avgE
+    const pct = (v:number) => +(v/total*100).toFixed(1)
+    chartInst.set('_depDonut', new Chart(depDonutRef.value, {
+      type: 'doughnut',
+      data: {
+        labels: ['少齡 0–14', '工作 15–64', '老齡 65+'],
+        datasets:[{
+          data: [pct(avgY), pct(100), pct(avgE)],
+          backgroundColor: ['#22c55ecc','#3b82f6cc','#f97316cc'],
+          borderColor:      ['#22c55e',  '#3b82f6',  '#f97316'],
+          borderWidth: 1.5,
+        }],
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{
+          legend:{ display:true, position:'right', labels:{font:{size:8},boxWidth:8,padding:4} },
+          tooltip:{ callbacks:{ label:(c:any)=>` ${c.label}: ${c.raw}%` } },
+        },
+        cutout: '62%',
+      },
+    }))
+  }
 }
 
 // ── 老化指數：泡泡圖（扶幼 vs 扶老，泡大小=老化指數）──────────
@@ -622,8 +670,7 @@ onUnmounted(() => {
   mapView?.destroy(); mapView = null
   fl24 = null
   cachedFeatures = []
-  chartInst.forEach(c => c?.destroy())
-  chartInst.clear()
+  chartInst.forEach(c => c?.destroy()); chartInst.clear()
 })
 </script>
 
@@ -733,4 +780,11 @@ onUnmounted(() => {
 .chg-btn.on { background: #1e293b; color: #fff; border-color: #1e293b; }
 .canvas-wrap { flex: 1; min-height: 0; position: relative; }
 .canvas-wrap canvas { width: 100% !important; height: 100% !important; }
+
+/* 扶養比卡分割佈局 */
+.dep-card { }
+.dep-split { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 4px; }
+.dep-bar { flex: 1.4; min-height: 0; }
+.dep-donut-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; border-top: 1px solid #f1f5f9; padding-top: 4px; }
+.donut-ttl { font-size: 9px; color: #94a3b8; font-weight: 500; text-align: center; flex-shrink: 0; margin-bottom: 2px; }
 </style>
