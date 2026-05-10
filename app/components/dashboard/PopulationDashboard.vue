@@ -158,11 +158,11 @@ const F = {
 }
 
 const CARDS = [
-  { key: 'DEPENDENCY_RAT',    shortLabel: '扶養比',  color: '#a855f7', colors: ['#f5f3ff','#ddd6fe','#a78bfa','#7c3aed','#4c1d95'] },
-  { key: 'A65_A0A14_RAT',     shortLabel: '老化指數', color: '#eab308', colors: ['#fefce8','#fef08a','#facc15','#ca8a04','#713f12'] },
-  { key: 'P_DEN',             shortLabel: '人口密度', color: '#3b82f6', colors: ['#dbeafe','#93c5fd','#3b82f6','#1d4ed8','#1e3a8a'] },
-  { key: 'A0A14_A15A65_RAT',  shortLabel: '扶幼比',  color: '#22c55e', colors: ['#f0fdf4','#bbf7d0','#4ade80','#16a34a','#14532d'] },
-  { key: 'A65UP_A15A64_RAT',  shortLabel: '扶老比',  color: '#f97316', colors: ['#fff7ed','#fed7aa','#fb923c','#ea580c','#7c2d12'] },
+  { key: 'DEPENDENCY_RAT',    shortLabel: '扶養比',  color: '#8CABD9', colors: ['#ddeaf5','#b8d0e8','#8CABD9','#5e89bb','#2d5a8e'] },
+  { key: 'A65_A0A14_RAT',     shortLabel: '老化指數', color: '#CF9546', colors: ['#fdf5e4','#f5d9a0','#F0CA50','#CF9546','#8a5e22'] },
+  { key: 'P_DEN',             shortLabel: '人口密度', color: '#7A989A', colors: ['#e4ecec','#b8ccce','#7A989A','#4a7274','#27403D'] },
+  { key: 'A0A14_A15A65_RAT',  shortLabel: '扶幼比',  color: '#AEC17B', colors: ['#f3f7ea','#d4e5b0','#AEC17B','#849271','#48725C'] },
+  { key: 'A65UP_A15A64_RAT',  shortLabel: '扶老比',  color: '#C67052', colors: ['#fdf0eb','#f0c4af','#E07B42','#C67052','#8a3e28'] },
 ] as const
 
 type CardKey = typeof CARDS[number]['key']
@@ -215,10 +215,10 @@ const villageData  = ref<Row[]>([])
 const prevData     = ref<Row[]>([])   // 2023
 
 const kpis = ref([
-  { key: 'cnt',   label: '村里', unit: '里', color: '#3b82f6', val: null as string|null },
-  { key: 'den',   label: '平均密度', unit: '人/km²', color: '#3b82f6', val: null as string|null },
-  { key: 'dep',   label: '平均扶養', unit: '',  color: '#a855f7', val: null as string|null },
-  { key: 'aging', label: '平均老化', unit: '',  color: '#eab308', val: null as string|null },
+  { key: 'cnt',   label: '村里', unit: '里', color: '#8CABD9', val: null as string|null },
+  { key: 'den',   label: '平均密度', unit: '人/km²', color: '#7A989A', val: null as string|null },
+  { key: 'dep',   label: '平均扶養', unit: '',  color: '#8CABD9', val: null as string|null },
+  { key: 'aging', label: '平均老化', unit: '',  color: '#CF9546', val: null as string|null },
 ])
 
 const stats = ref<Record<string, { avg: string; max: string; min: string }>>({})
@@ -479,11 +479,11 @@ function drawDependency() {
   chartInst.get('_depDonut')?.destroy()
 
   if (changeMode.DEPENDENCY_RAT) {
-    drawDivBar('DEPENDENCY_RAT', changeRows.value.map(r=>({name:r.name,val:r.dep})), '#a855f7')
+    drawDivBar('DEPENDENCY_RAT', changeRows.value.map(r=>({name:r.name,val:r.dep})), '#8CABD9')
     return
   }
 
-  // 堆疊橫條：扶幼比（綠） + 扶老比（橘）= 扶養比，按扶養比排序
+  // 堆疊橫條：扶幼比（鼠尾草綠）+ 扶老比（赤陶橘）= 扶養比，按扶養比排序
   const rows = [...villageData.value].sort((a,b)=>b.dep-a.dep).slice(0, 9)
   chartInst.set('DEPENDENCY_RAT', new Chart(canvas, {
     type: 'bar',
@@ -492,11 +492,11 @@ function drawDependency() {
       datasets: [
         {
           label: '扶幼比', data: rows.map(r=>+r.youth.toFixed(2)),
-          backgroundColor: '#22c55ecc', borderColor: '#22c55e', borderWidth:1, borderRadius:0, stack:'dep',
+          backgroundColor: '#AEC17Bcc', borderColor: '#AEC17B', borderWidth:1, borderRadius:0, stack:'dep',
         },
         {
           label: '扶老比', data: rows.map(r=>+r.elder.toFixed(2)),
-          backgroundColor: '#f97316cc', borderColor: '#f97316', borderWidth:1, borderRadius:2, stack:'dep',
+          backgroundColor: '#C67052cc', borderColor: '#C67052', borderWidth:1, borderRadius:2, stack:'dep',
         },
       ],
     },
@@ -522,8 +522,8 @@ function drawDependency() {
         labels: ['少齡 0–14', '工作 15–64', '老齡 65+'],
         datasets:[{
           data: [pct(avgY), pct(100), pct(avgE)],
-          backgroundColor: ['#22c55ecc','#3b82f6cc','#f97316cc'],
-          borderColor:      ['#22c55e',  '#3b82f6',  '#f97316'],
+          backgroundColor: ['#AEC17Bcc','#8CABD9cc','#C67052cc'],
+          borderColor:      ['#AEC17B',  '#8CABD9',  '#C67052'],
           borderWidth: 1.5,
         }],
       },
@@ -543,7 +543,7 @@ function drawDependency() {
 function drawAging() {
   const canvas = canvasRefs.get('A65_A0A14_RAT'); if (!canvas || !Chart) return
   chartInst.get('A65_A0A14_RAT')?.destroy()
-  if (changeMode.A65_A0A14_RAT) { drawDivBar('A65_A0A14_RAT', changeRows.value.map(r=>({name:r.name,val:r.aging})), '#eab308'); return }
+  if (changeMode.A65_A0A14_RAT) { drawDivBar('A65_A0A14_RAT', changeRows.value.map(r=>({name:r.name,val:r.aging})), '#CF9546'); return }
   const rows = villageData.value
   const maxA = Math.max(...rows.map(r=>r.aging))
   chartInst.set('A65_A0A14_RAT', new Chart(canvas, {
@@ -574,7 +574,7 @@ function drawAging() {
 function drawDensity() {
   const canvas = canvasRefs.get('P_DEN'); if (!canvas || !Chart) return
   chartInst.get('P_DEN')?.destroy()
-  if (changeMode.P_DEN) { drawDivBar('P_DEN', changeRows.value.map(r=>({name:r.name,val:r.density})), '#3b82f6'); return }
+  if (changeMode.P_DEN) { drawDivBar('P_DEN', changeRows.value.map(r=>({name:r.name,val:r.density})), '#7A989A'); return }
   const sorted = [...villageData.value].sort((a,b)=>b.density-a.density).slice(0,TOP_N)
   const maxD = sorted[0]?.density ?? 1
   chartInst.set('P_DEN', new Chart(canvas, {
@@ -588,13 +588,13 @@ function drawDensity() {
 function drawYouth() {
   const canvas = canvasRefs.get('A0A14_A15A65_RAT'); if (!canvas || !Chart) return
   chartInst.get('A0A14_A15A65_RAT')?.destroy()
-  if (changeMode.A0A14_A15A65_RAT) { drawDivBar('A0A14_A15A65_RAT', changeRows.value.map(r=>({name:r.name,val:r.youth})), '#22c55e'); return }
+  if (changeMode.A0A14_A15A65_RAT) { drawDivBar('A0A14_A15A65_RAT', changeRows.value.map(r=>({name:r.name,val:r.youth})), '#AEC17B'); return }
   const sorted = [...villageData.value].sort((a,b)=>b.youth-a.youth).slice(0,TOP_N)
   const avg = villageData.value.reduce((s,r)=>s+r.youth,0)/(villageData.value.length||1)
   chartInst.set('A0A14_A15A65_RAT', new Chart(canvas, {
     type:'bar',
     data:{ labels:sorted.map(r=>r.name), datasets:[
-      { type:'bar', data:sorted.map(r=>+r.youth.toFixed(3)), backgroundColor:'#22c55ecc', borderColor:'#22c55e', borderWidth:1, borderRadius:2, yAxisID:'y' },
+      { type:'bar', data:sorted.map(r=>+r.youth.toFixed(3)), backgroundColor:'#AEC17Bcc', borderColor:'#AEC17B', borderWidth:1, borderRadius:2, yAxisID:'y' },
       { type:'line', data:sorted.map(()=>+avg.toFixed(3)), borderColor:'#94a3b8', borderDash:[4,3], borderWidth:1.5, pointRadius:0, yAxisID:'y', tension:0, label:'均值' },
     ] },
     options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{grid:{color:'#f1f5f9'},ticks:{font:{size:9}}}, y:{grid:{display:false},ticks:{font:{size:9}}} } },
@@ -605,11 +605,11 @@ function drawYouth() {
 function drawElder() {
   const canvas = canvasRefs.get('A65UP_A15A64_RAT'); if (!canvas || !Chart) return
   chartInst.get('A65UP_A15A64_RAT')?.destroy()
-  if (changeMode.A65UP_A15A64_RAT) { drawDivBar('A65UP_A15A64_RAT', changeRows.value.map(r=>({name:r.name,val:r.elder})), '#f97316'); return }
+  if (changeMode.A65UP_A15A64_RAT) { drawDivBar('A65UP_A15A64_RAT', changeRows.value.map(r=>({name:r.name,val:r.elder})), '#C67052'); return }
   const sorted = [...villageData.value].sort((a,b)=>b.elder-a.elder).slice(0,TOP_N)
   chartInst.set('A65UP_A15A64_RAT', new Chart(canvas, {
     type:'bar',
-    data:{ labels:sorted.map(r=>r.name), datasets:[{ data:sorted.map(r=>+r.elder.toFixed(3)), backgroundColor:'#f97316cc', borderColor:'#f97316', borderWidth:1, borderRadius:2 }] },
+    data:{ labels:sorted.map(r=>r.name), datasets:[{ data:sorted.map(r=>+r.elder.toFixed(3)), backgroundColor:'#C67052cc', borderColor:'#C67052', borderWidth:1, borderRadius:2 }] },
     options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{grid:{color:'#f1f5f9'},ticks:{font:{size:9}}}, y:{grid:{display:false},ticks:{font:{size:9}}} } },
   }))
 }
@@ -698,7 +698,7 @@ onUnmounted(() => {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
   font-size: 12px; color: #64748b;
 }
-.spinner { width:22px; height:22px; border:2.5px solid #e2e8f0; border-top-color:#3b82f6; border-radius:50%; animation:spin .8s linear infinite; }
+.spinner { width:22px; height:22px; border:2.5px solid #e2e8f0; border-top-color:#8CABD9; border-radius:50%; animation:spin .8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
 
 /* KPI 覆蓋卡 */
@@ -761,7 +761,7 @@ onUnmounted(() => {
   flex: 1;
 }
 .ind-card:hover { border-color: #cbd5e1; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
-.card-active { border-color: #3b82f6 !important; box-shadow: 0 2px 12px rgba(59,130,246,.15) !important; }
+.card-active { border-color: #8CABD9 !important; box-shadow: 0 2px 12px rgba(140,171,217,.2) !important; }
 .card-hd {
   display: flex; align-items: center; justify-content: space-between;
   gap: 6px; flex-shrink: 0; margin-bottom: 4px;
@@ -776,7 +776,7 @@ onUnmounted(() => {
   background: #f8fafc; font-size: 10px; color: #64748b; cursor: pointer; transition: all .15s;
   white-space: nowrap;
 }
-.chg-btn:hover { border-color: #93c5fd; color: #1d4ed8; }
+.chg-btn:hover { border-color: #8CABD9; color: #2d5a8e; }
 .chg-btn.on { background: #1e293b; color: #fff; border-color: #1e293b; }
 .canvas-wrap { flex: 1; min-height: 0; position: relative; }
 .canvas-wrap canvas { width: 100% !important; height: 100% !important; }

@@ -239,40 +239,40 @@ const THEMES = [
     id: 'population',
     name: '人口結構',
     desc: '呈現新市區各村里人口組成、出生死亡及自然增減等核心指標。',
-    color: '#3b82f6',
-    lightBg: '#eff6ff',
+    color: '#8CABD9',
+    lightBg: '#eef4fb',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
   },
   {
     id: 'housing',
     name: '房市交易',
     desc: '統計區域內不動產買賣與租賃動態，呈現成交量、單價及房型分布。',
-    color: '#f97316',
-    lightBg: '#fff7ed',
+    color: '#CF9546',
+    lightBg: '#fdf5e6',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
   },
   {
     id: 'amenity',
     name: '生活機能',
     desc: '評估醫療、交通、商業等生活機能資源的空間分布與可及性。',
-    color: '#22c55e',
-    lightBg: '#f0fdf4',
+    color: '#48725C',
+    lightBg: '#ecf3ef',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
   },
   {
     id: 'education',
     name: '教育與福利機構',
     desc: '呈現學校、社福、托育及長照機構的分布密度與服務涵蓋範圍。',
-    color: '#a855f7',
-    lightBg: '#faf5ff',
+    color: '#AEC17B',
+    lightBg: '#f3f7ea',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>',
   },
   {
     id: 'elderly',
     name: '銀髮安居',
     desc: '整合老化指數、獨居老人比例及長照需求，評估銀髮族生活安居條件。',
-    color: '#f43f5e',
-    lightBg: '#fff1f2',
+    color: '#C1395E',
+    lightBg: '#fceef2',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>',
   },
 ]
@@ -281,28 +281,28 @@ const currentTheme = computed(() => THEMES.find(t => t.id === props.theme) ?? TH
 
 // KPI configs per theme
 const housingKPIs = [
-  { label: '季交易件數', unit: '件', color: '#f97316' },
-  { label: '平均成交單價', unit: '萬/坪', color: '#fb923c' },
-  { label: '中位數單價', unit: '萬/坪', color: '#fbbf24' },
-  { label: '買賣交易比', unit: '%', color: '#34d399' },
+  { label: '季交易件數',   unit: '件',   color: '#CF9546' },
+  { label: '平均成交單價', unit: '萬/坪', color: '#E07B42' },
+  { label: '中位數單價',   unit: '萬/坪', color: '#B3A86A' },
+  { label: '買賣交易比',   unit: '%',    color: '#F0CA50' },
 ]
 const amenityKPIs = [
-  { label: '醫療院所', unit: '處', color: '#22c55e' },
-  { label: '公共設施', unit: '處', color: '#10b981' },
-  { label: '公車站點', unit: '站', color: '#06b6d4' },
-  { label: '公園綠地', unit: '處', color: '#84cc16' },
+  { label: '醫療院所', unit: '處', color: '#48725C' },
+  { label: '公共設施', unit: '處', color: '#849271' },
+  { label: '公車站點', unit: '站', color: '#7A989A' },
+  { label: '公園綠地', unit: '處', color: '#AEC17B' },
 ]
 const educationKPIs = [
-  { label: '學校數', unit: '所', color: '#a855f7' },
-  { label: '社福機構', unit: '處', color: '#c084fc' },
-  { label: '托育設施', unit: '處', color: '#818cf8' },
-  { label: '長照機構', unit: '處', color: '#f472b6' },
+  { label: '學校數',   unit: '所', color: '#AEC17B' },
+  { label: '社福機構', unit: '處', color: '#48725C' },
+  { label: '托育設施', unit: '處', color: '#89A7C2' },
+  { label: '長照機構', unit: '處', color: '#7A989A' },
 ]
 const elderlyKPIs = [
-  { label: '65 歲以上人口', unit: '人', color: '#f43f5e' },
-  { label: '獨居老人戶數', unit: '戶', color: '#fb7185' },
-  { label: '老屋比例', unit: '%', color: '#f97316' },
-  { label: '長照需求人口', unit: '人', color: '#a78bfa' },
+  { label: '65 歲以上人口', unit: '人', color: '#C1395E' },
+  { label: '獨居老人戶數', unit: '戶', color: '#F6A7B8' },
+  { label: '老屋比例',     unit: '%',  color: '#C67052' },
+  { label: '長照需求人口', unit: '人', color: '#CF9546' },
 ]
 </script>
 
