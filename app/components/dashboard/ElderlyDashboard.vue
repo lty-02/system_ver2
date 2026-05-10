@@ -270,6 +270,7 @@ async function findLayerUrls(): Promise<{
       const b = raw.replace(/\/+$/, '')
       return b.endsWith('/0') ? b : `${b}/0`
     }
+    let elderlyFallback: string|null = null
     ws.allLayers.forEach((l: any) => {
       const title = l.title ?? ''
       const raw   = l.url ?? l.parsedUrl?.path ?? ''
@@ -278,7 +279,10 @@ async function findLayerUrls(): Promise<{
       const yrM = title.match(/^(\d{4})年/)
       if (!yrM) return
       const year = parseInt(yrM[1])
-      if (!geoUrl) geoUrl = url  // 第一個可用圖層作為幾何備援
+      const isElderly = INDICES.some(idx => title.includes(idx.suffix))
+      // 優先使用非銀髮安居圖層作為村里幾何來源（人口圖層有面幾何）
+      if (!isElderly && !geoUrl) geoUrl = url
+      if (isElderly && !elderlyFallback) elderlyFallback = url
       for (const idx of INDICES) {
         if (title.includes(idx.suffix)) {
           if (!yearMap.has(idx.key)) yearMap.set(idx.key, [])
@@ -286,6 +290,8 @@ async function findLayerUrls(): Promise<{
         }
       }
     })
+    if (!geoUrl) geoUrl = elderlyFallback
+    console.log('[EldDash] geoUrl:', geoUrl)
     console.log('[EldDash] yearMap:', [...yearMap.entries()].map(([k, v]) => `${k}:${v.map(e => e.year).join(',')}`).join(' | '))
   } catch(e) { console.warn('[EldDash] findLayerUrls 失敗', e) }
 
@@ -791,27 +797,26 @@ onMounted(async () => {
   await loadArcGIS()
   const { urls, geoUrl } = await findLayerUrls()
 
-  // 並行載入所有最新年份圖層（含幾何）
+  // 銀髮安居圖層為統計屬性表，不含面幾何；先從人口/其他圖層取幾何
+  if (geoUrl) {
+    const geoFeats = await queryFeatures(geoUrl, true)
+    cacheGeo(geoFeats)
+    console.log('[EldDash] cachedGeos:', cachedGeos.length, cachedGeos.map(g => g.name))
+  }
+
+  // 並行載入所有最新年份圖層（不需要幾何）
   await Promise.all(INDICES.map(async idx => {
     const u = urls[idx.key]
     if (!u?.cur) return
-    const feats = await queryFeatures(u.cur, true)
-    cacheGeo(feats)  // 集中於此快取幾何
+    const feats = await queryFeatures(u.cur, false)
     switch (idx.key) {
-      case 'mob':   processMob(feats,   scores24.mob);                break
-      case 'care':  processCare(feats,  scores24.care);               break
-      case 'eco':   processEco(feats,   scores24.eco);                break
-      case 'house': processHouse(feats, scores24.house, true); break
-      case 'env':   processEnv(feats,   scores24.env,   true);  break
+      case 'mob':   processMob(feats,   scores24.mob);              break
+      case 'care':  processCare(feats,  scores24.care);             break
+      case 'eco':   processEco(feats,   scores24.eco);              break
+      case 'house': processHouse(feats, scores24.house, true);      break
+      case 'env':   processEnv(feats,   scores24.env,   true);      break
     }
   }))
-
-  // 若幾何仍為空，嘗試備援圖層取幾何
-  if (cachedGeos.length === 0 && geoUrl) {
-    console.log('[EldDash] 備援幾何載入:', geoUrl)
-    const geoFeats = await queryFeatures(geoUrl, true)
-    cacheGeo(geoFeats)
-  }
 
   buildKPIs()
   await loadChartJS()
