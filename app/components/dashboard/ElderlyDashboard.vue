@@ -251,9 +251,12 @@ async function loadChartJS() {
 }
 
 // ── WebScene 圖層 URL 查找 ────────────────────────────────────
-async function findLayerUrls(): Promise<Record<string, { url24: string|null; url23: string|null }>> {
-  const result: Record<string, { url24: string|null; url23: string|null }> = {}
-  for (const idx of INDICES) result[idx.key] = { url24: null, url23: null }
+async function findLayerUrls(): Promise<{
+  urls: Record<IdxKey, { cur: string|null; prev: string|null }>
+  geoUrl: string|null
+}> {
+  const yearMap = new Map<IdxKey, Array<{ year: number; url: string }>>()
+  let geoUrl: string|null = null
 
   try {
     const { default: Portal }   = await import('@arcgis/core/portal/Portal')
@@ -269,40 +272,65 @@ async function findLayerUrls(): Promise<Record<string, { url24: string|null; url
     }
     ws.allLayers.forEach((l: any) => {
       const title = l.title ?? ''
-      const raw = l.url ?? l.parsedUrl?.path ?? ''
+      const raw   = l.url ?? l.parsedUrl?.path ?? ''
       if (!raw) return
       const url = fmt(raw)
       const yrM = title.match(/^(\d{4})年/)
       if (!yrM) return
       const year = parseInt(yrM[1])
+      if (!geoUrl) geoUrl = url  // 第一個可用圖層作為幾何備援
       for (const idx of INDICES) {
         if (title.includes(idx.suffix)) {
-          if (year >= 2024) result[idx.key].url24 = url
-          else if (year >= 2022) result[idx.key].url23 = url
+          if (!yearMap.has(idx.key)) yearMap.set(idx.key, [])
+          yearMap.get(idx.key)!.push({ year, url })
         }
       }
     })
-    console.log('[EldDash] URLs:', result)
+    console.log('[EldDash] yearMap:', [...yearMap.entries()].map(([k, v]) => `${k}:${v.map(e => e.year).join(',')}`).join(' | '))
   } catch(e) { console.warn('[EldDash] findLayerUrls 失敗', e) }
-  return result
+
+  const empty = { cur: null as string|null, prev: null as string|null }
+  const urls: Record<IdxKey, { cur: string|null; prev: string|null }> = {
+    mob: {...empty}, care: {...empty}, eco: {...empty}, house: {...empty}, env: {...empty},
+  }
+  for (const [key, years] of yearMap) {
+    const sorted = [...years].sort((a, b) => b.year - a.year)
+    urls[key as IdxKey].cur  = sorted[0]?.url ?? null
+    urls[key as IdxKey].prev = sorted[1]?.url ?? null
+  }
+  console.log('[EldDash] URLs:', JSON.stringify(urls))
+  return { urls, geoUrl }
 }
 
-// ── 泛用特徵查詢 ─────────────────────────────────────────────
+// ── 泛用特徵查詢（依序嘗試多個鄉鎮過濾條件）────────────────────
 async function queryFeatures(url: string, withGeo = false): Promise<any[]> {
   const fl = new FeatureLayer({ url, outFields: ['*'] })
   try { await fl.load() } catch {}
-  try {
-    const res = await fl.queryFeatures({
-      where: TOWN_FILTER, outFields: ['*'], returnGeometry: withGeo,
-    })
-    if (res.features.length) return res.features
-    // 備援：不過濾
-    const r2 = await fl.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: withGeo })
-    return r2.features
-  } catch(e) {
-    console.warn('[EldDash] queryFeatures 失敗', url, e)
-    return []
+
+  const filters = [
+    "TOWNCODE = '67000200'",
+    "TOWN = '新市區'",
+    "VILLCODE LIKE '670002%'",
+    "VILLCODE LIKE '67000200%'",
+  ]
+  for (const where of filters) {
+    try {
+      const res = await fl.queryFeatures({ where, outFields: ['*'], returnGeometry: withGeo })
+      if (res.features.length > 0) {
+        console.log(`[EldDash] 過濾成功 (${where}): ${res.features.length} 筆`)
+        return res.features
+      }
+    } catch {}
   }
+
+  // 印出可用欄位便於診斷
+  try {
+    const s = await fl.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: false, num: 1 })
+    if (s.features.length) {
+      console.warn('[EldDash] 所有過濾失敗，可用欄位:', Object.keys(s.features[0].attributes ?? {}))
+    }
+  } catch {}
+  return []
 }
 
 // ── 欄位名稱解析（含 10 字截斷）───────────────────────────────
@@ -326,7 +354,6 @@ function cacheGeo(features: any[]) {
 
 // ── 行動健康 ──────────────────────────────────────────────────
 function processMob(features: any[], target: ScoreMap) {
-  cacheGeo(features)
   const bd: Record<string, number> = { A31: 0, A32: 0, A33: 0 }
   for (const f of features) {
     const a = f.attributes ?? {}
@@ -346,7 +373,6 @@ function processMob(features: any[], target: ScoreMap) {
 
 // ── 照護人力 ──────────────────────────────────────────────────
 function processCare(features: any[], target: ScoreMap) {
-  cacheGeo(features)
   const bd: Record<string, number> = { N11: 0, N12: 0, N13: 0 }
   for (const f of features) {
     const a = f.attributes ?? {}
@@ -366,7 +392,6 @@ function processCare(features: any[], target: ScoreMap) {
 
 // ── 經濟狀況 ──────────────────────────────────────────────────
 function processEco(features: any[], target: ScoreMap) {
-  cacheGeo(features)
   const bd: Record<string, number> = { G11: 0, G12: 0, G13: 0 }
   for (const f of features) {
     const a = f.attributes ?? {}
@@ -385,8 +410,7 @@ function processEco(features: any[], target: ScoreMap) {
 }
 
 // ── 住宅狀況 ──────────────────────────────────────────────────
-function processHouse(features: any[], target: ScoreMap) {
-  cacheGeo(features)
+function processHouse(features: any[], target: ScoreMap, isCurrent = false) {
   const villMap = new Map<string, { e12: number; e22: number; e32: number; total: number }>()
   for (const f of features) {
     const a = f.attributes ?? {}
@@ -400,15 +424,14 @@ function processHouse(features: any[], target: ScoreMap) {
     if (String(a[rk(a, 'APARTMENT')] ?? '') === 'E22') v.e22 += cnt
     if (String(a[rk(a, 'MATERIAL')]  ?? '') === 'E32') v.e32 += cnt
   }
-  houseVill.value = villMap
+  if (isCurrent) houseVill.value = villMap
   for (const [k, v] of villMap) {
     target.set(k, { score: v.total > 0 ? v.e12 / v.total : 0, total: v.total })
   }
 }
 
 // ── 環境安全 ──────────────────────────────────────────────────
-function processEnv(features: any[], target: ScoreMap) {
-  cacheGeo(features)
+function processEnv(features: any[], target: ScoreMap, isCurrent = false) {
   const area = { lique: 0, fault: 0, flood: 0, total: 0 }
   const tmp = new Map<string, { lique: number; fault: number; flood: number; total: number }>()
 
@@ -430,7 +453,7 @@ function processEnv(features: any[], target: ScoreMap) {
   }
 
   const t = area.total || 1
-  envPct.value = {
+  if (isCurrent) envPct.value = {
     lique: area.lique / t * 100,
     fault: area.fault / t * 100,
     flood: area.flood / t * 100,
@@ -766,21 +789,29 @@ function buildKPIs() {
 // ── 生命週期 ──────────────────────────────────────────────────
 onMounted(async () => {
   await loadArcGIS()
-  const urls = await findLayerUrls()
+  const { urls, geoUrl } = await findLayerUrls()
 
-  // 並行載入所有 2024 圖層
+  // 並行載入所有最新年份圖層（含幾何）
   await Promise.all(INDICES.map(async idx => {
     const u = urls[idx.key]
-    if (!u?.url24) return
-    const feats = await queryFeatures(u.url24, true)
+    if (!u?.cur) return
+    const feats = await queryFeatures(u.cur, true)
+    cacheGeo(feats)  // 集中於此快取幾何
     switch (idx.key) {
-      case 'mob':   processMob(feats,   scores24.mob);   break
-      case 'care':  processCare(feats,  scores24.care);  break
-      case 'eco':   processEco(feats,   scores24.eco);   break
-      case 'house': processHouse(feats, scores24.house); break
-      case 'env':   processEnv(feats,   scores24.env);   break
+      case 'mob':   processMob(feats,   scores24.mob);                break
+      case 'care':  processCare(feats,  scores24.care);               break
+      case 'eco':   processEco(feats,   scores24.eco);                break
+      case 'house': processHouse(feats, scores24.house, true); break
+      case 'env':   processEnv(feats,   scores24.env,   true);  break
     }
   }))
+
+  // 若幾何仍為空，嘗試備援圖層取幾何
+  if (cachedGeos.length === 0 && geoUrl) {
+    console.log('[EldDash] 備援幾何載入:', geoUrl)
+    const geoFeats = await queryFeatures(geoUrl, true)
+    cacheGeo(geoFeats)
+  }
 
   buildKPIs()
   await loadChartJS()
@@ -789,18 +820,21 @@ onMounted(async () => {
 
   await initMap()
 
-  // 初始地圖：行動健康
-  if (cachedGeos.length) applyChoro('mob')
-
-  // 嘗試 goTo 範圍
-  if (cachedGeos.length && mapView) {
+  if (cachedGeos.length) {
+    applyChoro('mob')
+    // goTo 村里範圍
     try {
-      const lats = cachedGeos.flatMap(g => g.geometry?.extent ? [g.geometry.extent.ymin, g.geometry.extent.ymax] : [])
-      const lons = cachedGeos.flatMap(g => g.geometry?.extent ? [g.geometry.extent.xmin, g.geometry.extent.xmax] : [])
-      if (lats.length) {
+      const extents = cachedGeos.map(g => g.geometry?.extent).filter(Boolean)
+      if (extents.length) {
         await mapView.goTo({
-          target: { xmin: Math.min(...lons), ymin: Math.min(...lats), xmax: Math.max(...lons), ymax: Math.max(...lats), spatialReference: { wkid: 4326 } },
-          padding: { top: 20, bottom: 20, left: 20, right: 20 },
+          target: {
+            xmin: Math.min(...extents.map((e: any) => e.xmin)),
+            ymin: Math.min(...extents.map((e: any) => e.ymin)),
+            xmax: Math.max(...extents.map((e: any) => e.xmax)),
+            ymax: Math.max(...extents.map((e: any) => e.ymax)),
+            spatialReference: extents[0].spatialReference,
+          },
+          padding: { top: 10, bottom: 10, left: 10, right: 10 },
         })
       }
     } catch {}
@@ -808,17 +842,17 @@ onMounted(async () => {
 
   mapLoading.value = false
 
-  // 背景載入 2023（用於變化量）
+  // 背景載入前一年（用於變化量）
   Promise.all(INDICES.map(async idx => {
     const u = urls[idx.key]
-    if (!u?.url23) return
-    const feats = await queryFeatures(u.url23, false)
+    if (!u?.prev) return
+    const feats = await queryFeatures(u.prev, false)
     switch (idx.key) {
-      case 'mob':   processMob(feats,   scores23.mob);   break
-      case 'care':  processCare(feats,  scores23.care);  break
-      case 'eco':   processEco(feats,   scores23.eco);   break
-      case 'house': processHouse(feats, scores23.house); break
-      case 'env':   processEnv(feats,   scores23.env);   break
+      case 'mob':   processMob(feats,   scores23.mob);         break
+      case 'care':  processCare(feats,  scores23.care);        break
+      case 'eco':   processEco(feats,   scores23.eco);         break
+      case 'house': processHouse(feats, scores23.house, false); break
+      case 'env':   processEnv(feats,   scores23.env,   false); break
     }
   }))
 })
