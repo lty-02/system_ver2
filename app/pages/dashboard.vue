@@ -27,6 +27,9 @@
         :key="module.id"
         class="module-btn"
         :class="{ active: activeModule === module.id }"
+        :style="activeModule === module.id
+          ? { background: module.color, borderColor: module.color, boxShadow: `0 4px 16px ${module.color}44` }
+          : {}"
         @click="toggleModule(module.id)"
       >
         <div class="module-icon" v-html="module.icon"></div>
@@ -90,33 +93,15 @@
             <h2>數據儀表板</h2>
             <p class="welcome-desc">探索南科園區主題指標</p>
             <div class="feature-cards">
-              <div class="feature-card" @click="activeModule = 'temporal'">
-                <div class="card-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 3v18h18"/><path d="M18 17l-5-5-4 4-4-4"/>
-                  </svg>
-                </div>
-                <h4>多時期展示</h4>
-                <p>透過 TimeSlider 查看歷史變化</p>
-              </div>
-              <div class="feature-card" @click="activeModule = 'area-profile'">
-                <div class="card-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-                  </svg>
-                </div>
-                <h4>行政區概覽</h4>
-                <p>新市區儀表板</p>
-              </div>
-              <div class="feature-card" @click="activeModule = 'nanke-history'">
-                <div class="card-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 3v18h18"/><path d="M18 17l-5-5-4 4-4-4"/>
-                    <circle cx="19" cy="5" r="2"/>
-                  </svg>
-                </div>
-                <h4>南科發展歷程</h4>
-                <p>由衛星影像看產業變遷</p>
+              <div
+                v-for="m in modules" :key="m.id"
+                class="feature-card"
+                :style="`--c:${m.color};--bg:${m.lightBg}`"
+                @click="activeModule = m.id"
+              >
+                <div class="card-icon" v-html="m.icon"></div>
+                <h4>{{ m.label }}</h4>
+                <p>{{ m.desc }}</p>
               </div>
             </div>
           </div>
@@ -143,17 +128,26 @@ const modules = [
   {
     id: 'temporal',
     label: '多時期展示',
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17l-5-5-4 4-4-4"/></svg>',
+    desc: '透過 TimeSlider 查看歷史變化',
+    color: '#CF9546',
+    lightBg: '#fdf5e6',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
   },
   {
     id: 'area-profile',
     label: '行政區概覽',
+    desc: '新市區多主題儀表板',
+    color: '#8CABD9',
+    lightBg: '#eef4fb',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
   },
   {
     id: 'nanke-history',
     label: '南科發展歷程',
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17l-5-5-4 4-4-4"/><circle cx="19" cy="5" r="2"/></svg>',
+    desc: '由衛星影像看產業變遷',
+    color: '#48725C',
+    lightBg: '#ecf3ef',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
   },
 ]
 
@@ -206,7 +200,7 @@ function applyNankeSettings(settings: { mode: string; swipeLeft: string; swipeRi
 .module-bar { display:flex; gap:12px; padding:12px 24px; background:#fff; border-bottom:1px solid #e2e8f0; flex-shrink:0; height:68px; overflow-x:auto; }
 .module-btn { display:flex; align-items:center; gap:10px; padding:10px 18px; border:1px solid #e2e8f0; border-radius:12px; background:#fff; color:#64748b; font-size:14px; font-weight:500; cursor:pointer; transition:all .3s; white-space:nowrap; flex-shrink:0; }
 .module-btn:hover { background:#f8fafc; border-color:#cbd5e1; color:#1e293b; }
-.module-btn.active { background:linear-gradient(135deg,#60a5fa,#93c5fd); border-color:transparent; color:#fff; box-shadow:0 4px 16px rgba(96,165,250,.3); }
+.module-btn.active { border-color:transparent; color:#fff; }
 .module-icon { width:20px; height:20px; display:flex; align-items:center; }
 .module-icon :deep(svg) { width:100%; height:100%; }
 
@@ -223,14 +217,27 @@ function applyNankeSettings(settings: { mode: string; swipeLeft: string; swipeRi
 
 /* ── Welcome ── */
 .welcome-view { width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:#f8fafc; }
-.welcome-content { max-width:700px; text-align:center; padding:40px 24px; }
+.welcome-content { max-width:960px; width:90%; text-align:center; padding:40px 24px; }
 .welcome-content h2 { font-size:28px; font-weight:700; color:#1e293b; margin:0 0 12px; }
 .welcome-desc { font-size:16px; color:#64748b; margin:0 0 40px; line-height:1.6; }
-.feature-cards { display:grid; grid-template-columns:1fr 1fr; gap:16px; text-align:left; }
-.feature-card { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:24px; cursor:pointer; transition:all .3s; }
-.feature-card:hover { border-color:#93c5fd; box-shadow:0 4px 20px rgba(96,165,250,.15); transform:translateY(-2px); }
-.card-icon { width:44px; height:44px; background:linear-gradient(135deg,#eff6ff,#dbeafe); border-radius:12px; display:flex; align-items:center; justify-content:center; margin-bottom:14px; }
-.card-icon svg { width:22px; height:22px; stroke:#3b82f6; }
+.feature-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; text-align:left; }
+.feature-card {
+  background:#fff; border:1.5px solid #e2e8f0; border-radius:16px; padding:24px;
+  cursor:pointer; transition:all .25s;
+}
+.feature-card:hover {
+  border-color: var(--c, #8CABD9);
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--c, #8CABD9) 20%, transparent);
+  transform:translateY(-3px);
+}
+.card-icon {
+  width:46px; height:46px;
+  background: var(--bg, #eef4fb);
+  border-radius:12px;
+  display:flex; align-items:center; justify-content:center;
+  margin-bottom:16px;
+}
+.card-icon :deep(svg) { width:22px; height:22px; stroke: var(--c, #8CABD9); }
 .feature-card h4 { font-size:15px; font-weight:600; color:#1e293b; margin:0 0 6px; }
 .feature-card p  { font-size:13px; color:#64748b; margin:0; line-height:1.5; }
 

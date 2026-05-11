@@ -232,6 +232,8 @@ definePageMeta({ layout: 'blank' })
 
 .entry-icon svg { width: 24px; height: 24px; stroke: #3b82f6; }
 
+.entry-body { flex: 1; min-width: 0; }
+
 .entry-title {
   font-size: 20px;
   font-weight: 700;
@@ -253,6 +255,8 @@ definePageMeta({ layout: 'blank' })
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .entry-arrow svg {
