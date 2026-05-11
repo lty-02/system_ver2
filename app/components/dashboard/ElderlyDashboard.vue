@@ -250,6 +250,9 @@ async function loadChartJS() {
   })
 }
 
+// 用於識別含有村里面幾何的人口圖層
+const GEO_KEYWORDS = ['人口指標', '村里人口', '統計區人口']
+
 // ── WebScene 圖層 URL 查找 ────────────────────────────────────
 async function findLayerUrls(): Promise<{
   urls: Record<IdxKey, { cur: string|null; prev: string|null }>
@@ -270,19 +273,20 @@ async function findLayerUrls(): Promise<{
       const b = raw.replace(/\/+$/, '')
       return b.endsWith('/0') ? b : `${b}/0`
     }
-    let elderlyFallback: string|null = null
     ws.allLayers.forEach((l: any) => {
       const title = l.title ?? ''
       const raw   = l.url ?? l.parsedUrl?.path ?? ''
       if (!raw) return
       const url = fmt(raw)
+      // 優先用含有人口指標關鍵字的圖層作為幾何來源
+      if (!geoUrl && GEO_KEYWORDS.some(k => title.includes(k))) {
+        geoUrl = url
+        console.log('[EldDash] geoUrl (人口圖層):', title, url)
+      }
+      // 銀髮安居各指數圖層
       const yrM = title.match(/^(\d{4})年/)
       if (!yrM) return
       const year = parseInt(yrM[1])
-      const isElderly = INDICES.some(idx => title.includes(idx.suffix))
-      // 優先使用非銀髮安居圖層作為村里幾何來源（人口圖層有面幾何）
-      if (!isElderly && !geoUrl) geoUrl = url
-      if (isElderly && !elderlyFallback) elderlyFallback = url
       for (const idx of INDICES) {
         if (title.includes(idx.suffix)) {
           if (!yearMap.has(idx.key)) yearMap.set(idx.key, [])
@@ -290,8 +294,19 @@ async function findLayerUrls(): Promise<{
         }
       }
     })
-    if (!geoUrl) geoUrl = elderlyFallback
-    console.log('[EldDash] geoUrl:', geoUrl)
+    if (!geoUrl) {
+      // 備援：任何非銀髮安居的年份圖層
+      ws.allLayers.forEach((l: any) => {
+        if (geoUrl) return
+        const title = l.title ?? ''
+        const raw = l.url ?? l.parsedUrl?.path ?? ''
+        if (!raw || !title.match(/^(\d{4})年/)) return
+        if (!INDICES.some(idx => title.includes(idx.suffix))) {
+          geoUrl = fmt(raw)
+          console.log('[EldDash] geoUrl (備援):', title, geoUrl)
+        }
+      })
+    }
     console.log('[EldDash] yearMap:', [...yearMap.entries()].map(([k, v]) => `${k}:${v.map(e => e.year).join(',')}`).join(' | '))
   } catch(e) { console.warn('[EldDash] findLayerUrls 失敗', e) }
 
@@ -304,38 +319,34 @@ async function findLayerUrls(): Promise<{
     urls[key as IdxKey].cur  = sorted[0]?.url ?? null
     urls[key as IdxKey].prev = sorted[1]?.url ?? null
   }
-  console.log('[EldDash] URLs:', JSON.stringify(urls))
   return { urls, geoUrl }
 }
 
-// ── 泛用特徵查詢（依序嘗試多個鄉鎮過濾條件）────────────────────
-async function queryFeatures(url: string, withGeo = false): Promise<any[]> {
-  const fl = new FeatureLayer({ url, outFields: ['*'] })
+// ── 屬性資料查詢（同 PopulationDashboard：definitionExpression + where:'1=1'）
+async function queryAttribs(url: string): Promise<any[]> {
+  // 先嘗試 definitionExpression 方式（最穩定）
+  const fl = new FeatureLayer({ url, outFields: ['*'], definitionExpression: TOWN_FILTER })
   try { await fl.load() } catch {}
-
-  const filters = [
-    "TOWNCODE = '67000200'",
-    "TOWN = '新市區'",
-    "VILLCODE LIKE '670002%'",
-    "VILLCODE LIKE '67000200%'",
-  ]
-  for (const where of filters) {
+  try {
+    const res = await fl.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: false })
+    if (res.features.length > 0) {
+      console.log(`[EldDash] queryAttribs OK (definitionExpression): ${res.features.length} 筆`)
+      return res.features
+    }
+  } catch {}
+  // 備援：逐一嘗試其他過濾條件
+  for (const where of ["TOWN = '新市區'", "VILLCODE LIKE '670002%'"]) {
     try {
-      const res = await fl.queryFeatures({ where, outFields: ['*'], returnGeometry: withGeo })
+      const fl2 = new FeatureLayer({ url, outFields: ['*'] })
+      await fl2.load()
+      const res = await fl2.queryFeatures({ where, outFields: ['*'], returnGeometry: false })
       if (res.features.length > 0) {
-        console.log(`[EldDash] 過濾成功 (${where}): ${res.features.length} 筆`)
+        console.log(`[EldDash] queryAttribs OK (${where}): ${res.features.length} 筆`)
         return res.features
       }
     } catch {}
   }
-
-  // 印出可用欄位便於診斷
-  try {
-    const s = await fl.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: false, num: 1 })
-    if (s.features.length) {
-      console.warn('[EldDash] 所有過濾失敗，可用欄位:', Object.keys(s.features[0].attributes ?? {}))
-    }
-  } catch {}
+  console.warn('[EldDash] queryAttribs 全部失敗:', url)
   return []
 }
 
@@ -797,24 +808,17 @@ onMounted(async () => {
   await loadArcGIS()
   const { urls, geoUrl } = await findLayerUrls()
 
-  // 銀髮安居圖層為統計屬性表，不含面幾何；先從人口/其他圖層取幾何
-  if (geoUrl) {
-    const geoFeats = await queryFeatures(geoUrl, true)
-    cacheGeo(geoFeats)
-    console.log('[EldDash] cachedGeos:', cachedGeos.length, cachedGeos.map(g => g.name))
-  }
-
-  // 並行載入所有最新年份圖層（不需要幾何）
+  // 並行載入最新年份屬性資料（同 PopulationDashboard loadYearData 模式）
   await Promise.all(INDICES.map(async idx => {
     const u = urls[idx.key]
     if (!u?.cur) return
-    const feats = await queryFeatures(u.cur, false)
+    const feats = await queryAttribs(u.cur)
     switch (idx.key) {
-      case 'mob':   processMob(feats,   scores24.mob);              break
-      case 'care':  processCare(feats,  scores24.care);             break
-      case 'eco':   processEco(feats,   scores24.eco);              break
-      case 'house': processHouse(feats, scores24.house, true);      break
-      case 'env':   processEnv(feats,   scores24.env,   true);      break
+      case 'mob':   processMob(feats,   scores24.mob);         break
+      case 'care':  processCare(feats,  scores24.care);        break
+      case 'eco':   processEco(feats,   scores24.eco);         break
+      case 'house': processHouse(feats, scores24.house, true); break
+      case 'env':   processEnv(feats,   scores24.env,   true); break
     }
   }))
 
@@ -823,39 +827,33 @@ onMounted(async () => {
   await nextTick()
   redrawAll()
 
+  // 初始化地圖（同 PopulationDashboard initMap）
   await initMap()
 
-  if (cachedGeos.length) {
-    applyChoro('mob')
-    // goTo 村里範圍
+  // 用人口/幾何圖層取村里面幾何（完全同 PopulationDashboard getGeometries 模式）
+  if (geoUrl) {
+    const flGeo = new FeatureLayer({ url: geoUrl, outFields: ['*'], definitionExpression: TOWN_FILTER })
+    try { await flGeo.load() } catch (e) { console.warn('[EldDash] flGeo.load 失敗', e) }
+    try { await mapView.goTo(flGeo.fullExtent.expand(1.4)) } catch {}
     try {
-      const extents = cachedGeos.map(g => g.geometry?.extent).filter(Boolean)
-      if (extents.length) {
-        await mapView.goTo({
-          target: {
-            xmin: Math.min(...extents.map((e: any) => e.xmin)),
-            ymin: Math.min(...extents.map((e: any) => e.ymin)),
-            xmax: Math.max(...extents.map((e: any) => e.xmax)),
-            ymax: Math.max(...extents.map((e: any) => e.ymax)),
-            spatialReference: extents[0].spatialReference,
-          },
-          padding: { top: 10, bottom: 10, left: 10, right: 10 },
-        })
-      }
-    } catch {}
+      const res = await flGeo.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
+      cacheGeo(res.features)
+      console.log('[EldDash] cachedGeos:', cachedGeos.length, cachedGeos.map(g => g.name))
+    } catch (e) { console.warn('[EldDash] geo query 失敗', e) }
   }
 
+  if (cachedGeos.length) applyChoro('mob')
   mapLoading.value = false
 
   // 背景載入前一年（用於變化量）
   Promise.all(INDICES.map(async idx => {
     const u = urls[idx.key]
     if (!u?.prev) return
-    const feats = await queryFeatures(u.prev, false)
+    const feats = await queryAttribs(u.prev)
     switch (idx.key) {
-      case 'mob':   processMob(feats,   scores23.mob);         break
-      case 'care':  processCare(feats,  scores23.care);        break
-      case 'eco':   processEco(feats,   scores23.eco);         break
+      case 'mob':   processMob(feats,   scores23.mob);          break
+      case 'care':  processCare(feats,  scores23.care);         break
+      case 'eco':   processEco(feats,   scores23.eco);          break
       case 'house': processHouse(feats, scores23.house, false); break
       case 'env':   processEnv(feats,   scores23.env,   false); break
     }
