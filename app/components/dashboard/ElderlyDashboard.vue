@@ -161,11 +161,11 @@ const INDICES = [
   { key: 'eco'   as IdxKey, shortLabel: '經濟狀況', color: '#7A989A',
     colors: ['#e4ecec','#b8ccce','#7A989A','#4a7274','#27403D'],
     suffix: '經濟狀況需求指數' },
-  { key: 'house' as IdxKey, shortLabel: '住宅狀況', color: '#48725C',
-    colors: ['#ecf3ef','#b0cfc0','#48725C','#2a4a38','#162b21'],
+  { key: 'house' as IdxKey, shortLabel: '住宅狀況', color: '#C67052',
+    colors: ['#fdf0eb','#f0c4af','#E07B42','#C67052','#8a3e28'],
     suffix: '住宅狀況需求指數' },
-  { key: 'env'   as IdxKey, shortLabel: '環境安全', color: '#849271',
-    colors: ['#f3f2ed','#cccdb5','#849271','#566050','#2e3429'],
+  { key: 'env'   as IdxKey, shortLabel: '環境安全', color: '#B3A86A',
+    colors: ['#fdf8ed','#ece0b5','#D4BE78','#B3A86A','#7a6a38'],
     suffix: '環境安全需求指數' },
 ] as const
 
@@ -671,8 +671,8 @@ function drawCare() {
       labels: ['同住/非獨居 (N11)', '老老照顧 (N12)', '獨居 (N13)'],
       datasets: [{
         data: vals,
-        backgroundColor: ['#AEC17Bcc', '#CF9546cc', '#C1395Ecc'],
-        borderColor:      ['#AEC17B',   '#CF9546',   '#C1395E'],
+        backgroundColor: ['#89A7C2cc', '#CF9546cc', '#C1395Ecc'],
+        borderColor:      ['#89A7C2',   '#CF9546',   '#C1395E'],
         borderWidth: 1.5,
       }],
     },
@@ -711,7 +711,7 @@ function drawEco() {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c: any) => ` 弱勢: ${Number(c.raw).toFixed(1)}%` } } },
       scales: {
-        x: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 9 } }, max: 100 },
+        x: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 9 } }, max: 20 },
         y: { grid: { display: false }, ticks: { font: { size: 8 } } },
       },
     },
@@ -734,9 +734,9 @@ function drawHouse() {
     data: {
       labels: sorted.map(([n]) => n),
       datasets: [
-        { label: '老屋≥30年', data: sorted.map(([, v]) => pct(v.e12, v.total)), backgroundColor: '#48725Ccc', borderColor: '#48725C', borderWidth: 1 },
-        { label: '無電梯公寓', data: sorted.map(([, v]) => pct(v.e22, v.total)), backgroundColor: '#AEC17Bcc', borderColor: '#AEC17B', borderWidth: 1 },
-        { label: '非RC結構', data: sorted.map(([, v]) => pct(v.e32, v.total)), backgroundColor: '#B3A86Acc', borderColor: '#B3A86A', borderWidth: 1 },
+        { label: '老屋≥30年', data: sorted.map(([, v]) => pct(v.e12, v.total)), backgroundColor: '#C67052cc', borderColor: '#C67052', borderWidth: 1 },
+        { label: '無電梯公寓', data: sorted.map(([, v]) => pct(v.e22, v.total)), backgroundColor: '#E07B42cc', borderColor: '#E07B42', borderWidth: 1 },
+        { label: '非RC結構', data: sorted.map(([, v]) => pct(v.e32, v.total)), backgroundColor: '#F0CA50cc', borderColor: '#F0CA50', borderWidth: 1 },
       ],
     },
     options: {
@@ -764,8 +764,8 @@ function drawEnv() {
       labels: ['土壤液化潛勢', '地質敏感帶', '淹水潛勢'],
       datasets: [{
         data: [+lique.toFixed(1), +fault.toFixed(1), +flood.toFixed(1)],
-        backgroundColor: ['#849271cc', '#C67052cc', '#7A989Acc'],
-        borderColor:      ['#849271',   '#C67052',   '#7A989A'],
+        backgroundColor: ['#B3A86Acc', '#C67052cc', '#89A7C2cc'],
+        borderColor:      ['#B3A86A',   '#C67052',   '#89A7C2'],
         borderWidth: 1.5,
       }],
     },

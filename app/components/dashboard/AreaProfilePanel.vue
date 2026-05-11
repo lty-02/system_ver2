@@ -48,6 +48,7 @@
             :key="t.id"
             class="theme-item"
             :class="{ active: activeTheme === t.id }"
+            :style="`--c:${t.color};--bg:${t.lightBg}`"
             @click="setTheme(t.id)"
           >
             <div class="theme-chip" :style="{ background: t.lightBg }">
@@ -98,40 +99,40 @@ const themes = [
     id: 'population',
     name: '人口結構',
     sub: '年齡、出生、自然增減',
-    color: '#3b82f6',
-    lightBg: '#eff6ff',
+    color: '#8CABD9',
+    lightBg: '#eef4fb',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
   },
   {
     id: 'housing',
     name: '房市交易',
     sub: '成交量、單價、房型',
-    color: '#f97316',
-    lightBg: '#fff7ed',
+    color: '#CF9546',
+    lightBg: '#fdf5e6',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
   },
   {
     id: 'amenity',
     name: '生活機能',
     sub: '醫療、交通、商業',
-    color: '#22c55e',
-    lightBg: '#f0fdf4',
+    color: '#48725C',
+    lightBg: '#ecf3ef',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
   },
   {
     id: 'education',
     name: '教育與福利機構',
     sub: '學校、社福、托育、長照',
-    color: '#a855f7',
-    lightBg: '#faf5ff',
+    color: '#AEC17B',
+    lightBg: '#f3f7ea',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>',
   },
   {
     id: 'elderly',
     name: '銀髮安居',
     sub: '老化指數、獨居、長照需求',
-    color: '#f43f5e',
-    lightBg: '#fff1f2',
+    color: '#C1395E',
+    lightBg: '#fceef2',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>',
   },
 ]
@@ -156,10 +157,10 @@ function setTheme(id: string) {
 }
 .intro-icon {
   width: 40px; height: 40px; border-radius: 10px;
-  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+  background: linear-gradient(135deg, #eef4fb, #d8e8f5);
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-.intro-icon svg { width: 20px; height: 20px; color: #1d4ed8; }
+.intro-icon svg { width: 20px; height: 20px; color: #5a7ea0; }
 .intro-title { font-size: 15px; font-weight: 600; color: #1e293b; }
 .intro-sub { font-size: 12px; color: #94a3b8; margin-top: 2px; }
 
@@ -181,7 +182,7 @@ function setTheme(id: string) {
 }
 .role-tab:hover { border-color: #cbd5e1; background: #fff; color: #1e293b; }
 .role-tab.active {
-  border-color: #93c5fd; background: #eff6ff; color: #1d4ed8; font-weight: 600;
+  border-color: #8CABD9; background: #eef4fb; color: #4a6e8a; font-weight: 600;
 }
 
 /* 主題清單 */
@@ -194,7 +195,7 @@ function setTheme(id: string) {
   text-align: left; transition: all 0.15s; width: 100%;
 }
 .theme-item:hover { background: #f8fafc; border-color: #e2e8f0; }
-.theme-item.active { background: #f8fafc; border-color: #e2e8f0; }
+.theme-item.active { background: var(--bg, #f8fafc); border-color: var(--c, #e2e8f0); }
 
 .theme-chip {
   width: 36px; height: 36px; border-radius: 9px;
@@ -205,11 +206,12 @@ function setTheme(id: string) {
 
 .theme-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .theme-name { font-size: 13px; font-weight: 500; color: #1e293b; }
-.theme-item.active .theme-name { font-weight: 600; color: #1d4ed8; }
+.theme-item.active .theme-name { font-weight: 600; color: var(--c, #1d4ed8); }
 .theme-sub { font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .theme-chevron { color: #cbd5e1; flex-shrink: 0; transition: color 0.15s; }
-.theme-item:hover .theme-chevron, .theme-item.active .theme-chevron { color: #93c5fd; }
+.theme-item:hover .theme-chevron { color: #b0bec5; }
+.theme-item.active .theme-chevron { color: var(--c, #93c5fd); }
 
 /* 決策機關提示 */
 .authority-hint {

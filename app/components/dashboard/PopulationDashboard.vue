@@ -106,9 +106,9 @@
       <!-- 扶幼比：長條 + 均線 -->
       <div class="ind-card" :class="{ 'card-active': activeCard==='A0A14_A15A65_RAT' }" @click="activateCard('A0A14_A15A65_RAT')">
         <div class="card-hd">
-          <span class="card-title"><span class="card-dot" style="background:#22c55e"></span>扶幼比（含均線）</span>
+          <span class="card-title"><span class="card-dot" style="background:#F0CA50"></span>扶幼比（含均線）</span>
           <div class="card-actions">
-            <span class="stat-mini" v-if="stats.A0A14_A15A65_RAT">平均 <b :style="{color:'#22c55e'}">{{ stats.A0A14_A15A65_RAT.avg }}</b></span>
+            <span class="stat-mini" v-if="stats.A0A14_A15A65_RAT">平均 <b :style="{color:'#F0CA50'}">{{ stats.A0A14_A15A65_RAT.avg }}</b></span>
             <button class="chg-btn" :class="{ on: changeMode.A0A14_A15A65_RAT }" @click.stop="toggleChange('A0A14_A15A65_RAT')">
               {{ changeMode.A0A14_A15A65_RAT ? '現值' : '變化量' }}
             </button>
@@ -161,7 +161,7 @@ const CARDS = [
   { key: 'DEPENDENCY_RAT',    shortLabel: '扶養比',  color: '#8CABD9', colors: ['#ddeaf5','#b8d0e8','#8CABD9','#5e89bb','#2d5a8e'] },
   { key: 'A65_A0A14_RAT',     shortLabel: '老化指數', color: '#CF9546', colors: ['#fdf5e4','#f5d9a0','#F0CA50','#CF9546','#8a5e22'] },
   { key: 'P_DEN',             shortLabel: '人口密度', color: '#7A989A', colors: ['#e4ecec','#b8ccce','#7A989A','#4a7274','#27403D'] },
-  { key: 'A0A14_A15A65_RAT',  shortLabel: '扶幼比',  color: '#AEC17B', colors: ['#f3f7ea','#d4e5b0','#AEC17B','#849271','#48725C'] },
+  { key: 'A0A14_A15A65_RAT',  shortLabel: '扶幼比',  color: '#F0CA50', colors: ['#fdfae4','#f5e898','#F0CA50','#CF9546','#8a5e22'] },
   { key: 'A65UP_A15A64_RAT',  shortLabel: '扶老比',  color: '#C67052', colors: ['#fdf0eb','#f0c4af','#E07B42','#C67052','#8a3e28'] },
 ] as const
 
@@ -492,7 +492,7 @@ function drawDependency() {
       datasets: [
         {
           label: '扶幼比', data: rows.map(r=>+r.youth.toFixed(2)),
-          backgroundColor: '#AEC17Bcc', borderColor: '#AEC17B', borderWidth:1, borderRadius:0, stack:'dep',
+          backgroundColor: '#F0CA50cc', borderColor: '#F0CA50', borderWidth:1, borderRadius:0, stack:'dep',
         },
         {
           label: '扶老比', data: rows.map(r=>+r.elder.toFixed(2)),
@@ -522,8 +522,8 @@ function drawDependency() {
         labels: ['少齡 0–14', '工作 15–64', '老齡 65+'],
         datasets:[{
           data: [pct(avgY), pct(100), pct(avgE)],
-          backgroundColor: ['#AEC17Bcc','#8CABD9cc','#C67052cc'],
-          borderColor:      ['#AEC17B',  '#8CABD9',  '#C67052'],
+          backgroundColor: ['#F0CA50cc','#8CABD9cc','#C67052cc'],
+          borderColor:      ['#F0CA50',  '#8CABD9',  '#C67052'],
           borderWidth: 1.5,
         }],
       },
@@ -588,13 +588,13 @@ function drawDensity() {
 function drawYouth() {
   const canvas = canvasRefs.get('A0A14_A15A65_RAT'); if (!canvas || !Chart) return
   chartInst.get('A0A14_A15A65_RAT')?.destroy()
-  if (changeMode.A0A14_A15A65_RAT) { drawDivBar('A0A14_A15A65_RAT', changeRows.value.map(r=>({name:r.name,val:r.youth})), '#AEC17B'); return }
+  if (changeMode.A0A14_A15A65_RAT) { drawDivBar('A0A14_A15A65_RAT', changeRows.value.map(r=>({name:r.name,val:r.youth})), '#F0CA50'); return }
   const sorted = [...villageData.value].sort((a,b)=>b.youth-a.youth).slice(0,TOP_N)
   const avg = villageData.value.reduce((s,r)=>s+r.youth,0)/(villageData.value.length||1)
   chartInst.set('A0A14_A15A65_RAT', new Chart(canvas, {
     type:'bar',
     data:{ labels:sorted.map(r=>r.name), datasets:[
-      { type:'bar', data:sorted.map(r=>+r.youth.toFixed(3)), backgroundColor:'#AEC17Bcc', borderColor:'#AEC17B', borderWidth:1, borderRadius:2, yAxisID:'y' },
+      { type:'bar', data:sorted.map(r=>+r.youth.toFixed(3)), backgroundColor:'#F0CA50cc', borderColor:'#F0CA50', borderWidth:1, borderRadius:2, yAxisID:'y' },
       { type:'line', data:sorted.map(()=>+avg.toFixed(3)), borderColor:'#94a3b8', borderDash:[4,3], borderWidth:1.5, pointRadius:0, yAxisID:'y', tension:0, label:'均值' },
     ] },
     options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{grid:{color:'#f1f5f9'},ticks:{font:{size:9}}}, y:{grid:{display:false},ticks:{font:{size:9}}} } },
