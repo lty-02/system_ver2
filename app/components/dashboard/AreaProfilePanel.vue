@@ -66,16 +66,30 @@
       </div>
     </transition>
 
-    <!-- 決策機關提示 -->
+    <!-- 決策機關主題 -->
     <transition name="slide-fade">
       <div v-if="role === 'authority'" class="panel-section">
-        <div class="authority-hint">
-          <div class="hint-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        <div class="section-label">分析主題</div>
+        <div class="theme-list">
+          <button
+            v-for="t in authorityThemes"
+            :key="t.id"
+            class="theme-item"
+            :class="{ active: activeTheme === t.id }"
+            :style="`--c:${t.color};--bg:${t.lightBg}`"
+            @click="setTheme(t.id)"
+          >
+            <div class="theme-chip" :style="{ background: t.lightBg }">
+              <span class="theme-chip-icon" :style="{ color: t.color }" v-html="t.icon" />
+            </div>
+            <div class="theme-text">
+              <span class="theme-name">{{ t.name }}</span>
+              <span class="theme-sub">{{ t.sub }}</span>
+            </div>
+            <svg class="theme-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
+              <path d="M9 18l6-6-6-6"/>
             </svg>
-          </div>
-          <p class="hint-text">決策機關頁面正在規劃中，敬請期待。</p>
+          </button>
         </div>
       </div>
     </transition>
@@ -93,6 +107,17 @@ const emit = defineEmits<{
 
 const role = ref<'public' | 'authority'>('public')
 const activeTheme = ref('population')
+
+const authorityThemes = [
+  {
+    id: 'vulnerability',
+    name: '社會脆弱度',
+    sub: '危害度、暴露量、應變、復原能力',
+    color: '#7A4F7B',
+    lightBg: '#f5eef7',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4M12 16h.01"/></svg>',
+  },
+]
 
 const themes = [
   {
@@ -139,7 +164,10 @@ const themes = [
 
 function setRole(r: 'public' | 'authority') {
   role.value = r
+  const defaultTheme = r === 'authority' ? 'vulnerability' : 'population'
+  activeTheme.value = defaultTheme
   emit('role-change', r)
+  emit('theme-change', defaultTheme)
 }
 
 function setTheme(id: string) {

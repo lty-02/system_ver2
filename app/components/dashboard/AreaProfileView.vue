@@ -1,17 +1,19 @@
 <template>
   <div class="ap-root">
 
-    <!-- 決策機關：空白預留 -->
-    <div v-if="userRole === 'authority'" class="empty-authority">
+    <!-- 決策機關：社會脆弱度 -->
+    <SocialVulnerabilityDashboard v-if="userRole === 'authority' && theme === 'vulnerability'" />
+
+    <!-- 決策機關：尚未選擇主題 -->
+    <div v-else-if="userRole === 'authority'" class="empty-authority">
       <div class="empty-box">
         <div class="empty-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40">
-            <path d="M2 7h20M2 17h20M5 3v18M19 3v18"/>
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
           </svg>
         </div>
-        <h3 class="empty-title">決策機關頁面</h3>
-        <p class="empty-desc">此頁面正在規劃設計中，將提供決策所需的進階分析視圖。</p>
-        <div class="empty-badge">Coming Soon</div>
+        <h3 class="empty-title">決策機關儀表板</h3>
+        <p class="empty-desc">請從左側面板選擇分析主題以開始探索。</p>
       </div>
     </div>
 
@@ -227,8 +229,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import PopulationDashboard from '@/components/dashboard/PopulationDashboard.vue'
-import ElderlyDashboard    from '@/components/dashboard/ElderlyDashboard.vue'
+import PopulationDashboard          from '@/components/dashboard/PopulationDashboard.vue'
+import ElderlyDashboard             from '@/components/dashboard/ElderlyDashboard.vue'
+import SocialVulnerabilityDashboard from '@/components/dashboard/SocialVulnerabilityDashboard.vue'
 
 const props = withDefaults(defineProps<{
   userRole?: 'public' | 'authority'
