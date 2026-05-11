@@ -296,34 +296,47 @@ async function findLayerUrls(): Promise<Record<IdxKey, { cur: string|null; prev:
   return urls
 }
 
-// ── 查詢（含幾何，同 PopulationDashboard：definitionExpression + where:'1=1'）
+// ── 查詢（含幾何）──────────────────────────────────────────────
 async function queryWithGeo(url: string): Promise<any[]> {
-  const fl = new FeatureLayer({ url, outFields: ['*'], definitionExpression: TOWN_FILTER })
+  const fl = new FeatureLayer({ url, outFields: ['*'] })
   try { await fl.load() } catch {}
+
+  // 先取 1 筆診斷欄位名稱與可用過濾條件
+  let sampleAttrs: Record<string, unknown> = {}
   try {
-    const res = await fl.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
-    if (res.features.length > 0) {
-      console.log(`[EldDash] queryWithGeo OK: ${res.features.length} 筆, 幾何: ${res.features.filter((f: any) => f.geometry).length}`)
-      return res.features
+    const s = await fl.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: false, num: 1 })
+    if (s.features.length) {
+      sampleAttrs = s.features[0].attributes ?? {}
+      const allKeys = Object.keys(sampleAttrs)
+      const comboKeys = allKeys.filter(k => COMB_RE.test(k))
+      const metaKeys  = allKeys.filter(k => !COMB_RE.test(k))
+      console.log('[EldDash] meta fields:', metaKeys)
+      console.log('[EldDash] combo fields count:', comboKeys.length, '範例:', comboKeys.slice(0, 3))
     }
   } catch {}
-  for (const where of ["TOWN = '新市區'", "VILLCODE LIKE '670002%'"]) {
+
+  // 逐一嘗試過濾條件（含整數與字串 TOWNCODE 兩種格式）
+  const filters = [
+    TOWN_FILTER,                          // "TOWNCODE = '67000200'"（字串）
+    "TOWNCODE = 67000200",                // 整數格式
+    "TOWN = '新市區'",
+    "VILLCODE LIKE '670002%'",
+  ]
+  for (const where of filters) {
     try {
-      const fl2 = new FeatureLayer({ url, outFields: ['*'] })
-      await fl2.load()
-      const res = await fl2.queryFeatures({ where, outFields: ['*'], returnGeometry: true })
-      if (res.features.length > 0) {
-        console.log(`[EldDash] queryWithGeo fallback (${where}): ${res.features.length} 筆`)
+      const res = await fl.queryFeatures({ where, outFields: ['*'], returnGeometry: true })
+      if (res.features.length > 0 && res.features.length < 100) {
+        console.log(`[EldDash] queryWithGeo OK (${where}): ${res.features.length} 筆, 幾何: ${res.features.filter((f: any) => f.geometry).length}`)
         return res.features
       }
     } catch {}
   }
-  console.warn('[EldDash] queryWithGeo 全部失敗:', url)
+  console.warn('[EldDash] 所有過濾失敗，請確認欄位:', Object.keys(sampleAttrs).filter(k => !COMB_RE.test(k)))
   return []
 }
 
-// ── 組合欄位偵測 & 村里名稱解析 ─────────────────────────────
-const COMB_RE = /^[A-Z]\d{2}[A-Z]\d{2}[A-Z]\d{2}$/
+// ── 組合欄位偵測（大小寫不敏感）& 村里名稱解析 ───────────────
+const COMB_RE = /^[A-Za-z]\d{2}[A-Za-z]\d{2}[A-Za-z]\d{2}$/
 
 function villName(a: Record<string, unknown>): string {
   // 依序嘗試常見村里名稱欄位（含 NCKU portal 常用命名）
@@ -355,7 +368,7 @@ function processMob(features: any[], target: ScoreMap) {
       if (!COMB_RE.test(k)) continue
       const n = +(raw ?? 0); if (!(n > 0)) continue
       total += n
-      const c3 = k.slice(6)
+      const c3 = k.slice(6, 9).toUpperCase()
       if (c3 === 'A32' || c3 === 'A33') highNeed += n
       bd[c3] = (bd[c3] ?? 0) + n
     }
@@ -375,7 +388,7 @@ function processCare(features: any[], target: ScoreMap) {
       if (!COMB_RE.test(k)) continue
       const n = +(raw ?? 0); if (!(n > 0)) continue
       total += n
-      const c1 = k.slice(0, 3)
+      const c1 = k.slice(0, 3).toUpperCase()
       if (c1 === 'N13') highNeed += n
       if (c1 in bd) bd[c1] += n
     }
@@ -395,7 +408,7 @@ function processEco(features: any[], target: ScoreMap) {
       if (!COMB_RE.test(k)) continue
       const n = +(raw ?? 0); if (!(n > 0)) continue
       total += n
-      const c1 = k.slice(0, 3)
+      const c1 = k.slice(0, 3).toUpperCase()
       if (c1 === 'G12' || c1 === 'G13') highNeed += n
       if (c1 in bd) bd[c1] += n
     }
@@ -405,7 +418,6 @@ function processEco(features: any[], target: ScoreMap) {
 }
 
 // ── 住宅狀況（E1x=屋齡, E2x=電梯, E3x=結構）─────────────────
-// 高需求 = E12/E13（老屋）；grouped bar 另顯示無電梯E22、非RC E32
 function processHouse(features: any[], target: ScoreMap, isCurrent = false) {
   const villMap = new Map<string, { e12: number; e22: number; e32: number; total: number }>()
   for (const f of features) {
@@ -417,7 +429,9 @@ function processHouse(features: any[], target: ScoreMap, isCurrent = false) {
       if (!COMB_RE.test(k)) continue
       const n = +(raw ?? 0); if (!(n > 0)) continue
       vm.total += n
-      const c1 = k.slice(0, 3), c2 = k.slice(3, 6), c3 = k.slice(6)
+      const c1 = k.slice(0, 3).toUpperCase()
+      const c2 = k.slice(3, 6).toUpperCase()
+      const c3 = k.slice(6, 9).toUpperCase()
       if (c1 === 'E12' || c1 === 'E13') vm.e12 += n
       if (c2 === 'E22') vm.e22 += n
       if (c3 === 'E32') vm.e32 += n
@@ -428,7 +442,6 @@ function processHouse(features: any[], target: ScoreMap, isCurrent = false) {
 }
 
 // ── 環境安全（S1x=液化, S2x=斷層, S3x=淹水）────────────────
-// 高風險 = S12/S13 OR S22 OR S32/S33
 function processEnv(features: any[], target: ScoreMap, isCurrent = false) {
   const area = { lique: 0, fault: 0, flood: 0, total: 0 }
   const tmp = new Map<string, { lique: number; fault: number; flood: number; total: number }>()
@@ -441,7 +454,9 @@ function processEnv(features: any[], target: ScoreMap, isCurrent = false) {
       if (!COMB_RE.test(k)) continue
       const n = +(raw ?? 0); if (!(n > 0)) continue
       vm.total += n; area.total += n
-      const c1 = k.slice(0, 3), c2 = k.slice(3, 6), c3 = k.slice(6)
+      const c1 = k.slice(0, 3).toUpperCase()
+      const c2 = k.slice(3, 6).toUpperCase()
+      const c3 = k.slice(6, 9).toUpperCase()
       if (c1 === 'S12' || c1 === 'S13') { vm.lique += n; area.lique += n }
       if (c2 === 'S22')                 { vm.fault += n; area.fault += n }
       if (c3 === 'S32' || c3 === 'S33') { vm.flood += n; area.flood += n }
@@ -485,11 +500,13 @@ function applyChoro(idxKey: IdxKey) {
   const colors = def.colors
 
   const vals = [...sm.values()].map(v => v.score).filter(isFinite)
+  if (!vals.length) { console.warn('[EldDash] applyChoro: no scores for', idxKey); return }
   const mn = Math.min(...vals), mx = Math.max(...vals)
-  if (!isFinite(mn) || mn === mx) return
+  // 若全部相同（含全 0），仍用最低色渲染輪廓
+  const range = mn === mx ? 1 : mx - mn
 
   const toRgba = (score: number) => {
-    const t = (score - mn) / (mx - mn)
+    const t = (score - mn) / range
     const idx = Math.min(colors.length - 1, Math.floor(t * colors.length))
     const hex = colors[idx]!
     return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16), 220]
