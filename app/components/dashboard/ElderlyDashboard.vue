@@ -250,16 +250,9 @@ async function loadChartJS() {
   })
 }
 
-// 用於識別含有村里面幾何的人口圖層
-const GEO_KEYWORDS = ['人口指標', '村里人口', '統計區人口']
-
 // ── WebScene 圖層 URL 查找 ────────────────────────────────────
-async function findLayerUrls(): Promise<{
-  urls: Record<IdxKey, { cur: string|null; prev: string|null }>
-  geoUrl: string|null
-}> {
+async function findLayerUrls(): Promise<Record<IdxKey, { cur: string|null; prev: string|null }>> {
   const yearMap = new Map<IdxKey, Array<{ year: number; url: string }>>()
-  let geoUrl: string|null = null
 
   try {
     const { default: Portal }   = await import('@arcgis/core/portal/Portal')
@@ -278,12 +271,6 @@ async function findLayerUrls(): Promise<{
       const raw   = l.url ?? l.parsedUrl?.path ?? ''
       if (!raw) return
       const url = fmt(raw)
-      // 優先用含有人口指標關鍵字的圖層作為幾何來源
-      if (!geoUrl && GEO_KEYWORDS.some(k => title.includes(k))) {
-        geoUrl = url
-        console.log('[EldDash] geoUrl (人口圖層):', title, url)
-      }
-      // 銀髮安居各指數圖層
       const yrM = title.match(/^(\d{4})年/)
       if (!yrM) return
       const year = parseInt(yrM[1])
@@ -294,19 +281,6 @@ async function findLayerUrls(): Promise<{
         }
       }
     })
-    if (!geoUrl) {
-      // 備援：任何非銀髮安居的年份圖層
-      ws.allLayers.forEach((l: any) => {
-        if (geoUrl) return
-        const title = l.title ?? ''
-        const raw = l.url ?? l.parsedUrl?.path ?? ''
-        if (!raw || !title.match(/^(\d{4})年/)) return
-        if (!INDICES.some(idx => title.includes(idx.suffix))) {
-          geoUrl = fmt(raw)
-          console.log('[EldDash] geoUrl (備援):', title, geoUrl)
-        }
-      })
-    }
     console.log('[EldDash] yearMap:', [...yearMap.entries()].map(([k, v]) => `${k}:${v.map(e => e.year).join(',')}`).join(' | '))
   } catch(e) { console.warn('[EldDash] findLayerUrls 失敗', e) }
 
@@ -319,42 +293,43 @@ async function findLayerUrls(): Promise<{
     urls[key as IdxKey].cur  = sorted[0]?.url ?? null
     urls[key as IdxKey].prev = sorted[1]?.url ?? null
   }
-  return { urls, geoUrl }
+  return urls
 }
 
-// ── 屬性資料查詢（同 PopulationDashboard：definitionExpression + where:'1=1'）
-async function queryAttribs(url: string): Promise<any[]> {
-  // 先嘗試 definitionExpression 方式（最穩定）
+// ── 查詢（含幾何，同 PopulationDashboard：definitionExpression + where:'1=1'）
+async function queryWithGeo(url: string): Promise<any[]> {
   const fl = new FeatureLayer({ url, outFields: ['*'], definitionExpression: TOWN_FILTER })
   try { await fl.load() } catch {}
   try {
-    const res = await fl.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: false })
+    const res = await fl.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
     if (res.features.length > 0) {
-      console.log(`[EldDash] queryAttribs OK (definitionExpression): ${res.features.length} 筆`)
+      console.log(`[EldDash] queryWithGeo OK: ${res.features.length} 筆, 幾何: ${res.features.filter((f: any) => f.geometry).length}`)
       return res.features
     }
   } catch {}
-  // 備援：逐一嘗試其他過濾條件
   for (const where of ["TOWN = '新市區'", "VILLCODE LIKE '670002%'"]) {
     try {
       const fl2 = new FeatureLayer({ url, outFields: ['*'] })
       await fl2.load()
-      const res = await fl2.queryFeatures({ where, outFields: ['*'], returnGeometry: false })
+      const res = await fl2.queryFeatures({ where, outFields: ['*'], returnGeometry: true })
       if (res.features.length > 0) {
-        console.log(`[EldDash] queryAttribs OK (${where}): ${res.features.length} 筆`)
+        console.log(`[EldDash] queryWithGeo fallback (${where}): ${res.features.length} 筆`)
         return res.features
       }
     } catch {}
   }
-  console.warn('[EldDash] queryAttribs 全部失敗:', url)
+  console.warn('[EldDash] queryWithGeo 全部失敗:', url)
   return []
 }
 
-// ── 欄位名稱解析（含 10 字截斷）───────────────────────────────
-function rk(attrs: Record<string, unknown>, key: string): string {
-  const up = key.toUpperCase()
-  const p10 = up.slice(0, 10)
-  return Object.keys(attrs).find(k => k.toUpperCase() === up || k.toUpperCase() === p10) ?? key
+// ── 組合欄位偵測 & 村里名稱解析 ─────────────────────────────
+const COMB_RE = /^[A-Z]\d{2}[A-Z]\d{2}[A-Z]\d{2}$/
+
+function villName(a: Record<string, unknown>): string {
+  // 依序嘗試常見村里名稱欄位（含 NCKU portal 常用命名）
+  const cands = ['VILLAGE', 'VILLNAME', 'VILNAME', 'VIL_NAME', 'VNAME', 'NAME', 'VILLENG']
+  const key = Object.keys(a).find(k => cands.some(c => k.toUpperCase() === c))
+  return key ? String(a[key] ?? '') : ''
 }
 
 // ── 快取幾何 ──────────────────────────────────────────────────
@@ -362,122 +337,123 @@ function cacheGeo(features: any[]) {
   for (const f of features) {
     if (!f.geometry) continue
     const a = f.attributes ?? {}
-    const name = String(a[rk(a, 'VILLAGE')] ?? '')
+    const name = villName(a)
     if (name && !cachedGeos.find(g => g.name === name)) {
       cachedGeos.push({ name, geometry: f.geometry })
     }
   }
 }
 
-// ── 行動健康 ──────────────────────────────────────────────────
+// ── 行動健康（第三碼 A3x：A32/A33 = 高需求）────────────────
 function processMob(features: any[], target: ScoreMap) {
-  const bd: Record<string, number> = { A31: 0, A32: 0, A33: 0 }
+  const bd: Record<string, number> = {}
   for (const f of features) {
     const a = f.attributes ?? {}
-    const village = String(a[rk(a, 'VILLAGE')] ?? '')
-    const cnt     = Number(a[rk(a, 'CNT')] ?? 0)
-    if (!village || cnt <= 0) continue
-    if (!target.has(village)) target.set(village, { score: 0, total: 0 })
-    const v = target.get(village)!
-    v.total += cnt
-    const adls = String(a[rk(a, 'ADLS_E11')] ?? '')
-    if (adls === 'A32' || adls === 'A33') v.score += cnt
-    if (adls in bd) bd[adls] += cnt
+    const village = villName(a); if (!village) continue
+    let total = 0, highNeed = 0
+    for (const [k, raw] of Object.entries(a)) {
+      if (!COMB_RE.test(k)) continue
+      const n = +(raw ?? 0); if (!(n > 0)) continue
+      total += n
+      const c3 = k.slice(6)
+      if (c3 === 'A32' || c3 === 'A33') highNeed += n
+      bd[c3] = (bd[c3] ?? 0) + n
+    }
+    target.set(village, { score: total > 0 ? highNeed / total : 0, total })
   }
-  for (const v of target.values()) v.score = v.total > 0 ? v.score / v.total : 0
   areaBreakdown['mob'] = bd
 }
 
-// ── 照護人力 ──────────────────────────────────────────────────
+// ── 照護人力（第一碼 N1x：N13 = 獨居高需求）────────────────
 function processCare(features: any[], target: ScoreMap) {
   const bd: Record<string, number> = { N11: 0, N12: 0, N13: 0 }
   for (const f of features) {
     const a = f.attributes ?? {}
-    const village = String(a[rk(a, 'VILLAGE')] ?? '')
-    const cnt     = Number(a[rk(a, 'CNT')] ?? 0)
-    if (!village || cnt <= 0) continue
-    if (!target.has(village)) target.set(village, { score: 0, total: 0 })
-    const v = target.get(village)!
-    v.total += cnt
-    const ftype = String(a[rk(a, 'FAMILY_TYPE')] ?? '')
-    if (ftype === 'N13') v.score += cnt
-    if (ftype in bd) bd[ftype] += cnt
+    const village = villName(a); if (!village) continue
+    let total = 0, highNeed = 0
+    for (const [k, raw] of Object.entries(a)) {
+      if (!COMB_RE.test(k)) continue
+      const n = +(raw ?? 0); if (!(n > 0)) continue
+      total += n
+      const c1 = k.slice(0, 3)
+      if (c1 === 'N13') highNeed += n
+      if (c1 in bd) bd[c1] += n
+    }
+    target.set(village, { score: total > 0 ? highNeed / total : 0, total })
   }
-  for (const v of target.values()) v.score = v.total > 0 ? v.score / v.total : 0
   areaBreakdown['care'] = bd
 }
 
-// ── 經濟狀況 ──────────────────────────────────────────────────
+// ── 經濟狀況（第一碼 G1x：G12/G13 = 弱勢高需求）────────────
 function processEco(features: any[], target: ScoreMap) {
   const bd: Record<string, number> = { G11: 0, G12: 0, G13: 0 }
   for (const f of features) {
     const a = f.attributes ?? {}
-    const village = String(a[rk(a, 'VILLAGE')] ?? '')
-    const cnt     = Number(a[rk(a, 'CNT')] ?? 0)
-    if (!village || cnt <= 0) continue
-    if (!target.has(village)) target.set(village, { score: 0, total: 0 })
-    const v = target.get(village)!
-    v.total += cnt
-    const lt = String(a[rk(a, 'LOW_TYPE')] ?? '')
-    if (lt === 'G12' || lt === 'G13') v.score += cnt
-    if (lt in bd) bd[lt] += cnt
+    const village = villName(a); if (!village) continue
+    let total = 0, highNeed = 0
+    for (const [k, raw] of Object.entries(a)) {
+      if (!COMB_RE.test(k)) continue
+      const n = +(raw ?? 0); if (!(n > 0)) continue
+      total += n
+      const c1 = k.slice(0, 3)
+      if (c1 === 'G12' || c1 === 'G13') highNeed += n
+      if (c1 in bd) bd[c1] += n
+    }
+    target.set(village, { score: total > 0 ? highNeed / total : 0, total })
   }
-  for (const v of target.values()) v.score = v.total > 0 ? v.score / v.total : 0
   areaBreakdown['eco'] = bd
 }
 
-// ── 住宅狀況 ──────────────────────────────────────────────────
+// ── 住宅狀況（E1x=屋齡, E2x=電梯, E3x=結構）─────────────────
+// 高需求 = E12/E13（老屋）；grouped bar 另顯示無電梯E22、非RC E32
 function processHouse(features: any[], target: ScoreMap, isCurrent = false) {
   const villMap = new Map<string, { e12: number; e22: number; e32: number; total: number }>()
   for (const f of features) {
     const a = f.attributes ?? {}
-    const village = String(a[rk(a, 'VILLAGE')] ?? '')
-    const cnt     = Number(a[rk(a, 'CNT')] ?? 0)
-    if (!village || cnt <= 0) continue
+    const village = villName(a); if (!village) continue
     if (!villMap.has(village)) villMap.set(village, { e12: 0, e22: 0, e32: 0, total: 0 })
-    const v = villMap.get(village)!
-    v.total += cnt
-    if (String(a[rk(a, 'BUILD_AGE')] ?? '') === 'E12') v.e12 += cnt
-    if (String(a[rk(a, 'APARTMENT')] ?? '') === 'E22') v.e22 += cnt
-    if (String(a[rk(a, 'MATERIAL')]  ?? '') === 'E32') v.e32 += cnt
+    const vm = villMap.get(village)!
+    for (const [k, raw] of Object.entries(a)) {
+      if (!COMB_RE.test(k)) continue
+      const n = +(raw ?? 0); if (!(n > 0)) continue
+      vm.total += n
+      const c1 = k.slice(0, 3), c2 = k.slice(3, 6), c3 = k.slice(6)
+      if (c1 === 'E12' || c1 === 'E13') vm.e12 += n
+      if (c2 === 'E22') vm.e22 += n
+      if (c3 === 'E32') vm.e32 += n
+    }
+    target.set(village, { score: vm.total > 0 ? vm.e12 / vm.total : 0, total: vm.total })
   }
   if (isCurrent) houseVill.value = villMap
-  for (const [k, v] of villMap) {
-    target.set(k, { score: v.total > 0 ? v.e12 / v.total : 0, total: v.total })
-  }
 }
 
-// ── 環境安全 ──────────────────────────────────────────────────
+// ── 環境安全（S1x=液化, S2x=斷層, S3x=淹水）────────────────
+// 高風險 = S12/S13 OR S22 OR S32/S33
 function processEnv(features: any[], target: ScoreMap, isCurrent = false) {
   const area = { lique: 0, fault: 0, flood: 0, total: 0 }
   const tmp = new Map<string, { lique: number; fault: number; flood: number; total: number }>()
-
   for (const f of features) {
     const a = f.attributes ?? {}
-    const village = String(a[rk(a, 'VILLAGE')] ?? '')
-    const cnt     = Number(a[rk(a, 'CNT')] ?? 0)
-    if (!village || cnt <= 0) continue
+    const village = villName(a); if (!village) continue
     if (!tmp.has(village)) tmp.set(village, { lique: 0, fault: 0, flood: 0, total: 0 })
-    const v = tmp.get(village)!
-    v.total += cnt; area.total += cnt
-
-    const lique = String(a[rk(a, 'LIQUE')] ?? '')
-    const fault = String(a[rk(a, 'FAULT')] ?? '')
-    const flood = String(a[rk(a, 'FLOOD')] ?? '')
-    if (lique === 'S12' || lique === 'S13') { v.lique += cnt; area.lique += cnt }
-    if (fault === 'S22')                    { v.fault += cnt; area.fault += cnt }
-    if (flood === 'S32' || flood === 'S33') { v.flood += cnt; area.flood += cnt }
+    const vm = tmp.get(village)!
+    for (const [k, raw] of Object.entries(a)) {
+      if (!COMB_RE.test(k)) continue
+      const n = +(raw ?? 0); if (!(n > 0)) continue
+      vm.total += n; area.total += n
+      const c1 = k.slice(0, 3), c2 = k.slice(3, 6), c3 = k.slice(6)
+      if (c1 === 'S12' || c1 === 'S13') { vm.lique += n; area.lique += n }
+      if (c2 === 'S22')                 { vm.fault += n; area.fault += n }
+      if (c3 === 'S32' || c3 === 'S33') { vm.flood += n; area.flood += n }
+    }
+    const v = vm.total > 0 ? (vm.lique + vm.fault + vm.flood) / (3 * vm.total) : 0
+    target.set(village, { score: v, total: vm.total })
   }
-
   const t = area.total || 1
   if (isCurrent) envPct.value = {
     lique: area.lique / t * 100,
     fault: area.fault / t * 100,
     flood: area.flood / t * 100,
-  }
-  for (const [k, v] of tmp) {
-    const composite = v.total > 0 ? (v.lique + v.fault + v.flood) / (3 * v.total) : 0
-    target.set(k, { score: composite, total: v.total })
   }
 }
 
@@ -806,13 +782,22 @@ function buildKPIs() {
 // ── 生命週期 ──────────────────────────────────────────────────
 onMounted(async () => {
   await loadArcGIS()
-  const { urls, geoUrl } = await findLayerUrls()
+  const urls = await findLayerUrls()
 
-  // 並行載入最新年份屬性資料（同 PopulationDashboard loadYearData 模式）
+  // 載入最新年份資料（含幾何）——銀髮安居圖層本身有村里面幾何
+  // 先找任一有效 cur URL 做 goTo，其餘並行載入
+  const firstCurUrl = INDICES.map(i => urls[i.key].cur).find(Boolean) ?? null
+  let flRef: any = null
+  if (firstCurUrl) {
+    flRef = new FeatureLayer({ url: firstCurUrl, outFields: ['*'], definitionExpression: TOWN_FILTER })
+    try { await flRef.load() } catch {}
+  }
+
   await Promise.all(INDICES.map(async idx => {
     const u = urls[idx.key]
     if (!u?.cur) return
-    const feats = await queryAttribs(u.cur)
+    const feats = await queryWithGeo(u.cur)
+    if (!cachedGeos.length) cacheGeo(feats)   // 只需快取一次幾何
     switch (idx.key) {
       case 'mob':   processMob(feats,   scores24.mob);         break
       case 'care':  processCare(feats,  scores24.care);        break
@@ -822,24 +807,18 @@ onMounted(async () => {
     }
   }))
 
+  console.log('[EldDash] cachedGeos:', cachedGeos.length, cachedGeos.map(g => g.name))
+
   buildKPIs()
   await loadChartJS()
   await nextTick()
   redrawAll()
 
-  // 初始化地圖（同 PopulationDashboard initMap）
+  // 地圖初始化（同 PopulationDashboard）
   await initMap()
-
-  // 用人口/幾何圖層取村里面幾何（完全同 PopulationDashboard getGeometries 模式）
-  if (geoUrl) {
-    const flGeo = new FeatureLayer({ url: geoUrl, outFields: ['*'], definitionExpression: TOWN_FILTER })
-    try { await flGeo.load() } catch (e) { console.warn('[EldDash] flGeo.load 失敗', e) }
-    try { await mapView.goTo(flGeo.fullExtent.expand(1.4)) } catch {}
-    try {
-      const res = await flGeo.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
-      cacheGeo(res.features)
-      console.log('[EldDash] cachedGeos:', cachedGeos.length, cachedGeos.map(g => g.name))
-    } catch (e) { console.warn('[EldDash] geo query 失敗', e) }
+  // goTo 村里範圍（同 PopulationDashboard 用 fl.fullExtent）
+  if (flRef) {
+    try { await mapView.goTo(flRef.fullExtent.expand(1.4)) } catch {}
   }
 
   if (cachedGeos.length) applyChoro('mob')
@@ -849,7 +828,7 @@ onMounted(async () => {
   Promise.all(INDICES.map(async idx => {
     const u = urls[idx.key]
     if (!u?.prev) return
-    const feats = await queryAttribs(u.prev)
+    const feats = await queryWithGeo(u.prev)
     switch (idx.key) {
       case 'mob':   processMob(feats,   scores23.mob);          break
       case 'care':  processCare(feats,  scores23.care);         break
