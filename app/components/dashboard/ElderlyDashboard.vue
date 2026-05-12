@@ -57,6 +57,11 @@
         </div>
       </transition>
 
+      <!-- 南科圖層開關 -->
+      <button class="sci-toggle" :class="{ on: sciParkVisible }" @click="toggleSciPark">
+        <span class="sci-dot"></span>南科範圍
+      </button>
+
       <div class="map-legend" v-if="activeIdxDef">
         <div class="leg-label">
           {{ activeIdxDef.shortLabel }}{{ changeMode[activeIdx] ? '・變化量' : '・需求程度' }}
@@ -221,9 +226,17 @@ const chartInst  = new Map<string, any>()
 
 let mapView: any = null
 let cachedGeos: Array<{ name: string; geometry: any }> = []
+let sciGL: any = null
+const sciParkVisible = ref(false)
 
 const selectedVill = ref<{ name: string } | null>(null)
 function clearVillPopup() { selectedVill.value = null }
+
+function toggleSciPark() {
+  if (!sciGL) return
+  sciParkVisible.value = !sciParkVisible.value
+  sciGL.visible = sciParkVisible.value
+}
 
 const selectedVillScores = computed(() => {
   if (!selectedVill.value) return null
@@ -293,8 +306,9 @@ async function loadChartJS() {
 }
 
 // ── WebScene 圖層 URL 查找 ────────────────────────────────────
-async function findLayerUrls(): Promise<Record<IdxKey, { cur: string|null; prev: string|null }>> {
+async function findLayerUrls(): Promise<{ urls: Record<IdxKey, { cur: string|null; prev: string|null }>; sciParkUrl: string|null }> {
   const yearMap = new Map<IdxKey, Array<{ year: number; url: string }>>()
+  let sciParkUrl: string|null = null
 
   try {
     const { default: Portal }   = await import('@arcgis/core/portal/Portal')
@@ -313,6 +327,7 @@ async function findLayerUrls(): Promise<Record<IdxKey, { cur: string|null; prev:
       const raw   = l.url ?? l.parsedUrl?.path ?? ''
       if (!raw) return
       const url = fmt(raw)
+      if (!sciParkUrl && title.includes('南部科學園區_台南園區範圍')) { sciParkUrl = url; return }
       const yrM = title.match(/^(\d{4})年/)
       if (!yrM) return
       const year = parseInt(yrM[1])
@@ -335,7 +350,7 @@ async function findLayerUrls(): Promise<Record<IdxKey, { cur: string|null; prev:
     urls[key as IdxKey].cur  = sorted[0]?.url ?? null
     urls[key as IdxKey].prev = sorted[1]?.url ?? null
   }
-  return urls
+  return { urls, sciParkUrl }
 }
 
 // ── 查詢（含幾何）──────────────────────────────────────────────
@@ -842,7 +857,7 @@ function buildKPIs() {
 // ── 生命週期 ──────────────────────────────────────────────────
 onMounted(async () => {
   await loadArcGIS()
-  const urls = await findLayerUrls()
+  const { urls, sciParkUrl } = await findLayerUrls()
 
   // 載入最新年份資料（含幾何）——銀髮安居圖層本身有村里面幾何
   // 先找任一有效 cur URL 做 goTo，其餘並行載入
@@ -882,6 +897,35 @@ onMounted(async () => {
   }
 
   if (cachedGeos.length) applyChoro('mob')
+
+  // 載入南科圖層
+  if (sciParkUrl) {
+    try {
+      const sciFL = new FeatureLayer({ url: sciParkUrl, outFields: [] })
+      await sciFL.load()
+      const sciRes = await sciFL.queryFeatures({ where: '1=1', returnGeometry: true, outFields: [] })
+      if (sciRes?.features?.length > 0) {
+        const gl = new GraphicsLayer({ id: 'sci-park-gl', visible: false })
+        for (const f of sciRes.features) {
+          if (!f.geometry) continue
+          gl.add(new Graphic({
+            geometry: f.geometry,
+            symbol: {
+              type: 'simple-fill',
+              color: [240, 202, 80, 30],
+              outline: { color: [207, 149, 70, 230], width: 2.5 },
+            } as any,
+          }))
+        }
+        sciGL = gl
+        mapView.map.add(gl)
+        console.log('[EldDash] 南科圖層載入完成')
+      }
+    } catch (e) {
+      console.warn('[EldDash] 南科圖層載入失敗', e)
+    }
+  }
+
   mapLoading.value = false
 
   // 背景載入前一年（用於變化量）
@@ -901,6 +945,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   mapView?.destroy(); mapView = null
+  sciGL = null
   cachedGeos = []
   chartInst.forEach(c => c?.destroy()); chartInst.clear()
 })
@@ -1026,4 +1071,22 @@ onUnmounted(() => {
 .popup-row b { font-size: 13px; font-weight: 700; }
 .popup-fade-enter-active, .popup-fade-leave-active { transition: all 0.2s ease; }
 .popup-fade-enter-from, .popup-fade-leave-to { opacity: 0; transform: translateY(-4px) scale(0.97); }
+
+/* 南科圖層開關 */
+.sci-toggle {
+  position: absolute; bottom: 12px; right: 14px; z-index: 20;
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px;
+  border: 1.5px solid #CF9546; background: rgba(255,255,255,0.92);
+  font-size: 10px; font-weight: 600; color: #CF9546;
+  cursor: pointer; transition: all 0.15s;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.1);
+}
+.sci-toggle:hover { background: #fef9ec; }
+.sci-toggle.on { background: #CF9546; color: #fff; }
+.sci-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  background: #CF9546; transition: background 0.15s;
+}
+.sci-toggle.on .sci-dot { background: #fff; }
 </style>

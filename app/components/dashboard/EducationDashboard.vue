@@ -26,6 +26,11 @@
             </div>
           </div>
         </transition>
+
+      <!-- 南科圖層開關 -->
+      <button class="sci-toggle" :class="{ on: sciParkVisible }" @click="toggleSciPark">
+        <span class="sci-dot"></span>南科範圍
+      </button>
       </div>
 
       <!-- ── 右側面板（55%）── -->
@@ -182,6 +187,8 @@ const selectedFac = ref<{ name: string; typeLabel: string; color: string } | nul
 let mapView: any  = null
 let facGL: any    = null
 let barChart: Chart | null = null
+let sciGL: any    = null
+const sciParkVisible = ref(false)
 
 // ── Computed ──────────────────────────────────────────────────
 const activeFac      = computed(() => FACILITIES.find(f => f.key === activeKey.value))
@@ -258,6 +265,12 @@ function highlightFacItem(item: FacItem) {
   if (item.geometry && mapView) {
     try { mapView.goTo({ target: item.geometry, zoom: 15 }) } catch {}
   }
+}
+
+function toggleSciPark() {
+  if (!sciGL) return
+  sciParkVisible.value = !sciParkVisible.value
+  sciGL.visible = sciParkVisible.value
 }
 
 // ── Name extraction (handles field truncation) ────────────────
@@ -523,6 +536,42 @@ async function loadData() {
     }))
   }))
 
+  // ── Find and render science park boundary ─────────────────
+  let sciLayer: any = null
+  ws.allLayers.forEach((l: any) => {
+    if (!sciLayer && l.title?.includes('南部科學園區_台南園區範圍')) sciLayer = l
+  })
+  if (sciLayer) {
+    try { await sciLayer.load() } catch {}
+    let sciQueryable = sciLayer
+    if (sciLayer.type === 'map-image' || sciLayer.sublayers) {
+      const sub = sciLayer.sublayers?.getItemAt(0)
+      if (sub) { try { await sub.load() } catch {}; sciQueryable = sub }
+    }
+    try {
+      const sciResult = await sciQueryable.queryFeatures({ where: '1=1', returnGeometry: true, outFields: [] })
+      if (sciResult?.features?.length > 0) {
+        const gl = new GraphicsLayer({ id: 'sci-park-gl', visible: false })
+        for (const f of sciResult.features) {
+          if (!f.geometry) continue
+          gl.add(new Graphic({
+            geometry: f.geometry,
+            symbol: {
+              type: 'simple-fill',
+              color: [240, 202, 80, 30],
+              outline: { color: [207, 149, 70, 230], width: 2.5 },
+            } as any,
+          }))
+        }
+        sciGL = gl
+        mapView.map.add(gl)
+        console.log('[EduDash] 南科圖層載入完成')
+      }
+    } catch (e) {
+      console.warn('[EduDash] 南科圖層載入失敗', e)
+    }
+  }
+
   renderFacPoints(activeKey.value)
   loading.value = false
   await nextTick()
@@ -543,6 +592,7 @@ onUnmounted(() => {
   mapView?.destroy()
   mapView = null
   facGL = null
+  sciGL = null
 })
 </script>
 
@@ -714,4 +764,22 @@ onUnmounted(() => {
   font-size: 11px; color: #334155; flex: 1; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* 南科圖層開關 */
+.sci-toggle {
+  position: absolute; bottom: 12px; right: 12px; z-index: 20;
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px;
+  border: 1.5px solid #CF9546; background: rgba(255,255,255,0.92);
+  font-size: 10px; font-weight: 600; color: #CF9546;
+  cursor: pointer; transition: all 0.15s;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.1);
+}
+.sci-toggle:hover { background: #fef9ec; }
+.sci-toggle.on { background: #CF9546; color: #fff; }
+.sci-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  background: #CF9546; transition: background 0.15s;
+}
+.sci-toggle.on .sci-dot { background: #fff; }
 </style>

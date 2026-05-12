@@ -52,6 +52,11 @@
         </div>
       </transition>
 
+      <!-- 南科圖層開關 -->
+      <button class="sci-toggle" :class="{ on: sciParkVisible }" @click="toggleSciPark">
+        <span class="sci-dot"></span>南科範圍
+      </button>
+
       <!-- 圖例 -->
       <div class="map-legend">
         <div class="leg-label">{{ activeCardDef?.shortLabel }}{{ changeMode[activeCard] ? '・變化量' : '' }}</div>
@@ -217,9 +222,17 @@ const changeMode = reactive<Record<CardKey, boolean>>({
 
 let mapView: any = null, fl24: any = null
 let cachedFeatures: Array<{ geometry: any; name: string }> = []
+let sciGL: any = null
+const sciParkVisible = ref(false)
 
 const selectedVill = ref<{ name: string; row: Row | null } | null>(null)
 function clearVillPopup() { selectedVill.value = null }
+
+function toggleSciPark() {
+  if (!sciGL) return
+  sciParkVisible.value = !sciParkVisible.value
+  sciGL.visible = sciParkVisible.value
+}
 
 async function handlePopClick(event: any) {
   if (!mapView) return
@@ -291,7 +304,7 @@ async function loadChartJS() {
 }
 
 // ── Portal + Layer URL 查找 ────────────────────────────────────
-async function findLayerUrls(): Promise<{ url24: string|null; url23: string|null }> {
+async function findLayerUrls(): Promise<{ url24: string|null; url23: string|null; sciParkUrl: string|null }> {
   try {
     const { default: Portal }   = await import('@arcgis/core/portal/Portal')
     const { default: WebScene } = await import('@arcgis/core/WebScene')
@@ -301,16 +314,18 @@ async function findLayerUrls(): Promise<{ url24: string|null; url23: string|null
     await ws.load()
 
     let url24: string|null = null, url23: string|null = null
+    let sciParkUrl: string|null = null
     ws.allLayers.forEach((l: any) => {
       const title = l.title ?? ''
       const raw = l.url ?? l.parsedUrl?.path ?? ''
       const url = raw.replace(/\/+$/, '').endsWith('/0') ? raw.replace(/\/+$/, '') : `${raw.replace(/\/+$/, '')}/0`
       if (!url24 && title.includes(SUFFIX_2024)) url24 = url
       if (!url23 && title.includes(SUFFIX_2023)) url23 = url
+      if (!sciParkUrl && title.includes('南部科學園區_台南園區範圍')) sciParkUrl = url
     })
-    console.log('[PopDash] URL 2024:', url24, '2023:', url23)
-    return { url24, url23 }
-  } catch (e) { console.warn('[PopDash] findLayerUrls 失敗', e); return { url24: null, url23: null } }
+    console.log('[PopDash] URL 2024:', url24, '2023:', url23, '南科:', sciParkUrl)
+    return { url24, url23, sciParkUrl }
+  } catch (e) { console.warn('[PopDash] findLayerUrls 失敗', e); return { url24: null, url23: null, sciParkUrl: null } }
 }
 
 // ── 建立地圖 ──────────────────────────────────────────────────
@@ -324,7 +339,12 @@ async function initMap(url: string) {
   // fl24 is query-only — never added to map to avoid tile cache requests
   fl24 = new FeatureLayer({ url, outFields: ['*'], definitionExpression: TOWN_FILTER })
   try { await fl24.load() } catch (e) { console.warn('[PopDash] fl24.load 失敗', e) }
-  try { await mapView.goTo(fl24.fullExtent.expand(1.4)) } catch {}
+  try {
+    const extResult = await fl24.queryExtent({ where: '1=1' })
+    if (extResult?.extent) await mapView.goTo(extResult.extent.expand(1.3))
+  } catch {
+    try { await mapView.goTo(fl24.fullExtent.expand(1.4)) } catch {}
+  }
 }
 
 // ── 取得幾何（快取）──────────────────────────────────────────
@@ -679,7 +699,7 @@ function resolveKey(attrs:Record<string,unknown>, key:string) {
 // ── 生命週期 ──────────────────────────────────────────────────
 onMounted(async () => {
   await loadArcGIS()
-  const { url24, url23 } = await findLayerUrls()
+  const { url24, url23, sciParkUrl } = await findLayerUrls()
   if (!url24) { mapLoading.value = false; return }
 
   // 先載入資料，applyChoro 需要 villageData 的 min/max
@@ -698,12 +718,42 @@ onMounted(async () => {
   await initMap(url24)
   // 初始渲染人口密度面量圖
   await applyChoro('P_DEN', CARDS.find(c=>c.key==='P_DEN')!.colors)
+
+  // 載入南科圖層
+  if (sciParkUrl) {
+    try {
+      const sciFL = new FeatureLayer({ url: sciParkUrl, outFields: [] })
+      await sciFL.load()
+      const sciRes = await sciFL.queryFeatures({ where: '1=1', returnGeometry: true, outFields: [] })
+      if (sciRes?.features?.length > 0) {
+        const gl = new GraphicsLayer({ id: 'sci-park-gl', visible: false })
+        for (const f of sciRes.features) {
+          if (!f.geometry) continue
+          gl.add(new Graphic({
+            geometry: f.geometry,
+            symbol: {
+              type: 'simple-fill',
+              color: [240, 202, 80, 30],
+              outline: { color: [207, 149, 70, 230], width: 2.5 },
+            } as any,
+          }))
+        }
+        sciGL = gl
+        mapView.map.add(gl)
+        console.log('[PopDash] 南科圖層載入完成')
+      }
+    } catch (e) {
+      console.warn('[PopDash] 南科圖層載入失敗', e)
+    }
+  }
+
   mapLoading.value = false
 })
 
 onUnmounted(() => {
   mapView?.destroy(); mapView = null
   fl24 = null
+  sciGL = null
   cachedFeatures = []
   chartInst.forEach(c => c?.destroy()); chartInst.clear()
 })
@@ -842,4 +892,22 @@ onUnmounted(() => {
 .popup-row b { font-size: 13px; font-weight: 700; }
 .popup-fade-enter-active, .popup-fade-leave-active { transition: all 0.2s ease; }
 .popup-fade-enter-from, .popup-fade-leave-to { opacity: 0; transform: translateY(-4px) scale(0.97); }
+
+/* 南科圖層開關 */
+.sci-toggle {
+  position: absolute; bottom: 12px; right: 14px; z-index: 20;
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px;
+  border: 1.5px solid #CF9546; background: rgba(255,255,255,0.92);
+  font-size: 10px; font-weight: 600; color: #CF9546;
+  cursor: pointer; transition: all 0.15s;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.1);
+}
+.sci-toggle:hover { background: #fef9ec; }
+.sci-toggle.on { background: #CF9546; color: #fff; }
+.sci-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  background: #CF9546; transition: background 0.15s;
+}
+.sci-toggle.on .sci-dot { background: #fff; }
 </style>
