@@ -1,10 +1,9 @@
 <template>
   <div class="am-root">
 
-    <!-- Loading overlay (position:absolute so map DOM is always mounted) -->
     <div v-if="loading" class="loading-mask">
       <div class="spinner"></div>
-      <span>載入生活機能資料中…</span>
+      <span>載入教育與福利機構資料中…</span>
     </div>
 
     <div class="main-layout">
@@ -13,13 +12,13 @@
       <div class="map-pane">
         <div ref="mapDivRef" class="map-div"></div>
 
-        <!-- Science park toggle -->
+        <!-- 科學園區開關 -->
         <button class="sci-btn" :class="{ active: showSciPark }" @click="toggleSciPark">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
           科學園區
         </button>
 
-        <!-- Popup overlay -->
+        <!-- Popup -->
         <transition name="popup-fade">
           <div v-if="selectedFac" class="map-popup">
             <div class="popup-header">
@@ -39,11 +38,11 @@
 
         <!-- Header -->
         <div class="panel-header">
-          <div class="panel-title">新市區生活機能</div>
+          <div class="panel-title">新市區教育與福利機構</div>
           <div class="panel-sub">Tainan · 新市區</div>
         </div>
 
-        <!-- Count cards 2×4 — larger numbers -->
+        <!-- Count cards 2×3 grid -->
         <div class="count-grid">
           <div
             v-for="fac in FACILITIES"
@@ -64,15 +63,15 @@
           </div>
         </div>
 
-        <!-- Horizontal bar chart — all facility counts at a glance -->
+        <!-- Horizontal bar chart -->
         <div class="chart-box">
-          <div class="chart-title">設施數量分布</div>
+          <div class="chart-title">機構數量分布</div>
           <div class="chart-inner">
             <canvas ref="chartCanvasRef"></canvas>
           </div>
         </div>
 
-        <!-- Tab filter + list (shrunk) -->
+        <!-- Tab filter + list -->
         <div class="list-section">
           <div class="fac-tabs">
             <button
@@ -127,20 +126,18 @@ Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip)
 const PORTAL_URL  = 'https://igisportal.geomatics.ncku.edu.tw/portal'
 const WEBSCENE_ID = '85502d8e84934fef9412dce360fc7165'
 
-type FacKey = 'activity' | 'parking' | 'bank' | 'post' | 'market' | 'gas' | 'park' | 'cvs'
+type FacKey = 'disability' | 'child' | 'elderly' | 'kindergarten' | 'midHighSchool' | 'elementary'
 
 const FACILITIES: Array<{ key: FacKey; titlePart: string; label: string; color: string }> = [
-  { key: 'activity', titlePart: '活動中心', label: '活動中心', color: '#CF9546' },
-  { key: 'parking',  titlePart: '停車場',   label: '停車場',   color: '#7A8FA6' },
-  { key: 'bank',     titlePart: '金融機構', label: '金融機構', color: '#4A8FC4' },
-  { key: 'post',     titlePart: '郵局',     label: '郵局',     color: '#C67052' },
-  { key: 'market',   titlePart: '大賣場',   label: '大賣場',   color: '#C1395E' },
-  { key: 'gas',      titlePart: '加油站',   label: '加油站',   color: '#7B5EA7' },
-  { key: 'park',     titlePart: '公園',     label: '公園',     color: '#48725C' },
-  { key: 'cvs',      titlePart: '便利商店', label: '便利商店', color: '#3A9BB5' },
+  { key: 'disability',   titlePart: '身心障礙福利機構', label: '身障福利',  color: '#7A4F7B' },
+  { key: 'child',        titlePart: '兒少福利機構',     label: '兒少福利',  color: '#CF9546' },
+  { key: 'elderly',      titlePart: '老人福利機構',     label: '老人福利',  color: '#C67052' },
+  { key: 'kindergarten', titlePart: '幼兒園',           label: '幼兒園',    color: '#F0CA50' },
+  { key: 'midHighSchool',titlePart: '國中及高中',       label: '國中高中',  color: '#4A8FC4' },
+  { key: 'elementary',   titlePart: '國民小學',         label: '國民小學',  color: '#48725C' },
 ]
 
-// ── ArcGIS module holders ─────────────────────────────────────
+// ── ArcGIS ────────────────────────────────────────────────────
 let esriConfig: any    = null
 let Portal: any        = null
 let WebScene: any      = null
@@ -173,19 +170,18 @@ async function loadArcGIS() {
 const loading        = ref(true)
 const mapDivRef      = ref<HTMLDivElement | null>(null)
 const chartCanvasRef = ref<HTMLCanvasElement | null>(null)
-const activeKey      = ref<FacKey>('activity')
+const activeKey      = ref<FacKey>('elementary')
+const showSciPark    = ref(false)
 
 interface FacItem { name: string; geometry: any; color: string; typeLabel: string }
 const facData = ref<Record<FacKey, FacItem[]>>({
-  activity: [], parking: [], bank: [], post: [],
-  market:   [], gas:     [], park: [], cvs:  [],
+  disability: [], child: [], elderly: [], kindergarten: [], midHighSchool: [], elementary: [],
 })
 
-const selectedFac  = ref<{ name: string; typeLabel: string; color: string } | null>(null)
-const showSciPark  = ref(false)
+const selectedFac = ref<{ name: string; typeLabel: string; color: string } | null>(null)
 
-let mapView: any  = null
-let facGL: any    = null
+let mapView: any   = null
+let facGL: any     = null
 let sciParkGL: any = null
 let barChart: Chart | null = null
 
@@ -252,8 +248,41 @@ function renderChart() {
   } as any)
 }
 
-// Update chart whenever facData changes (after data load)
 watch(facData, () => { nextTick(renderChart) }, { deep: true })
+
+// ── Science park toggle ───────────────────────────────────────
+function toggleSciPark() {
+  showSciPark.value = !showSciPark.value
+  if (sciParkGL) sciParkGL.visible = showSciPark.value
+}
+
+async function loadSciPark(ws: any) {
+  let sciLayer: any = null
+  ws.allLayers.forEach((l: any) => {
+    if (!sciLayer && (l.title?.includes('南部科學') || l.title?.includes('台南園區') || l.title?.includes('科學園區'))) sciLayer = l
+  })
+  if (!sciLayer || !mapView) return
+  try {
+    await sciLayer.load()
+    let queryable = sciLayer
+    if (sciLayer.type === 'map-image' || sciLayer.sublayers) {
+      const sub = sciLayer.sublayers?.getItemAt(0)
+      if (sub) { try { await sub.load() } catch {}; queryable = sub }
+    }
+    const result = await queryable.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
+    const features = result?.features ?? []
+    if (!features.length) return
+    sciParkGL = new GraphicsLayer({ id: 'sci-park-gl', visible: false })
+    for (const f of features) {
+      if (!f.geometry) continue
+      sciParkGL.add(new Graphic({
+        geometry: markRaw(f.geometry),
+        symbol: { type: 'simple-fill', color: [130, 200, 80, 28], outline: { color: [80, 160, 40, 220], width: 2.5, style: 'dash' } } as any,
+      }))
+    }
+    mapView.map.add(sciParkGL)
+  } catch (e) { console.warn('[SciPark] Edu load failed', e) }
+}
 
 // ── Actions ───────────────────────────────────────────────────
 function setActive(key: FacKey) {
@@ -268,60 +297,19 @@ function highlightFacItem(item: FacItem) {
   }
 }
 
-// ── Science park toggle ───────────────────────────────────────
-function toggleSciPark() {
-  showSciPark.value = !showSciPark.value
-  if (sciParkGL) sciParkGL.visible = showSciPark.value
-}
-
-async function loadSciPark(ws: any) {
-  let sciLayer: any = null
-  ws.allLayers.forEach((l: any) => {
-    if (!sciLayer && (l.title?.includes('南部科學') || l.title?.includes('台南園區') || l.title?.includes('科學園區'))) {
-      sciLayer = l
-    }
-  })
-  if (!sciLayer || !mapView) return
-  try {
-    await sciLayer.load()
-    let queryable = sciLayer
-    if (sciLayer.type === 'map-image' || sciLayer.sublayers) {
-      const sub = sciLayer.sublayers?.getItemAt(0)
-      if (sub) { try { await sub.load() } catch {}; queryable = sub }
-    }
-    const result = await queryable.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
-    const features = result?.features ?? []
-    if (!features.length) { console.warn('[SciPark] no features'); return }
-    sciParkGL = new GraphicsLayer({ id: 'sci-park-gl', visible: false })
-    for (const f of features) {
-      if (!f.geometry) continue
-      sciParkGL.add(new Graphic({
-        geometry: markRaw(f.geometry),
-        symbol: { type: 'simple-fill', color: [130, 200, 80, 28], outline: { color: [80, 160, 40, 220], width: 2.5, style: 'dash' } } as any,
-      }))
-    }
-    mapView.map.add(sciParkGL)
-    console.log('[SciPark] loaded', features.length, 'features, title:', sciLayer.title)
-  } catch (e) {
-    console.warn('[SciPark] load failed', e)
-  }
-}
-
-// ── Name extraction (handles field truncation) ────────────────
+// ── Name extraction ───────────────────────────────────────────
 function extractName(attrs: Record<string, any>): string {
   if (!attrs) return '(未知)'
-  const candidates = ['MARKNAME2', 'MARKNAM2', 'MARK_NAME2', 'MARK_NAME', 'NAME2', 'NAME', 'FACNAME', 'FAC_NAME', 'TITLE']
+  const candidates = ['MARKNAME2', 'MARKNAM2', 'MARK_NAME2', 'MARK_NAME', 'NAME2', 'NAME', 'SCHNAME', 'SCH_NAME', 'FACNAME']
   for (const key of candidates) {
     const v = attrs[key]
     if (v && typeof v === 'string' && v.trim()) return v.trim()
   }
-  // Pattern search: key containing MARKNAME
   for (const [k, v] of Object.entries(attrs)) {
     if (k.toUpperCase().includes('MARKNAME') && typeof v === 'string' && v.trim()) return v.trim()
   }
-  // Pattern search: key starting with NAME
   for (const [k, v] of Object.entries(attrs)) {
-    if (/^NAME/i.test(k) && typeof v === 'string' && v.trim()) return v.trim()
+    if (/^(SCH|NAME|FAC|MARK)/i.test(k) && typeof v === 'string' && v.trim()) return v.trim()
   }
   return '(未知)'
 }
@@ -331,10 +319,8 @@ async function initMap(): Promise<void> {
   if (!mapDivRef.value) return
   const m = new ArcMap({ basemap: 'gray-vector' })
   mapView = markRaw(new MapView({
-    container: mapDivRef.value,
-    map: m,
-    center: [120.31, 23.07],
-    zoom: 12,
+    container: mapDivRef.value, map: m,
+    center: [120.319, 23.068], zoom: 13,
     ui: { components: ['zoom'] },
   }))
   mapView.ui.remove('attribution')
@@ -359,14 +345,13 @@ function renderVillages(features: any[]) {
   mapView.map.add(gl, 0)
 }
 
-// ── Render facility points for active key ─────────────────────
+// ── Render facility points ────────────────────────────────────
 function renderFacPoints(key: FacKey) {
   if (!mapView) return
   if (facGL) { mapView.map.remove(facGL); facGL = null }
 
   const items = facData.value[key]
   if (!items?.length) return
-
   const fac = FACILITIES.find(f => f.key === key)!
   const hexToRgb = (hex: string): [number, number, number] => [
     parseInt(hex.slice(1, 3), 16),
@@ -380,12 +365,7 @@ function renderFacPoints(key: FacKey) {
     if (!item.geometry) continue
     gl.add(new Graphic({
       geometry: item.geometry,
-      symbol: {
-        type: 'simple-marker',
-        color: [r, g, b, 210],
-        size: 9,
-        outline: { color: [255, 255, 255, 220], width: 1.5 },
-      } as any,
+      symbol: { type: 'simple-marker', color: [r, g, b, 210], size: 9, outline: { color: [255, 255, 255, 220], width: 1.5 } } as any,
       attributes: { name: item.name, typeLabel: item.typeLabel, color: fac.color },
     }))
   }
@@ -405,7 +385,7 @@ function renderFacPoints(key: FacKey) {
   })
 }
 
-// ── Load data from WebScene ───────────────────────────────────
+// ── Load data ─────────────────────────────────────────────────
 async function loadData() {
   await loadArcGIS()
   await initMap()
@@ -417,55 +397,44 @@ async function loadData() {
     ws = new WebScene({ portalItem: { id: WEBSCENE_ID, portal } })
     await ws.load()
   } catch (e) {
-    console.error('[AmenityDash] WebScene load failed', e)
+    console.error('[EduDash] WebScene load failed', e)
     loading.value = false
     return
   }
 
-  // ── Science park (load in background after map is ready) ─────
+  // Science park (background)
   loadSciPark(ws)
 
-  // ── Find boundary layer ───────────────────────────────────
+  // Find boundary layer
   let boundaryLayer: any = null
   ws.allLayers.forEach((l: any) => {
     if (!boundaryLayer && l.title?.includes('計畫實驗區村里界')) boundaryLayer = l
   })
 
-  let queryGeom: any = null   // buffered polygon for spatial queries
+  let queryGeom: any = null
   let villageFeatures: any[] = []
 
   if (boundaryLayer) {
     try { await boundaryLayer.load() } catch {}
-
     let queryable = boundaryLayer
     if (boundaryLayer.type === 'map-image' || boundaryLayer.sublayers) {
       const sub = boundaryLayer.sublayers?.getItemAt(0)
       if (sub) { try { await sub.load() } catch {}; queryable = sub }
     }
 
-    const boundaryFilters = [
-      "TOWN = '新市區'",
-      "TOWNNAME = '新市區'",
-      "TOWNCODE = '67000200'",
-    ]
-
-    for (const where of boundaryFilters) {
+    for (const where of ["TOWN = '新市區'", "TOWNNAME = '新市區'", "TOWNCODE = '67000200'"]) {
       try {
         const result = await queryable.queryFeatures({ where, outFields: ['*'], returnGeometry: true })
         if (result?.features?.length > 0) {
           villageFeatures = result.features
-          console.log(`[AmenityDash] boundary OK (${where}): ${villageFeatures.length} 筆`)
+          console.log(`[EduDash] boundary OK (${where}): ${villageFeatures.length} 筆`)
           break
         }
-      } catch (e) {
-        console.warn(`[AmenityDash] boundary filter "${where}" failed`, e)
-      }
+      } catch {}
     }
 
     if (villageFeatures.length > 0) {
       renderVillages(villageFeatures)
-
-      // ── Build buffered polygon (union of village polygons + 500m buffer) ──
       try {
         const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
         const polys = villageFeatures.map((f: any) => f.geometry).filter(Boolean)
@@ -473,35 +442,15 @@ async function loadData() {
           const union = polys.length === 1 ? polys[0] : geometryEngine.union(polys)
           const buffered = geometryEngine.geodesicBuffer(union, 500, 'meters')
           queryGeom = markRaw(buffered)
-          console.log('[AmenityDash] buffered query geometry created')
           try { await mapView.goTo(queryGeom) } catch {}
         }
       } catch (e) {
-        console.warn('[AmenityDash] geometryEngine failed, falling back to extent', e)
-        // Extent fallback
-        try {
-          const { default: Extent } = await import('@arcgis/core/geometry/Extent')
-          let xmin = Infinity, ymin = Infinity, xmax = -Infinity, ymax = -Infinity
-          for (const f of villageFeatures) {
-            const ext = f.geometry?.extent ?? f.geometry
-            if (ext?.xmin != null) {
-              xmin = Math.min(xmin, ext.xmin); ymin = Math.min(ymin, ext.ymin)
-              xmax = Math.max(xmax, ext.xmax); ymax = Math.max(ymax, ext.ymax)
-            }
-          }
-          if (isFinite(xmin)) {
-            const sr = villageFeatures[0]?.geometry?.spatialReference
-            queryGeom = markRaw(new Extent({ xmin, ymin, xmax, ymax, spatialReference: sr }))
-            try { await mapView.goTo(queryGeom.expand(1.3)) } catch {}
-          }
-        } catch {}
+        console.warn('[EduDash] geometryEngine failed', e)
       }
     }
-  } else {
-    console.warn('[AmenityDash] 找不到計畫實驗區村里界圖層')
   }
 
-  // ── Find and query facility layers ────────────────────────
+  // Find and query facility layers
   const layerMap = new Map<FacKey, any>()
   ws.allLayers.forEach((l: any) => {
     for (const fac of FACILITIES) {
@@ -511,7 +460,7 @@ async function loadData() {
 
   await Promise.all(FACILITIES.map(async (fac) => {
     const layer = layerMap.get(fac.key)
-    if (!layer) { console.warn(`[AmenityDash] 找不到圖層: ${fac.titlePart}`); return }
+    if (!layer) { console.warn(`[EduDash] 找不到圖層: ${fac.titlePart}`); return }
 
     try { await layer.load() } catch {}
 
@@ -521,44 +470,34 @@ async function loadData() {
       if (sub) { try { await sub.load() } catch {}; queryable = sub }
     }
 
-    const outFields = ['*']
     let features: any[] = []
 
-    // Primary: spatial intersect with buffered polygon (precise)
+    // Primary: buffered polygon spatial query
     if (queryGeom) {
       try {
         const result = await queryable.queryFeatures({
-          geometry: queryGeom,
-          spatialRelationship: 'intersects',
-          outFields,
-          returnGeometry: true,
+          geometry: queryGeom, spatialRelationship: 'intersects',
+          outFields: ['*'], returnGeometry: true,
         })
         if (result?.features?.length > 0) {
           features = result.features
-          console.log(`[AmenityDash] ${fac.label} by buffer spatial: ${features.length} 筆`)
+          console.log(`[EduDash] ${fac.label} by buffer: ${features.length} 筆`)
         }
-      } catch (e) {
-        console.warn(`[AmenityDash] ${fac.label} spatial query failed`, e)
-      }
+      } catch (e) { console.warn(`[EduDash] ${fac.label} spatial failed`, e) }
     }
 
     // Fallback: attribute filter
     if (features.length === 0) {
       for (const where of ["TOWN = '新市區'", "TOWNNAME = '新市區'"]) {
         try {
-          const result = await queryable.queryFeatures({ where, outFields, returnGeometry: true })
-          if (result?.features?.length > 0) {
-            features = result.features
-            console.log(`[AmenityDash] ${fac.label} by attr (${where}): ${features.length} 筆`)
-            break
-          }
+          const result = await queryable.queryFeatures({ where, outFields: ['*'], returnGeometry: true })
+          if (result?.features?.length > 0) { features = result.features; break }
         } catch {}
       }
     }
 
     if (features.length > 0) {
-      const sampleKeys = Object.keys(features[0].attributes ?? {})
-      console.log(`[AmenityDash] ${fac.label} attr keys:`, sampleKeys)
+      console.log(`[EduDash] ${fac.label} attrs:`, Object.keys(features[0].attributes ?? {}))
     }
 
     facData.value[fac.key] = features.map(f => ({
@@ -578,7 +517,7 @@ async function loadData() {
 // ── Lifecycle ─────────────────────────────────────────────────
 onMounted(() => {
   loadData().catch(e => {
-    console.error('[AmenityDash] loadData error', e)
+    console.error('[EduDash] loadData error', e)
     loading.value = false
   })
 })
@@ -600,7 +539,6 @@ onUnmounted(() => {
   background: #f8fafc;
 }
 
-/* Loading overlay */
 .loading-mask {
   position: absolute; inset: 0; z-index: 100;
   background: rgba(248, 250, 252, 0.93);
@@ -610,19 +548,13 @@ onUnmounted(() => {
 }
 .spinner {
   width: 26px; height: 26px;
-  border: 2.5px solid #e2e8f0;
-  border-top-color: #0EA5E9;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  border: 2.5px solid #e2e8f0; border-top-color: #7A4F7B;
+  border-radius: 50%; animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Layout */
-.main-layout {
-  flex: 1; display: flex; overflow: hidden;
-}
+.main-layout { flex: 1; display: flex; overflow: hidden; }
 
-/* Map pane */
 .map-pane {
   flex: 0 0 45%; position: relative; overflow: hidden;
   border-right: 1px solid #e2e8f0;
@@ -645,10 +577,10 @@ onUnmounted(() => {
 /* Popup */
 .map-popup {
   position: absolute; top: 12px; left: 12px; z-index: 20;
-  background: rgba(255, 255, 255, 0.97);
+  background: rgba(255,255,255,0.97);
   border: 1px solid #e2e8f0; border-radius: 10px;
   padding: 10px 12px; min-width: 180px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.1);
 }
 .popup-header {
   display: flex; align-items: flex-start;
@@ -674,19 +606,17 @@ onUnmounted(() => {
   overflow: hidden; padding: 12px 14px 8px; gap: 8px;
 }
 
-/* Header */
 .panel-header {
-  flex-shrink: 0;
-  display: flex; align-items: baseline; gap: 8px;
+  flex-shrink: 0; display: flex; align-items: baseline; gap: 8px;
 }
 .panel-title { font-size: 15px; font-weight: 700; color: #1e293b; }
 .panel-sub   { font-size: 11px; color: #94a3b8; }
 
-/* Count grid — bigger cards 2 rows × 4 cols */
+/* Count grid 2×3 */
 .count-grid {
   flex-shrink: 0;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
 }
 .count-card {
@@ -699,13 +629,8 @@ onUnmounted(() => {
 }
 .count-card:hover { border-color: #cbd5e1; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
 .count-card.active { box-shadow: 0 3px 10px rgba(0,0,0,0.12); }
-.cc-count {
-  font-size: 26px; font-weight: 800; line-height: 1;
-}
-.cc-label {
-  font-size: 10px; color: #94a3b8; white-space: nowrap;
-  transition: color 0.15s;
-}
+.cc-count { font-size: 26px; font-weight: 800; line-height: 1; }
+.cc-label { font-size: 10px; color: #94a3b8; white-space: nowrap; transition: color 0.15s; }
 
 /* Bar chart */
 .chart-box {
@@ -713,25 +638,17 @@ onUnmounted(() => {
   background: #fff; border: 1px solid #e2e8f0;
   border-radius: 10px; padding: 8px 10px;
 }
-.chart-title {
-  font-size: 11px; font-weight: 600; color: #64748b;
-  margin-bottom: 4px;
-}
-.chart-inner {
-  height: 130px; position: relative;
-}
+.chart-title { font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 4px; }
+.chart-inner { height: 130px; position: relative; }
 
-/* List section — fills remaining space */
+/* List section */
 .list-section {
   flex: 1; display: flex; flex-direction: column;
-  overflow: hidden; gap: 4px;
-  min-height: 0;
+  overflow: hidden; gap: 4px; min-height: 0;
 }
 
-/* Tab bar */
 .fac-tabs {
-  flex-shrink: 0;
-  display: flex; flex-wrap: wrap; gap: 3px;
+  flex-shrink: 0; display: flex; flex-wrap: wrap; gap: 3px;
 }
 .fac-tab {
   padding: 2px 8px; border: 1px solid #e2e8f0; border-radius: 20px;
@@ -741,7 +658,6 @@ onUnmounted(() => {
 .fac-tab:hover { border-color: #cbd5e1; }
 .fac-tab.active { font-weight: 700; }
 
-/* List header */
 .list-header {
   flex-shrink: 0;
   display: flex; align-items: baseline; justify-content: space-between;
@@ -750,25 +666,17 @@ onUnmounted(() => {
 .list-title { font-size: 12px; font-weight: 700; }
 .list-count  { font-size: 10px; color: #94a3b8; }
 
-/* Scrollable list */
 .fac-list {
-  flex: 1; overflow-y: auto;
-  display: flex; flex-direction: column;
+  flex: 1; overflow-y: auto; display: flex; flex-direction: column;
 }
-.fac-empty {
-  text-align: center; color: #94a3b8; font-size: 12px; padding: 12px 0;
-}
+.fac-empty { text-align: center; color: #94a3b8; font-size: 12px; padding: 12px 0; }
 .fac-item {
   display: flex; align-items: center; gap: 8px;
-  padding: 5px 4px;
-  border-bottom: 1px solid #f8fafc;
-  cursor: pointer; transition: background 0.1s;
-  border-radius: 4px;
+  padding: 5px 4px; border-bottom: 1px solid #f8fafc;
+  cursor: pointer; transition: background 0.1s; border-radius: 4px;
 }
 .fac-item:hover { background: #f1f5f9; }
-.fac-dot {
-  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
-}
+.fac-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .fac-name {
   font-size: 11px; color: #334155; flex: 1; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
