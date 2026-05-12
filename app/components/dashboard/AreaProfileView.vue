@@ -25,6 +25,9 @@
       <!-- 銀髮安居：整頁 ElderlyDashboard -->
       <ElderlyDashboard v-else-if="theme === 'elderly'" />
 
+      <!-- 生活機能：整頁 AmenityDashboard -->
+      <AmenityDashboard v-else-if="theme === 'amenity'" />
+
       <!-- 其他主題：頁首 + 捲動面板 -->
       <template v-else>
       <!-- 主題頁首 -->
@@ -84,8 +87,8 @@
           </div>
         </template>
 
-        <!-- ── 生活機能 ── -->
-        <template v-else-if="theme === 'amenity'">
+        <!-- ── 生活機能（placeholder kept, replaced by AmenityDashboard above） ── -->
+        <template v-if="theme === 'amenity_disabled'">
           <div class="kpi-row">
             <div v-for="k in amenityKPIs" :key="k.label" class="kpi-card" :style="{ borderTopColor: k.color }">
               <div class="kpi-label">{{ k.label }}</div>
@@ -232,6 +235,7 @@ import { computed } from 'vue'
 import PopulationDashboard          from '@/components/dashboard/PopulationDashboard.vue'
 import ElderlyDashboard             from '@/components/dashboard/ElderlyDashboard.vue'
 import SocialVulnerabilityDashboard from '@/components/dashboard/SocialVulnerabilityDashboard.vue'
+import AmenityDashboard             from '@/components/dashboard/AmenityDashboard.vue'
 
 const props = withDefaults(defineProps<{
   userRole?: 'public' | 'authority'

@@ -33,6 +33,25 @@
         </div>
       </div>
 
+      <!-- 村里 Popup -->
+      <transition name="popup-fade">
+        <div v-if="selectedVill" class="map-popup">
+          <div class="popup-hd">
+            <span class="popup-name">{{ selectedVill.name }}</span>
+            <button class="popup-close" @click="clearVillPopup">✕</button>
+          </div>
+          <template v-if="selectedVill.row">
+            <div class="popup-rows">
+              <div class="popup-row"><span>人口密度</span><b style="color:#7A989A">{{ selectedVill.row.density.toFixed(1) }}</b><span>人/km²</span></div>
+              <div class="popup-row"><span>扶養比</span><b style="color:#8CABD9">{{ selectedVill.row.dep.toFixed(3) }}</b></div>
+              <div class="popup-row"><span>扶幼比</span><b style="color:#F0CA50">{{ selectedVill.row.youth.toFixed(3) }}</b></div>
+              <div class="popup-row"><span>扶老比</span><b style="color:#C67052">{{ selectedVill.row.elder.toFixed(3) }}</b></div>
+              <div class="popup-row"><span>老化指數</span><b style="color:#CF9546">{{ selectedVill.row.aging.toFixed(3) }}</b></div>
+            </div>
+          </template>
+        </div>
+      </transition>
+
       <!-- 圖例 -->
       <div class="map-legend">
         <div class="leg-label">{{ activeCardDef?.shortLabel }}{{ changeMode[activeCard] ? '・變化量' : '' }}</div>
@@ -140,7 +159,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick, markRaw } fr
 // ── 常數 ──────────────────────────────────────────────────────
 const PORTAL_URL   = 'https://igisportal.geomatics.ncku.edu.tw/portal'
 const WEBSCENE_ID  = '85502d8e84934fef9412dce360fc7165'
-const TOWN_FILTER  = "TOWNCODE = '67000200'"
+const TOWN_FILTER  = "(TOWN = '新市區' OR TOWNNAME = '新市區' OR TOWNCODE = '67000200' OR TOWNCODE = 67000200)"
 const SUFFIX_2024  = '2024年12月臺南市村里人口指標'
 const SUFFIX_2023  = '2023年12月臺南市村里人口指標'
 const TOP_N        = 10
@@ -198,6 +217,21 @@ const changeMode = reactive<Record<CardKey, boolean>>({
 
 let mapView: any = null, fl24: any = null
 let cachedFeatures: Array<{ geometry: any; name: string }> = []
+
+const selectedVill = ref<{ name: string; row: Row | null } | null>(null)
+function clearVillPopup() { selectedVill.value = null }
+
+async function handlePopClick(event: any) {
+  if (!mapView) return
+  const hit = await mapView.hitTest(event)
+  const match = hit.results?.find((r: any) => r.graphic?.attributes?.name)
+  if (!match) { clearVillPopup(); return }
+  const name = match.graphic.attributes.name as string
+  selectedVill.value = {
+    name,
+    row: villageData.value.find(r => r.name === name) ?? null,
+  }
+}
 
 const canvasRefs = new Map<CardKey, HTMLCanvasElement>()
 function setRef(key: CardKey, el: HTMLCanvasElement | null) { if (el) canvasRefs.set(key, el) }
@@ -286,6 +320,7 @@ async function initMap(url: string) {
   mapView = markRaw(new MapView({ container: mapDivRef.value, map: m, center: [120.31,23.07], zoom: 12, ui: { components: ['zoom'] } }))
   mapView.ui.remove('attribution')
   await mapView.when()
+  mapView.on('click', handlePopClick)
   // fl24 is query-only — never added to map to avoid tile cache requests
   fl24 = new FeatureLayer({ url, outFields: ['*'], definitionExpression: TOWN_FILTER })
   try { await fl24.load() } catch (e) { console.warn('[PopDash] fl24.load 失敗', e) }
@@ -342,7 +377,7 @@ async function applyChoro(key: CardKey, colors: readonly string[]) {
     for (const f of features) {
       const v = dataMap.get(f.name)
       const color = v != null ? toColor(v) : [200,200,200,120]
-      gl.add(new Graphic({ geometry: f.geometry, symbol: { type:'simple-fill', color, outline:{color:[255,255,255,180],width:0.6} } as any }))
+      gl.add(new Graphic({ geometry: f.geometry, attributes: { name: f.name }, symbol: { type:'simple-fill', color, outline:{color:[255,255,255,180],width:0.6} } as any }))
     }
     mapView.map.add(gl)
   } catch (e) { console.warn('[PopDash] applyChoro 失敗', e) }
@@ -368,7 +403,7 @@ async function applyChangeChoro(fieldGetter: (r: ChangeRow) => number) {
     for (const f of features) {
       const row = dataMap.get(f.name)
       if (!row) continue
-      gl.add(new Graphic({ geometry: f.geometry, symbol: { type:'simple-fill', color: toColor(fieldGetter(row)), outline:{color:[255,255,255,180],width:0.6} } as any }))
+      gl.add(new Graphic({ geometry: f.geometry, attributes: { name: f.name }, symbol: { type:'simple-fill', color: toColor(fieldGetter(row)), outline:{color:[255,255,255,180],width:0.6} } as any }))
     }
     mapView.map.add(gl)
   } catch (e) { console.warn('[PopDash] applyChangeChoro 失敗', e) }
@@ -787,4 +822,24 @@ onUnmounted(() => {
 .dep-bar { flex: 1.4; min-height: 0; }
 .dep-donut-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; border-top: 1px solid #f1f5f9; padding-top: 4px; }
 .donut-ttl { font-size: 9px; color: #94a3b8; font-weight: 500; text-align: center; flex-shrink: 0; margin-bottom: 2px; }
+
+/* Village popup */
+.map-popup {
+  position: absolute; top: 14px; right: 14px; z-index: 20;
+  background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.15);
+  padding: 12px 14px; min-width: 180px; border: 1px solid #e2e8f0;
+}
+.popup-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.popup-name { font-size: 14px; font-weight: 700; color: #1e293b; }
+.popup-close {
+  width: 20px; height: 20px; border-radius: 50%; border: none;
+  background: #f1f5f9; color: #64748b; font-size: 11px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.popup-close:hover { background: #e2e8f0; }
+.popup-rows { display: flex; flex-direction: column; gap: 4px; }
+.popup-row { display: flex; align-items: baseline; gap: 6px; font-size: 12px; color: #475569; }
+.popup-row b { font-size: 13px; font-weight: 700; }
+.popup-fade-enter-active, .popup-fade-leave-active { transition: all 0.2s ease; }
+.popup-fade-enter-from, .popup-fade-leave-to { opacity: 0; transform: translateY(-4px) scale(0.97); }
 </style>

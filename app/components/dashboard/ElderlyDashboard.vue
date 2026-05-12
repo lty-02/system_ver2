@@ -38,6 +38,25 @@
       </div>
 
       <!-- 圖例 -->
+      <!-- 村里 Popup -->
+      <transition name="popup-fade">
+        <div v-if="selectedVill" class="map-popup">
+          <div class="popup-hd">
+            <span class="popup-name">{{ selectedVill.name }}</span>
+            <button class="popup-close" @click="clearVillPopup">✕</button>
+          </div>
+          <template v-if="selectedVillScores">
+            <div class="popup-rows">
+              <div class="popup-row"><span>行動健康需求</span><b style="color:#C1395E">{{ selectedVillScores.mob != null ? (selectedVillScores.mob * 100).toFixed(1) + '%' : '—' }}</b></div>
+              <div class="popup-row"><span>照護人力需求</span><b style="color:#CF9546">{{ selectedVillScores.care != null ? (selectedVillScores.care * 100).toFixed(1) + '%' : '—' }}</b></div>
+              <div class="popup-row"><span>經濟狀況需求</span><b style="color:#7A989A">{{ selectedVillScores.eco != null ? (selectedVillScores.eco * 100).toFixed(1) + '%' : '—' }}</b></div>
+              <div class="popup-row"><span>住宅狀況需求</span><b style="color:#8CABD9">{{ selectedVillScores.house != null ? (selectedVillScores.house * 100).toFixed(1) + '%' : '—' }}</b></div>
+              <div class="popup-row"><span>環境安全需求</span><b style="color:#48725C">{{ selectedVillScores.env != null ? (selectedVillScores.env * 100).toFixed(1) + '%' : '—' }}</b></div>
+            </div>
+          </template>
+        </div>
+      </transition>
+
       <div class="map-legend" v-if="activeIdxDef">
         <div class="leg-label">
           {{ activeIdxDef.shortLabel }}{{ changeMode[activeIdx] ? '・變化量' : '・需求程度' }}
@@ -202,6 +221,29 @@ const chartInst  = new Map<string, any>()
 
 let mapView: any = null
 let cachedGeos: Array<{ name: string; geometry: any }> = []
+
+const selectedVill = ref<{ name: string } | null>(null)
+function clearVillPopup() { selectedVill.value = null }
+
+const selectedVillScores = computed(() => {
+  if (!selectedVill.value) return null
+  const n = selectedVill.value.name
+  return {
+    mob:   scores24.mob.get(n)?.score,
+    care:  scores24.care.get(n)?.score,
+    eco:   scores24.eco.get(n)?.score,
+    house: scores24.house.get(n)?.score,
+    env:   scores24.env.get(n)?.score,
+  }
+})
+
+async function handlePopClick(event: any) {
+  if (!mapView) return
+  const hit = await mapView.hitTest(event)
+  const match = hit.results?.find((r: any) => r.graphic?.attributes?.name)
+  if (!match) { clearVillPopup(); return }
+  selectedVill.value = { name: match.graphic.attributes.name as string }
+}
 
 // 各指數的村里脆弱度分數 (0~1)
 interface VScore { score: number; total: number }
@@ -483,6 +525,7 @@ async function initMap() {
   }))
   mapView.ui.remove('attribution')
   await mapView.when()
+  mapView.on('click', handlePopClick)
 }
 
 function removeAllGL() {
@@ -517,7 +560,7 @@ function applyChoro(idxKey: IdxKey) {
   for (const { name, geometry } of cachedGeos) {
     const v = sm.get(name)
     const color = v != null ? toRgba(v.score) : [200, 200, 200, 100]
-    gl.add(new Graphic({ geometry, symbol: { type: 'simple-fill', color, outline: { color: [255,255,255,160], width: 0.6 } } as any }))
+    gl.add(new Graphic({ geometry, attributes: { name }, symbol: { type: 'simple-fill', color, outline: { color: [255,255,255,160], width: 0.6 } } as any }))
   }
   mapView.map.add(gl)
 }
@@ -545,7 +588,7 @@ function applyChangeChoro(idxKey: IdxKey) {
   for (const { name, geometry } of cachedGeos) {
     const d = diffs.get(name)
     if (d == null) continue
-    gl.add(new Graphic({ geometry, symbol: { type: 'simple-fill', color: toColor(d), outline: { color: [255,255,255,160], width: 0.6 } } as any }))
+    gl.add(new Graphic({ geometry, attributes: { name }, symbol: { type: 'simple-fill', color: toColor(d), outline: { color: [255,255,255,160], width: 0.6 } } as any }))
   }
   mapView.map.add(gl)
 }
@@ -963,4 +1006,24 @@ onUnmounted(() => {
 .chg-btn.on { background: #1e293b; color: #fff; border-color: #1e293b; }
 .canvas-wrap { flex: 1; min-height: 0; position: relative; }
 .canvas-wrap canvas { width: 100% !important; height: 100% !important; }
+
+/* Village popup */
+.map-popup {
+  position: absolute; top: 14px; right: 14px; z-index: 20;
+  background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.15);
+  padding: 12px 14px; min-width: 180px; border: 1px solid #e2e8f0;
+}
+.popup-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.popup-name { font-size: 14px; font-weight: 700; color: #1e293b; }
+.popup-close {
+  width: 20px; height: 20px; border-radius: 50%; border: none;
+  background: #f1f5f9; color: #64748b; font-size: 11px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.popup-close:hover { background: #e2e8f0; }
+.popup-rows { display: flex; flex-direction: column; gap: 4px; }
+.popup-row { display: flex; align-items: baseline; gap: 6px; font-size: 12px; color: #475569; }
+.popup-row b { font-size: 13px; font-weight: 700; }
+.popup-fade-enter-active, .popup-fade-leave-active { transition: all 0.2s ease; }
+.popup-fade-enter-from, .popup-fade-leave-to { opacity: 0; transform: translateY(-4px) scale(0.97); }
 </style>
