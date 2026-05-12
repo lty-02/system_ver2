@@ -8,12 +8,6 @@
         <div class="spinner"></div><span>載入中…</span>
       </div>
 
-      <!-- 科學園區開關 -->
-      <button class="sci-btn" :class="{ active: showSciPark }" @click="toggleSciPark">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-        科學園區
-      </button>
-
       <!-- 左上角 KPI 卡 -->
       <div class="kpi-overlay">
         <div class="kpi-head">
@@ -223,42 +217,6 @@ const changeMode = reactive<Record<CardKey, boolean>>({
 
 let mapView: any = null, fl24: any = null
 let cachedFeatures: Array<{ geometry: any; name: string }> = []
-let _ws: any = null
-let sciParkGL: any = null
-
-const showSciPark = ref(false)
-function toggleSciPark() {
-  showSciPark.value = !showSciPark.value
-  if (sciParkGL) sciParkGL.visible = showSciPark.value
-}
-
-async function loadSciParkLayer() {
-  if (!_ws || !mapView) return
-  let sciLayer: any = null
-  _ws.allLayers.forEach((l: any) => {
-    if (!sciLayer && (l.title?.includes('南部科學') || l.title?.includes('台南園區') || l.title?.includes('科學園區'))) sciLayer = l
-  })
-  if (!sciLayer) return
-  try {
-    await sciLayer.load()
-    let queryable = sciLayer
-    if (sciLayer.type === 'map-image' || sciLayer.sublayers) {
-      const sub = sciLayer.sublayers?.getItemAt(0)
-      if (sub) { try { await sub.load() } catch {}; queryable = sub }
-    }
-    const result = await queryable.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
-    const features = result?.features ?? []
-    if (!features.length) return
-    sciParkGL = new GraphicsLayer({ id: 'sci-park-gl', visible: false })
-    for (const f of features) {
-      if (!f.geometry) continue
-      sciParkGL.add(new Graphic({ geometry: markRaw(f.geometry),
-        symbol: { type: 'simple-fill', color: [130, 200, 80, 28], outline: { color: [80, 160, 40, 220], width: 2.5, style: 'dash' } } as any }))
-    }
-    mapView.map.add(sciParkGL)
-    console.log('[SciPark] Pop loaded', features.length)
-  } catch (e) { console.warn('[SciPark] Pop load failed', e) }
-}
 
 const selectedVill = ref<{ name: string; row: Row | null } | null>(null)
 function clearVillPopup() { selectedVill.value = null }
@@ -342,7 +300,6 @@ async function findLayerUrls(): Promise<{ url24: string|null; url23: string|null
     const ws = new WebScene({ portalItem: { id: WEBSCENE_ID, portal } })
     await ws.load()
 
-    _ws = ws
     let url24: string|null = null, url23: string|null = null
     ws.allLayers.forEach((l: any) => {
       const title = l.title ?? ''
@@ -374,7 +331,7 @@ async function initMap(url: string) {
 async function getGeometries(): Promise<Array<{ geometry: any; name: string }>> {
   if (cachedFeatures.length) return cachedFeatures
   if (!fl24) return []
-  const res = await fl24.queryFeatures({ where: TOWN_FILTER, outFields:['*'], returnGeometry:true })
+  const res = await fl24.queryFeatures({ where:'1=1', outFields:['*'], returnGeometry:true })
   if (!res.features.length) return []
   const a0 = res.features[0].attributes ?? {}
   const lk = resolveKey(a0, F.village)
@@ -419,8 +376,7 @@ async function applyChoro(key: CardKey, colors: readonly string[]) {
     const gl = new GraphicsLayer({ id: 'choro-gl' })
     for (const f of features) {
       const v = dataMap.get(f.name)
-      if (v == null) continue  // only render villages that have data (新市區)
-      const color = toColor(v)
+      const color = v != null ? toColor(v) : [200,200,200,120]
       gl.add(new Graphic({ geometry: f.geometry, attributes: { name: f.name }, symbol: { type:'simple-fill', color, outline:{color:[255,255,255,180],width:0.6} } as any }))
     }
     mapView.map.add(gl)
@@ -742,7 +698,6 @@ onMounted(async () => {
   await initMap(url24)
   // 初始渲染人口密度面量圖
   await applyChoro('P_DEN', CARDS.find(c=>c.key==='P_DEN')!.colors)
-  loadSciParkLayer()
   mapLoading.value = false
 })
 
@@ -780,19 +735,6 @@ onUnmounted(() => {
 }
 .spinner { width:22px; height:22px; border:2.5px solid #e2e8f0; border-top-color:#8CABD9; border-radius:50%; animation:spin .8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
-
-/* Science park button */
-.sci-btn {
-  position: absolute; bottom: 12px; right: 12px; z-index: 20;
-  display: flex; align-items: center; gap: 5px;
-  padding: 5px 10px; border-radius: 20px;
-  border: 1.5px solid #cbd5e1; background: rgba(255,255,255,0.93);
-  font-size: 10px; font-weight: 600; color: #475569;
-  cursor: pointer; transition: all 0.15s;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-}
-.sci-btn:hover { border-color: #80c060; color: #3d7a28; }
-.sci-btn.active { border-color: #60b040; background: #f0f8ea; color: #3d7a28; }
 
 /* KPI 覆蓋卡 */
 .kpi-overlay {

@@ -28,9 +28,6 @@
       <!-- 生活機能：整頁 AmenityDashboard -->
       <AmenityDashboard v-else-if="theme === 'amenity'" />
 
-      <!-- 教育與福利機構：整頁 EducationDashboard -->
-      <EducationDashboard v-else-if="theme === 'education'" />
-
       <!-- 其他主題：頁首 + 捲動面板 -->
       <template v-else>
       <!-- 主題頁首 -->
@@ -239,7 +236,6 @@ import PopulationDashboard          from '@/components/dashboard/PopulationDashb
 import ElderlyDashboard             from '@/components/dashboard/ElderlyDashboard.vue'
 import SocialVulnerabilityDashboard from '@/components/dashboard/SocialVulnerabilityDashboard.vue'
 import AmenityDashboard             from '@/components/dashboard/AmenityDashboard.vue'
-import EducationDashboard           from '@/components/dashboard/EducationDashboard.vue'
 
 const props = withDefaults(defineProps<{
   userRole?: 'public' | 'authority'

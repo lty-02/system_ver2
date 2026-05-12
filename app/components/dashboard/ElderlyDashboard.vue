@@ -37,12 +37,6 @@
         </div>
       </div>
 
-      <!-- 科學園區開關 -->
-      <button class="sci-btn" :class="{ active: showSciPark }" @click="toggleSciPark">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-        科學園區
-      </button>
-
       <!-- 圖例 -->
       <!-- 村里 Popup -->
       <transition name="popup-fade">
@@ -212,42 +206,8 @@ async function loadArcGIS() {
 }
 
 // ── State ─────────────────────────────────────────────────────
-const mapDivRef   = ref<HTMLDivElement | null>(null)
-const mapLoading  = ref(true)
-const showSciPark = ref(false)
-let sciParkGL: any = null
-
-function toggleSciPark() {
-  showSciPark.value = !showSciPark.value
-  if (sciParkGL) sciParkGL.visible = showSciPark.value
-}
-
-async function loadSciParkLayer(ws: any) {
-  let sciLayer: any = null
-  ws.allLayers.forEach((l: any) => {
-    if (!sciLayer && (l.title?.includes('南部科學') || l.title?.includes('台南園區') || l.title?.includes('科學園區'))) sciLayer = l
-  })
-  if (!sciLayer || !mapView) return
-  try {
-    await sciLayer.load()
-    let queryable = sciLayer
-    if (sciLayer.type === 'map-image' || sciLayer.sublayers) {
-      const sub = sciLayer.sublayers?.getItemAt(0)
-      if (sub) { try { await sub.load() } catch {}; queryable = sub }
-    }
-    const result = await queryable.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
-    const features = result?.features ?? []
-    if (!features.length) return
-    sciParkGL = new GraphicsLayer({ id: 'sci-park-gl', visible: false })
-    for (const f of features) {
-      if (!f.geometry) continue
-      sciParkGL.add(new Graphic({ geometry: markRaw(f.geometry),
-        symbol: { type: 'simple-fill', color: [130, 200, 80, 28], outline: { color: [80, 160, 40, 220], width: 2.5, style: 'dash' } } as any }))
-    }
-    mapView.map.add(sciParkGL)
-    console.log('[SciPark] Eld loaded', features.length)
-  } catch (e) { console.warn('[SciPark] Eld load failed', e) }
-}
+const mapDivRef  = ref<HTMLDivElement | null>(null)
+const mapLoading = ref(true)
 const activeIdx  = ref<IdxKey>('mob')
 const changeMode = reactive<Record<IdxKey, boolean>>({
   mob: false, care: false, eco: false, house: false, env: false,
@@ -333,8 +293,6 @@ async function loadChartJS() {
 }
 
 // ── WebScene 圖層 URL 查找 ────────────────────────────────────
-let _ws: any = null  // stored for science park load after map init
-
 async function findLayerUrls(): Promise<Record<IdxKey, { cur: string|null; prev: string|null }>> {
   const yearMap = new Map<IdxKey, Array<{ year: number; url: string }>>()
 
@@ -345,7 +303,6 @@ async function findLayerUrls(): Promise<Record<IdxKey, { cur: string|null; prev:
     try { await portal.load() } catch {}
     const ws = new WebScene({ portalItem: { id: WEBSCENE_ID, portal } })
     await ws.load()
-    _ws = ws
 
     const fmt = (raw: string) => {
       const b = raw.replace(/\/+$/, '')
@@ -563,7 +520,7 @@ async function initMap() {
   const m = new ArcMap({ basemap: 'gray-vector' })
   mapView = markRaw(new MapView({
     container: mapDivRef.value, map: m,
-    center: [120.319, 23.068], zoom: 13,
+    center: [120.31, 23.07], zoom: 12,
     ui: { components: ['zoom'] },
   }))
   mapView.ui.remove('attribution')
@@ -718,7 +675,7 @@ function drawMob() {
 
   const sorted = [...scores24.mob.entries()].sort(([, a], [, b]) => b.score - a.score).slice(0, 10)
   const colors = INDICES[0].colors
-  const toC = (s: number) => colors[Math.min(4, Math.floor(s * 5))]! + 'ee'
+  const toC = (s: number) => colors[Math.min(4, Math.floor(s * 5))]! + 'cc'
 
   chartInst.set('mob', new Chart(canvas, {
     type: 'bar',
@@ -778,9 +735,9 @@ function drawEco() {
   chartInst.get('eco')?.destroy()
   if (changeMode.eco) { drawDivBar('eco'); return }
 
-  const sorted = [...scores24.eco.entries()].sort(([, a], [, b]) => b.score - a.score).slice(0, 10)
+  const sorted = [...scores24.eco.entries()].sort(([, a], [, b]) => b.score - a.score).slice(0, 8)
   const colors = INDICES[2].colors
-  const toC = (s: number) => colors[Math.min(4, Math.floor(s * 5))]! + 'ee'
+  const toC = (s: number) => colors[Math.min(4, Math.floor(s * 5))]! + 'cc'
 
   chartInst.set('eco', new Chart(canvas, {
     type: 'bar',
@@ -790,15 +747,14 @@ function drawEco() {
         label: '弱勢比例 (G12+G13)',
         data: sorted.map(([, v]) => +(v.score * 100).toFixed(1)),
         backgroundColor: sorted.map(([, v]) => toC(v.score)),
-        borderColor: sorted.map(([, v]) => colors[Math.min(4, Math.floor(v.score * 5))]!),
-        borderWidth: 1, borderRadius: 2,
+        borderWidth: 0, borderRadius: 2,
       }],
     },
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c: any) => ` 弱勢: ${Number(c.raw).toFixed(1)}%` } } },
       scales: {
-        x: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 9 } }, max: 25 },
+        x: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 9 } }, max: 20 },
         y: { grid: { display: false }, ticks: { font: { size: 8 } } },
       },
     },
@@ -845,27 +801,24 @@ function drawEnv() {
 
   const { lique, fault, flood } = envPct.value
 
-  const allZero = lique === 0 && fault === 0 && flood === 0
-  if (allZero) { drawPlaceholder(canvas, '環境安全資料載入中…'); return }
-
   chartInst.set('env', new Chart(canvas, {
     type: 'polarArea',
     data: {
       labels: ['土壤液化潛勢', '地質敏感帶', '淹水潛勢'],
       datasets: [{
-        data: [+lique.toFixed(2), +fault.toFixed(2), +flood.toFixed(2)],
-        backgroundColor: ['rgba(179,168,106,0.82)', 'rgba(198,112,82,0.82)', 'rgba(137,167,194,0.82)'],
-        borderColor:     ['#B3A86A', '#C67052', '#89A7C2'],
-        borderWidth: 2,
+        data: [+lique.toFixed(1), +fault.toFixed(1), +flood.toFixed(1)],
+        backgroundColor: ['#B3A86Acc', '#C67052cc', '#89A7C2cc'],
+        borderColor:      ['#B3A86A',   '#C67052',   '#89A7C2'],
+        borderWidth: 1.5,
       }],
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: true, position: 'right', labels: { font: { size: 8 }, boxWidth: 9, padding: 5 } },
-        tooltip: { callbacks: { label: (c: any) => ` ${c.label}: ${Number(c.raw).toFixed(2)}% 老年人口` } },
+        tooltip: { callbacks: { label: (c: any) => ` ${c.label}: ${Number(c.raw).toFixed(1)}% 老年人口` } },
       },
-      scales: { r: { min: 0, ticks: { font: { size: 8 }, backdropColor: 'transparent' }, grid: { color: '#e2e8f0' } } },
+      scales: { r: { ticks: { font: { size: 8 }, backdropColor: 'transparent' }, grid: { color: '#e2e8f0' } } },
     },
   }))
 }
@@ -929,7 +882,6 @@ onMounted(async () => {
   }
 
   if (cachedGeos.length) applyChoro('mob')
-  if (_ws) loadSciParkLayer(_ws)
   mapLoading.value = false
 
   // 背景載入前一年（用於變化量）
@@ -979,19 +931,6 @@ onUnmounted(() => {
 }
 .spinner { width: 22px; height: 22px; border: 2.5px solid #e2e8f0; border-top-color: #C1395E; border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-
-/* Science park button */
-.sci-btn {
-  position: absolute; bottom: 12px; right: 12px; z-index: 20;
-  display: flex; align-items: center; gap: 5px;
-  padding: 5px 10px; border-radius: 20px;
-  border: 1.5px solid #cbd5e1; background: rgba(255,255,255,0.93);
-  font-size: 10px; font-weight: 600; color: #475569;
-  cursor: pointer; transition: all 0.15s;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-}
-.sci-btn:hover { border-color: #80c060; color: #3d7a28; }
-.sci-btn.active { border-color: #60b040; background: #f0f8ea; color: #3d7a28; }
 
 /* KPI 覆蓋卡 */
 .kpi-overlay {

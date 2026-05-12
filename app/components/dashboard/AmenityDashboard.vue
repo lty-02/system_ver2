@@ -13,12 +13,6 @@
       <div class="map-pane">
         <div ref="mapDivRef" class="map-div"></div>
 
-        <!-- Science park toggle -->
-        <button class="sci-btn" :class="{ active: showSciPark }" @click="toggleSciPark">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-          科學園區
-        </button>
-
         <!-- Popup overlay -->
         <transition name="popup-fade">
           <div v-if="selectedFac" class="map-popup">
@@ -131,13 +125,13 @@ type FacKey = 'activity' | 'parking' | 'bank' | 'post' | 'market' | 'gas' | 'par
 
 const FACILITIES: Array<{ key: FacKey; titlePart: string; label: string; color: string }> = [
   { key: 'activity', titlePart: '活動中心', label: '活動中心', color: '#CF9546' },
-  { key: 'parking',  titlePart: '停車場',   label: '停車場',   color: '#7A8FA6' },
-  { key: 'bank',     titlePart: '金融機構', label: '金融機構', color: '#4A8FC4' },
-  { key: 'post',     titlePart: '郵局',     label: '郵局',     color: '#C67052' },
+  { key: 'parking',  titlePart: '停車場',   label: '停車場',   color: '#64748b' },
+  { key: 'bank',     titlePart: '金融機構', label: '金融機構', color: '#2E7CB8' },
+  { key: 'post',     titlePart: '郵局',     label: '郵局',     color: '#E05C1A' },
   { key: 'market',   titlePart: '大賣場',   label: '大賣場',   color: '#C1395E' },
-  { key: 'gas',      titlePart: '加油站',   label: '加油站',   color: '#7B5EA7' },
+  { key: 'gas',      titlePart: '加油站',   label: '加油站',   color: '#7C3AED' },
   { key: 'park',     titlePart: '公園',     label: '公園',     color: '#48725C' },
-  { key: 'cvs',      titlePart: '便利商店', label: '便利商店', color: '#3A9BB5' },
+  { key: 'cvs',      titlePart: '便利商店', label: '便利商店', color: '#0EA5E9' },
 ]
 
 // ── ArcGIS module holders ─────────────────────────────────────
@@ -181,12 +175,10 @@ const facData = ref<Record<FacKey, FacItem[]>>({
   market:   [], gas:     [], park: [], cvs:  [],
 })
 
-const selectedFac  = ref<{ name: string; typeLabel: string; color: string } | null>(null)
-const showSciPark  = ref(false)
+const selectedFac = ref<{ name: string; typeLabel: string; color: string } | null>(null)
 
 let mapView: any  = null
 let facGL: any    = null
-let sciParkGL: any = null
 let barChart: Chart | null = null
 
 // ── Computed ──────────────────────────────────────────────────
@@ -194,13 +186,6 @@ const activeFac      = computed(() => FACILITIES.find(f => f.key === activeKey.v
 const activeFacItems = computed(() => facData.value[activeKey.value] ?? [])
 
 // ── Chart ─────────────────────────────────────────────────────
-function hexRgba(hex: string, alpha: number): string {
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return `rgba(${r},${g},${b},${alpha})`
-}
-
 function renderChart() {
   if (!chartCanvasRef.value) return
   const labels = FACILITIES.map(f => f.label)
@@ -219,9 +204,9 @@ function renderChart() {
       labels,
       datasets: [{
         data: counts,
-        backgroundColor: colors.map(c => hexRgba(c, 0.78)),
+        backgroundColor: colors.map(c => c + 'cc'),
         borderColor: colors,
-        borderWidth: 1.5,
+        borderWidth: 1,
         borderRadius: 4,
         borderSkipped: false,
       }],
@@ -232,8 +217,6 @@ function renderChart() {
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: 'rgba(30,41,59,0.92)',
-          padding: 8,
           callbacks: { label: (ctx: any) => ` ${ctx.parsed.x} 處` },
         },
       },
@@ -265,45 +248,6 @@ function highlightFacItem(item: FacItem) {
   selectedFac.value = { name: item.name, typeLabel: item.typeLabel, color: item.color }
   if (item.geometry && mapView) {
     try { mapView.goTo({ target: item.geometry, zoom: 15 }) } catch {}
-  }
-}
-
-// ── Science park toggle ───────────────────────────────────────
-function toggleSciPark() {
-  showSciPark.value = !showSciPark.value
-  if (sciParkGL) sciParkGL.visible = showSciPark.value
-}
-
-async function loadSciPark(ws: any) {
-  let sciLayer: any = null
-  ws.allLayers.forEach((l: any) => {
-    if (!sciLayer && (l.title?.includes('南部科學') || l.title?.includes('台南園區') || l.title?.includes('科學園區'))) {
-      sciLayer = l
-    }
-  })
-  if (!sciLayer || !mapView) return
-  try {
-    await sciLayer.load()
-    let queryable = sciLayer
-    if (sciLayer.type === 'map-image' || sciLayer.sublayers) {
-      const sub = sciLayer.sublayers?.getItemAt(0)
-      if (sub) { try { await sub.load() } catch {}; queryable = sub }
-    }
-    const result = await queryable.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
-    const features = result?.features ?? []
-    if (!features.length) { console.warn('[SciPark] no features'); return }
-    sciParkGL = new GraphicsLayer({ id: 'sci-park-gl', visible: false })
-    for (const f of features) {
-      if (!f.geometry) continue
-      sciParkGL.add(new Graphic({
-        geometry: markRaw(f.geometry),
-        symbol: { type: 'simple-fill', color: [130, 200, 80, 28], outline: { color: [80, 160, 40, 220], width: 2.5, style: 'dash' } } as any,
-      }))
-    }
-    mapView.map.add(sciParkGL)
-    console.log('[SciPark] loaded', features.length, 'features, title:', sciLayer.title)
-  } catch (e) {
-    console.warn('[SciPark] load failed', e)
   }
 }
 
@@ -421,9 +365,6 @@ async function loadData() {
     loading.value = false
     return
   }
-
-  // ── Science park (load in background after map is ready) ─────
-  loadSciPark(ws)
 
   // ── Find boundary layer ───────────────────────────────────
   let boundaryLayer: any = null
@@ -628,19 +569,6 @@ onUnmounted(() => {
   border-right: 1px solid #e2e8f0;
 }
 .map-div { width: 100%; height: 100%; }
-
-/* Science park button */
-.sci-btn {
-  position: absolute; bottom: 12px; right: 12px; z-index: 20;
-  display: flex; align-items: center; gap: 5px;
-  padding: 5px 10px; border-radius: 20px;
-  border: 1.5px solid #cbd5e1; background: rgba(255,255,255,0.93);
-  font-size: 10px; font-weight: 600; color: #475569;
-  cursor: pointer; transition: all 0.15s;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-}
-.sci-btn:hover { border-color: #80c060; color: #3d7a28; }
-.sci-btn.active { border-color: #60b040; background: #f0f8ea; color: #3d7a28; }
 
 /* Popup */
 .map-popup {
