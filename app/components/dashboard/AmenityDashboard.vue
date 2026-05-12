@@ -7,7 +7,7 @@
       <span>載入生活機能資料中…</span>
     </div>
 
-    <div v-else class="main-layout">
+    <div class="main-layout">
 
       <!-- ── 地圖（左 45%）── -->
       <div class="map-pane">
