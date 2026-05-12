@@ -732,8 +732,8 @@ onMounted(async () => {
           gl.add(new Graphic({
             geometry: f.geometry,
             symbol: {
-              type: 'transparent-fill',
-              color: [240, 202, 80, 30],
+              type: 'simple-fill',
+              color: [240, 202, 80, 0],
               outline: { color: [207, 149, 70, 230], width: 2.5 },
             } as any,
           }))
