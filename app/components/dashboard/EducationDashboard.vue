@@ -312,17 +312,21 @@ async function initMap(): Promise<void> {
 }
 
 // ── Render village polygons ───────────────────────────────────
-function renderVillages(features: any[]) {
-  if (!mapView || !features.length) return
+function renderVillages(allFeatures: any[], xinshiFeatures: any[]) {
+  if (!mapView || !allFeatures.length) return
+  const xinshiSet = new Set(xinshiFeatures)
   const gl = new GraphicsLayer({ id: 'village-gl' })
-  for (const f of features) {
+  for (const f of allFeatures) {
     if (!f.geometry) continue
+    const isXinshi = xinshiSet.has(f)
     gl.add(new Graphic({
       geometry: f.geometry,
       symbol: {
         type: 'simple-fill',
-        color: [248, 250, 252, 200],
-        outline: { color: [180, 180, 180, 200], width: 1 },
+        color: [248, 250, 252, isXinshi ? 200 : 130],
+        outline: isXinshi
+          ? { color: [15, 23, 42, 230], width: 1.8 }
+          : { color: [203, 213, 225, 140], width: 0.5 },
       } as any,
     }))
   }
@@ -361,6 +365,9 @@ function renderFacPoints(key: FacKey) {
   }
   facGL = gl
   mapView.map.add(gl)
+  if (sciGL) {
+    try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {}
+  }
 
   mapView.on('click', (evt: any) => {
     mapView.hitTest(evt).then((result: any) => {
@@ -410,27 +417,46 @@ async function loadData() {
       if (sub) { try { await sub.load() } catch {}; queryable = sub }
     }
 
-    const boundaryFilters = [
-      "TOWN = '新市區'",
-      "TOWNNAME = '新市區'",
-      "TOWNCODE = '67000200'",
-    ]
+    // Load ALL boundary features for background display
+    let allBoundaryFeatures: any[] = []
+    try {
+      const allRes = await queryable.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
+      if (allRes?.features?.length > 0) {
+        allBoundaryFeatures = allRes.features
+        console.log(`[EduDash] all boundary: ${allBoundaryFeatures.length} 筆`)
+      }
+    } catch (e) {
+      console.warn('[EduDash] all boundary query failed', e)
+    }
 
-    for (const where of boundaryFilters) {
-      try {
-        const result = await queryable.queryFeatures({ where, outFields: ['*'], returnGeometry: true })
-        if (result?.features?.length > 0) {
-          villageFeatures = result.features
-          console.log(`[EduDash] boundary OK (${where}): ${villageFeatures.length} 筆`)
-          break
+    // Client-side filter for 新市區
+    if (allBoundaryFeatures.length > 0) {
+      villageFeatures = allBoundaryFeatures.filter((f: any) => {
+        const a = f.attributes ?? {}
+        return a.TOWN === '新市區' || a.TOWNNAME === '新市區' || String(a.TOWNCODE) === '67000200'
+      })
+    }
+
+    // Fallback: server-side query
+    if (villageFeatures.length === 0) {
+      for (const where of ["TOWN = '新市區'", "TOWNNAME = '新市區'", "TOWNCODE = '67000200'"]) {
+        try {
+          const result = await queryable.queryFeatures({ where, outFields: ['*'], returnGeometry: true })
+          if (result?.features?.length > 0) {
+            villageFeatures = result.features
+            if (!allBoundaryFeatures.length) allBoundaryFeatures = villageFeatures
+            console.log(`[EduDash] boundary fallback (${where}): ${villageFeatures.length} 筆`)
+            break
+          }
+        } catch (e) {
+          console.warn(`[EduDash] boundary filter "${where}" failed`, e)
         }
-      } catch (e) {
-        console.warn(`[EduDash] boundary filter "${where}" failed`, e)
       }
     }
 
-    if (villageFeatures.length > 0) {
-      renderVillages(villageFeatures)
+    const displayFeatures = allBoundaryFeatures.length > 0 ? allBoundaryFeatures : villageFeatures
+    if (displayFeatures.length > 0) {
+      renderVillages(displayFeatures, villageFeatures)
 
       // ── Build buffered polygon (union of village polygons + 500m buffer) ──
       try {

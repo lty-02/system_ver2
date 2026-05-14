@@ -306,9 +306,10 @@ async function loadChartJS() {
 }
 
 // ── WebScene 圖層 URL 查找 ────────────────────────────────────
-async function findLayerUrls(): Promise<{ urls: Record<IdxKey, { cur: string|null; prev: string|null }>; sciParkUrl: string|null }> {
+async function findLayerUrls(): Promise<{ urls: Record<IdxKey, { cur: string|null; prev: string|null }>; sciParkUrl: string|null; boundaryUrl: string|null }> {
   const yearMap = new Map<IdxKey, Array<{ year: number; url: string }>>()
   let sciParkUrl: string|null = null
+  let boundaryUrl: string|null = null
 
   try {
     const { default: Portal }   = await import('@arcgis/core/portal/Portal')
@@ -328,6 +329,7 @@ async function findLayerUrls(): Promise<{ urls: Record<IdxKey, { cur: string|nul
       if (!raw) return
       const url = fmt(raw)
       if (!sciParkUrl && title.includes('南部科學園區_台南園區範圍')) { sciParkUrl = url; return }
+      if (!boundaryUrl && title.includes('計畫實驗區村里界')) { boundaryUrl = url }
       const yrM = title.match(/^(\d{4})年/)
       if (!yrM) return
       const year = parseInt(yrM[1])
@@ -350,7 +352,7 @@ async function findLayerUrls(): Promise<{ urls: Record<IdxKey, { cur: string|nul
     urls[key as IdxKey].cur  = sorted[0]?.url ?? null
     urls[key as IdxKey].prev = sorted[1]?.url ?? null
   }
-  return { urls, sciParkUrl }
+  return { urls, sciParkUrl, boundaryUrl }
 }
 
 // ── 查詢（含幾何）──────────────────────────────────────────────
@@ -550,6 +552,28 @@ function removeAllGL() {
   }
 }
 
+function renderBoundaryBg(allFeatures: any[], xinshiSet: Set<any>) {
+  if (!mapView || !allFeatures.length) return
+  const existing = mapView.map.findLayerById?.('boundary-bg-gl')
+  if (existing) mapView.map.remove(existing)
+  const gl = new GraphicsLayer({ id: 'boundary-bg-gl' })
+  for (const f of allFeatures) {
+    if (!f.geometry) continue
+    const isXinshi = xinshiSet.has(f)
+    gl.add(new Graphic({
+      geometry: f.geometry,
+      symbol: {
+        type: 'simple-fill',
+        color: [248, 250, 252, isXinshi ? 160 : 100],
+        outline: isXinshi
+          ? { color: [15, 23, 42, 210], width: 1.8 }
+          : { color: [203, 213, 225, 130], width: 0.5 },
+      } as any,
+    }))
+  }
+  mapView.map.add(gl, 0)
+}
+
 // ── 面量圖渲染 ────────────────────────────────────────────────
 function applyChoro(idxKey: IdxKey) {
   if (!mapView || !cachedGeos.length) return
@@ -578,6 +602,7 @@ function applyChoro(idxKey: IdxKey) {
     gl.add(new Graphic({ geometry, attributes: { name }, symbol: { type: 'simple-fill', color, outline: { color: [255,255,255,160], width: 0.6 } } as any }))
   }
   mapView.map.add(gl)
+  if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }
 }
 
 // ── 變化量地圖 ────────────────────────────────────────────────
@@ -606,6 +631,7 @@ function applyChangeChoro(idxKey: IdxKey) {
     gl.add(new Graphic({ geometry, attributes: { name }, symbol: { type: 'simple-fill', color: toColor(d), outline: { color: [255,255,255,160], width: 0.6 } } as any }))
   }
   mapView.map.add(gl)
+  if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }
 }
 
 // ── 地圖切換 ──────────────────────────────────────────────────
@@ -752,7 +778,7 @@ function drawEco() {
 
   const sorted = [...scores24.eco.entries()].sort(([, a], [, b]) => b.score - a.score).slice(0, 8)
   const colors = INDICES[2].colors
-  const toC = (s: number) => colors[Math.min(4, Math.floor(s * 5))]! + 'cc'
+  const toC = (s: number) => colors[Math.min(4, Math.floor(s * 5))]!
 
   chartInst.set('eco', new Chart(canvas, {
     type: 'bar',
@@ -769,7 +795,7 @@ function drawEco() {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c: any) => ` 弱勢: ${Number(c.raw).toFixed(1)}%` } } },
       scales: {
-        x: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 9 } }, max: 20 },
+        x: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 9 } }, max: 5, beginAtZero: true },
         y: { grid: { display: false }, ticks: { font: { size: 8 } } },
       },
     },
@@ -817,23 +843,27 @@ function drawEnv() {
   const { lique, fault, flood } = envPct.value
 
   chartInst.set('env', new Chart(canvas, {
-    type: 'polarArea',
+    type: 'bar',
     data: {
       labels: ['土壤液化潛勢', '地質敏感帶', '淹水潛勢'],
       datasets: [{
         data: [+lique.toFixed(1), +fault.toFixed(1), +flood.toFixed(1)],
-        backgroundColor: ['#B3A86Acc', '#C67052cc', '#89A7C2cc'],
-        borderColor:      ['#B3A86A',   '#C67052',   '#89A7C2'],
-        borderWidth: 1.5,
+        backgroundColor: ['#B3A86A', '#C67052', '#89A7C2'],
+        borderColor:     ['#8a6a38', '#8a3e28', '#4a7290'],
+        borderWidth: 1, borderRadius: 3,
       }],
     },
     options: {
+      indexAxis: 'y',
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { display: true, position: 'right', labels: { font: { size: 8 }, boxWidth: 9, padding: 5 } },
-        tooltip: { callbacks: { label: (c: any) => ` ${c.label}: ${Number(c.raw).toFixed(1)}% 老年人口` } },
+        legend: { display: false },
+        tooltip: { callbacks: { label: (c: any) => ` ${Number(c.raw).toFixed(1)}% 老年人口暴露` } },
       },
-      scales: { r: { ticks: { font: { size: 8 }, backdropColor: 'transparent' }, grid: { color: '#e2e8f0' } } },
+      scales: {
+        x: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 9 } }, max: 100, beginAtZero: true },
+        y: { grid: { display: false }, ticks: { font: { size: 9 } } },
+      },
     },
   }))
 }
@@ -857,7 +887,7 @@ function buildKPIs() {
 // ── 生命週期 ──────────────────────────────────────────────────
 onMounted(async () => {
   await loadArcGIS()
-  const { urls, sciParkUrl } = await findLayerUrls()
+  const { urls, sciParkUrl, boundaryUrl } = await findLayerUrls()
 
   // 載入最新年份資料（含幾何）——銀髮安居圖層本身有村里面幾何
   // 先找任一有效 cur URL 做 goTo，其餘並行載入
@@ -898,6 +928,29 @@ onMounted(async () => {
 
   if (cachedGeos.length) applyChoro('mob')
 
+  // 載入邊界背景
+  if (boundaryUrl) {
+    try {
+      const bFL = new FeatureLayer({ url: boundaryUrl, outFields: ['*'] })
+      await bFL.load()
+      const bRes = await bFL.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
+      if (bRes?.features?.length > 0) {
+        const xinshiFeats = bRes.features.filter((f: any) => {
+          const a = f.attributes ?? {}
+          return a.TOWN === '新市區' || a.TOWNNAME === '新市區' || String(a.TOWNCODE) === '67000200'
+        })
+        renderBoundaryBg(bRes.features, new Set(xinshiFeats))
+        // Move boundary-bg-gl below choro-gl
+        const bgGL = mapView.map.findLayerById?.('boundary-bg-gl')
+        if (bgGL) mapView.map.reorder(bgGL, 0)
+        console.log('[EldDash] 邊界背景載入完成')
+      }
+    } catch (e) {
+      console.warn('[EldDash] 邊界背景載入失敗', e)
+    }
+  }
+  mapLoading.value = false
+
   // 載入南科圖層
   if (sciParkUrl) {
     try {
@@ -925,8 +978,6 @@ onMounted(async () => {
       console.warn('[EldDash] 南科圖層載入失敗', e)
     }
   }
-
-  mapLoading.value = false
 
   // 背景載入前一年（用於變化量）
   Promise.all(INDICES.map(async idx => {

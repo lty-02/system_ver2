@@ -304,7 +304,7 @@ async function loadChartJS() {
 }
 
 // ── Portal + Layer URL 查找 ────────────────────────────────────
-async function findLayerUrls(): Promise<{ url24: string|null; url23: string|null; sciParkUrl: string|null }> {
+async function findLayerUrls(): Promise<{ url24: string|null; url23: string|null; sciParkUrl: string|null; boundaryUrl: string|null }> {
   try {
     const { default: Portal }   = await import('@arcgis/core/portal/Portal')
     const { default: WebScene } = await import('@arcgis/core/WebScene')
@@ -315,6 +315,7 @@ async function findLayerUrls(): Promise<{ url24: string|null; url23: string|null
 
     let url24: string|null = null, url23: string|null = null
     let sciParkUrl: string|null = null
+    let boundaryUrl: string|null = null
     ws.allLayers.forEach((l: any) => {
       const title = l.title ?? ''
       const raw = l.url ?? l.parsedUrl?.path ?? ''
@@ -322,10 +323,11 @@ async function findLayerUrls(): Promise<{ url24: string|null; url23: string|null
       if (!url24 && title.includes(SUFFIX_2024)) url24 = url
       if (!url23 && title.includes(SUFFIX_2023)) url23 = url
       if (!sciParkUrl && title.includes('南部科學園區_台南園區範圍')) sciParkUrl = url
+      if (!boundaryUrl && title.includes('計畫實驗區村里界')) boundaryUrl = url
     })
-    console.log('[PopDash] URL 2024:', url24, '2023:', url23, '南科:', sciParkUrl)
-    return { url24, url23, sciParkUrl }
-  } catch (e) { console.warn('[PopDash] findLayerUrls 失敗', e); return { url24: null, url23: null, sciParkUrl: null } }
+    console.log('[PopDash] URL 2024:', url24, '2023:', url23, '南科:', sciParkUrl, '邊界:', boundaryUrl)
+    return { url24, url23, sciParkUrl, boundaryUrl }
+  } catch (e) { console.warn('[PopDash] findLayerUrls 失敗', e); return { url24: null, url23: null, sciParkUrl: null, boundaryUrl: null } }
 }
 
 // ── 建立地圖 ──────────────────────────────────────────────────
@@ -400,6 +402,7 @@ async function applyChoro(key: CardKey, colors: readonly string[]) {
       gl.add(new Graphic({ geometry: f.geometry, attributes: { name: f.name }, symbol: { type:'simple-fill', color, outline:{color:[255,255,255,180],width:0.6} } as any }))
     }
     mapView.map.add(gl)
+    if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }
   } catch (e) { console.warn('[PopDash] applyChoro 失敗', e) }
 }
 
@@ -426,6 +429,7 @@ async function applyChangeChoro(fieldGetter: (r: ChangeRow) => number) {
       gl.add(new Graphic({ geometry: f.geometry, attributes: { name: f.name }, symbol: { type:'simple-fill', color: toColor(fieldGetter(row)), outline:{color:[255,255,255,180],width:0.6} } as any }))
     }
     mapView.map.add(gl)
+    if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }
   } catch (e) { console.warn('[PopDash] applyChangeChoro 失敗', e) }
 }
 
@@ -434,6 +438,28 @@ function removeAllGL() {
     const gl = mapView?.map?.findLayerById?.(id)
     if (gl) mapView.map.remove(gl)
   }
+}
+
+function renderBoundaryBg(allFeatures: any[], xinshiSet: Set<any>) {
+  if (!mapView || !allFeatures.length) return
+  const existing = mapView.map.findLayerById?.('boundary-bg-gl')
+  if (existing) mapView.map.remove(existing)
+  const gl = new GraphicsLayer({ id: 'boundary-bg-gl' })
+  for (const f of allFeatures) {
+    if (!f.geometry) continue
+    const isXinshi = xinshiSet.has(f)
+    gl.add(new Graphic({
+      geometry: f.geometry,
+      symbol: {
+        type: 'simple-fill',
+        color: [248, 250, 252, isXinshi ? 160 : 100],
+        outline: isXinshi
+          ? { color: [15, 23, 42, 210], width: 1.8 }
+          : { color: [203, 213, 225, 130], width: 0.5 },
+      } as any,
+    }))
+  }
+  mapView.map.add(gl, 0)
 }
 
 // ── 地圖重渲染 ────────────────────────────────────────────────
@@ -699,16 +725,45 @@ function resolveKey(attrs:Record<string,unknown>, key:string) {
 // ── 生命週期 ──────────────────────────────────────────────────
 onMounted(async () => {
   await loadArcGIS()
-  const { url24, url23, sciParkUrl } = await findLayerUrls()
+  const { url24, url23, sciParkUrl, boundaryUrl } = await findLayerUrls()
   if (!url24) { mapLoading.value = false; return }
 
-  // 先載入資料，applyChoro 需要 villageData 的 min/max
-  const [rows24] = await Promise.all([
-    loadYearData(url24),
-    url23 ? loadYearData(url23).then(r => { prevData.value = r }) : Promise.resolve(),
+  // Load year data AND boundary in parallel
+  const [rows24raw, boundaryResult] = await Promise.all([
+    Promise.all([
+      loadYearData(url24),
+      url23 ? loadYearData(url23).then(r => { prevData.value = r }) : Promise.resolve(null),
+    ]).then(([r]) => r as Row[]),
+    boundaryUrl ? (async () => {
+      try {
+        const bFL = new FeatureLayer({ url: boundaryUrl!, outFields: ['*'] })
+        await bFL.load()
+        const bRes = await bFL.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
+        if (!bRes?.features?.length) return { allFeats: [] as any[], xinshiFeats: [] as any[], xinshiNames: new Set<string>() }
+        const allFeats = bRes.features
+        const xinshiFeats = allFeats.filter((f: any) => {
+          const a = f.attributes ?? {}
+          return a.TOWN === '新市區' || a.TOWNNAME === '新市區' || String(a.TOWNCODE) === '67000200'
+        })
+        const xinshiNames = new Set<string>(xinshiFeats.map((f: any) => {
+          const a = f.attributes ?? {}
+          return String(a.VILLAGE ?? a.VILLNAME ?? a.VILNAME ?? a.VIL_NAME ?? '')
+        }).filter(Boolean))
+        console.log('[PopDash] boundary loaded:', allFeats.length, '新市區:', xinshiFeats.length)
+        return { allFeats, xinshiFeats, xinshiNames }
+      } catch (e) { console.warn('[PopDash] boundary load failed', e); return { allFeats: [] as any[], xinshiFeats: [] as any[], xinshiNames: new Set<string>() } }
+    })() : Promise.resolve({ allFeats: [] as any[], xinshiFeats: [] as any[], xinshiNames: new Set<string>() }),
   ])
-  villageData.value = rows24
-  buildStats(rows24)
+
+  // Filter village data to 新市區 only using boundary names
+  const { allFeats: bAllFeats, xinshiFeats: bXinshiFeats, xinshiNames } = boundaryResult
+  const rows24 = xinshiNames.size > 0
+    ? rows24raw.filter((r: Row) => xinshiNames.has(r.name))
+    : rows24raw
+  const finalRows = rows24.length > 0 ? rows24 : rows24raw
+  villageData.value = finalRows
+  if (xinshiNames.size > 0) prevData.value = prevData.value.filter((r: Row) => xinshiNames.has(r.name))
+  buildStats(finalRows)
 
   await loadChartJS()
   await nextTick()
@@ -716,8 +771,13 @@ onMounted(async () => {
 
   // 地圖初始化（fl24 query-only，不 add 到 map）
   await initMap(url24)
+
+  // Render boundary background
+  if (bAllFeats.length > 0) renderBoundaryBg(bAllFeats, new Set(bXinshiFeats))
+
   // 初始渲染人口密度面量圖
   await applyChoro('P_DEN', CARDS.find(c=>c.key==='P_DEN')!.colors)
+  mapLoading.value = false
 
   // 載入南科圖層
   if (sciParkUrl) {
@@ -746,8 +806,6 @@ onMounted(async () => {
       console.warn('[PopDash] 南科圖層載入失敗', e)
     }
   }
-
-  mapLoading.value = false
 })
 
 onUnmounted(() => {
