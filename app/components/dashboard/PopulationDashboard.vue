@@ -334,19 +334,13 @@ async function findLayerUrls(): Promise<{ url24: string|null; url23: string|null
 async function initMap(url: string) {
   if (!mapDivRef.value) return
   const m = new ArcMap({ basemap: 'gray-vector' })
-  mapView = markRaw(new MapView({ container: mapDivRef.value, map: m, center: [120.31,23.07], zoom: 12, ui: { components: ['zoom'] } }))
+  mapView = markRaw(new MapView({ container: mapDivRef.value, map: m, center: [120.31, 23.07], zoom: 13, ui: { components: ['zoom'] } }))
   mapView.ui.remove('attribution')
   await mapView.when()
   mapView.on('click', handlePopClick)
   // fl24 is query-only — never added to map to avoid tile cache requests
   fl24 = new FeatureLayer({ url, outFields: ['*'], definitionExpression: TOWN_FILTER })
   try { await fl24.load() } catch (e) { console.warn('[PopDash] fl24.load 失敗', e) }
-  try {
-    const extResult = await fl24.queryExtent({ where: '1=1' })
-    if (extResult?.extent) await mapView.goTo(extResult.extent.expand(1.3))
-  } catch {
-    try { await mapView.goTo(fl24.fullExtent.expand(1.4)) } catch {}
-  }
 }
 
 // ── 取得幾何（快取）──────────────────────────────────────────
@@ -460,6 +454,7 @@ function renderBoundaryBg(allFeatures: any[], xinshiSet: Set<any>) {
     }))
   }
   mapView.map.add(gl, 0)
+  if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }
 }
 
 // ── 地圖重渲染 ────────────────────────────────────────────────

@@ -273,8 +273,8 @@ const scores23 = reactive<Record<IdxKey, ScoreMap>>({
 const areaBreakdown = reactive<Record<string, Record<string, number>>>({})
 // 住宅：per-village 細項（供 grouped bar）
 const houseVill = ref<Map<string, { e12: number; e22: number; e32: number; total: number }>>(new Map())
-// 環境安全：全區三維風險 %
-const envPct = ref({ lique: 0, fault: 0, flood: 0 })
+// 環境安全：全區互斥風險分類 % (各類加總=100%)
+const envPct = ref({ noRisk: 0, lique: 0, fault: 0, flood: 0, multi: 0 })
 
 const kpis = ref([
   { key: 'total',   label: '老年人口', unit: '人', color: '#C1395E', val: null as string|null },
@@ -502,7 +502,7 @@ function processHouse(features: any[], target: ScoreMap, isCurrent = false) {
 
 // ── 環境安全（S1x=液化, S2x=斷層, S3x=淹水）────────────────
 function processEnv(features: any[], target: ScoreMap, isCurrent = false) {
-  const area = { lique: 0, fault: 0, flood: 0, total: 0 }
+  const area = { noRisk: 0, lique: 0, fault: 0, flood: 0, multi: 0, total: 0 }
   const tmp = new Map<string, { lique: number; fault: number; flood: number; total: number }>()
   for (const f of features) {
     const a = f.attributes ?? {}
@@ -516,18 +516,30 @@ function processEnv(features: any[], target: ScoreMap, isCurrent = false) {
       const c1 = k.slice(0, 3).toUpperCase()
       const c2 = k.slice(3, 6).toUpperCase()
       const c3 = k.slice(6, 9).toUpperCase()
-      if (c1 === 'S12' || c1 === 'S13') { vm.lique += n; area.lique += n }
-      if (c2 === 'S22')                 { vm.fault += n; area.fault += n }
-      if (c3 === 'S32' || c3 === 'S33') { vm.flood += n; area.flood += n }
+      const isL = c1 === 'S12' || c1 === 'S13'
+      const isF = c2 === 'S22'
+      const isW = c3 === 'S32' || c3 === 'S33'
+      if (isL) vm.lique += n
+      if (isF) vm.fault += n
+      if (isW) vm.flood += n
+      // Classify into mutually exclusive categories for area totals
+      const riskCount = (isL ? 1 : 0) + (isF ? 1 : 0) + (isW ? 1 : 0)
+      if (riskCount === 0)      area.noRisk += n
+      else if (riskCount >= 2) area.multi  += n
+      else if (isL)            area.lique  += n
+      else if (isF)            area.fault  += n
+      else                     area.flood  += n
     }
     const v = vm.total > 0 ? (vm.lique + vm.fault + vm.flood) / (3 * vm.total) : 0
     target.set(village, { score: v, total: vm.total })
   }
   const t = area.total || 1
   if (isCurrent) envPct.value = {
-    lique: area.lique / t * 100,
-    fault: area.fault / t * 100,
-    flood: area.flood / t * 100,
+    noRisk: area.noRisk / t * 100,
+    lique:  area.lique  / t * 100,
+    fault:  area.fault  / t * 100,
+    flood:  area.flood  / t * 100,
+    multi:  area.multi  / t * 100,
   }
 }
 
@@ -537,7 +549,7 @@ async function initMap() {
   const m = new ArcMap({ basemap: 'gray-vector' })
   mapView = markRaw(new MapView({
     container: mapDivRef.value, map: m,
-    center: [120.31, 23.07], zoom: 12,
+    center: [120.31, 23.07], zoom: 13,
     ui: { components: ['zoom'] },
   }))
   mapView.ui.remove('attribution')
@@ -778,7 +790,9 @@ function drawEco() {
 
   const sorted = [...scores24.eco.entries()].sort(([, a], [, b]) => b.score - a.score).slice(0, 8)
   const colors = INDICES[2].colors
-  const toC = (s: number) => colors[Math.min(4, Math.floor(s * 5))]!
+  const maxScore = Math.max(...sorted.map(([, v]) => v.score), 0.001)
+  // Darken: always use colors[2]-colors[4] range, relative to max score
+  const toC = (s: number) => colors[Math.min(4, 2 + Math.floor((s / maxScore) * 3))]!
 
   chartInst.set('eco', new Chart(canvas, {
     type: 'bar',
@@ -834,35 +848,30 @@ function drawHouse() {
   }))
 }
 
-// 5. 環境安全：極座標面積圖（3 維風險）
+// 5. 環境安全：環形圖（互斥風險分類，加總=100%）
 function drawEnv() {
   const canvas = canvasRefs.get('env'); if (!canvas || !Chart) return
   chartInst.get('env')?.destroy()
   if (changeMode.env) { drawDivBar('env'); return }
 
-  const { lique, fault, flood } = envPct.value
+  const { noRisk, lique, fault, flood, multi } = envPct.value
 
   chartInst.set('env', new Chart(canvas, {
-    type: 'bar',
+    type: 'doughnut',
     data: {
-      labels: ['土壤液化潛勢', '地質敏感帶', '淹水潛勢'],
+      labels: ['無環境風險', '液化潛勢', '地質敏感帶', '淹水潛勢', '複合風險'],
       datasets: [{
-        data: [+lique.toFixed(1), +fault.toFixed(1), +flood.toFixed(1)],
-        backgroundColor: ['#B3A86A', '#C67052', '#89A7C2'],
-        borderColor:     ['#8a6a38', '#8a3e28', '#4a7290'],
-        borderWidth: 1, borderRadius: 3,
+        data: [+noRisk.toFixed(1), +lique.toFixed(1), +fault.toFixed(1), +flood.toFixed(1), +multi.toFixed(1)],
+        backgroundColor: ['#94a3b8cc', '#B3A86Acc', '#C67052cc', '#89A7C2cc', '#C1395Ecc'],
+        borderColor:     ['#64748b',   '#7a6a38',   '#8a3e28',   '#4a7290',   '#8a1e3c'],
+        borderWidth: 1.5,
       }],
     },
     options: {
-      indexAxis: 'y',
-      responsive: true, maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false, cutout: '58%',
       plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: (c: any) => ` ${Number(c.raw).toFixed(1)}% 老年人口暴露` } },
-      },
-      scales: {
-        x: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 9 } }, max: 100, beginAtZero: true },
-        y: { grid: { display: false }, ticks: { font: { size: 9 } } },
+        legend: { display: true, position: 'right', labels: { font: { size: 8 }, boxWidth: 9, padding: 5 } },
+        tooltip: { callbacks: { label: (c: any) => ` ${c.label}: ${Number(c.raw).toFixed(1)}%` } },
       },
     },
   }))
@@ -921,10 +930,6 @@ onMounted(async () => {
 
   // 地圖初始化（同 PopulationDashboard）
   await initMap()
-  // goTo 村里範圍（同 PopulationDashboard 用 fl.fullExtent）
-  if (flRef) {
-    try { await mapView.goTo(flRef.fullExtent.expand(1.4)) } catch {}
-  }
 
   if (cachedGeos.length) applyChoro('mob')
 
@@ -943,6 +948,7 @@ onMounted(async () => {
         // Move boundary-bg-gl below choro-gl
         const bgGL = mapView.map.findLayerById?.('boundary-bg-gl')
         if (bgGL) mapView.map.reorder(bgGL, 0)
+        if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }
         console.log('[EldDash] 邊界背景載入完成')
       }
     } catch (e) {

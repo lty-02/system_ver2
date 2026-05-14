@@ -304,7 +304,7 @@ async function initMap(): Promise<void> {
     container: mapDivRef.value,
     map: m,
     center: [120.31, 23.07],
-    zoom: 12,
+    zoom: 13,
     ui: { components: ['zoom'] },
   }))
   mapView.ui.remove('attribution')
@@ -467,7 +467,6 @@ async function loadData() {
           const buffered = geometryEngine.geodesicBuffer(union, 500, 'meters')
           queryGeom = markRaw(buffered)
           console.log('[EduDash] buffered query geometry created')
-          try { await mapView.goTo(queryGeom) } catch {}
         }
       } catch (e) {
         console.warn('[EduDash] geometryEngine failed, falling back to extent', e)
@@ -485,7 +484,6 @@ async function loadData() {
           if (isFinite(xmin)) {
             const sr = villageFeatures[0]?.geometry?.spatialReference
             queryGeom = markRaw(new Extent({ xmin, ymin, xmax, ymax, spatialReference: sr }))
-            try { await mapView.goTo(queryGeom.expand(1.3)) } catch {}
           }
         } catch {}
       }
