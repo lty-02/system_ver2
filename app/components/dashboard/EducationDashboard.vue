@@ -460,7 +460,7 @@ async function loadData() {
 
       // ── Build buffered polygon (union of village polygons + 500m buffer) ──
       try {
-        const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+        const geometryEngine = await import('@arcgis/core/geometry/geometryEngine')
         const polys = villageFeatures.map((f: any) => f.geometry).filter(Boolean)
         if (polys.length > 0) {
           const union = polys.length === 1 ? polys[0] : geometryEngine.union(polys)
