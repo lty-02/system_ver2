@@ -330,7 +330,7 @@ async function loadLayerFeatures(
     s.area  += area
 
     if (f.geometry) {
-      geos.push({ label, area, geometry: f.geometry })
+      geos.push({ label, area, geometry: markRaw(f.geometry) })
     }
 
     // secondary field (e.g. 使用分 for urbanZone)
