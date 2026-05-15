@@ -209,7 +209,7 @@ function renderChart() {
   const colors = FACILITIES.map(f => f.color)
 
   if (barChart) {
-    barChart.data.datasets[0].data = counts
+    barChart.data.datasets[0]!.data = counts
     barChart.update()
     return
   }
