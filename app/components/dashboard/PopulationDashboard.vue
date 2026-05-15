@@ -334,7 +334,7 @@ async function findLayerUrls(): Promise<{ url24: string|null; url23: string|null
 async function initMap(url: string) {
   if (!mapDivRef.value) return
   const m = new ArcMap({ basemap: 'gray-vector' })
-  mapView = markRaw(new MapView({ container: mapDivRef.value, map: m, center: [120.31, 23.07], zoom: 12, ui: { components: ['zoom'] } }))
+  mapView = markRaw(new MapView({ container: mapDivRef.value, map: m, center: [120.35, 23.04], zoom: 12, ui: { components: ['zoom'] } }))
   mapView.ui.remove('attribution')
   await mapView.when()
   mapView.on('click', handlePopClick)
@@ -446,10 +446,10 @@ function renderBoundaryBg(allFeatures: any[], xinshiSet: Set<any>) {
       geometry: f.geometry,
       symbol: {
         type: 'simple-fill',
-        color: [248, 250, 252, isXinshi ? 160 : 100],
+        color: [248, 250, 252, isXinshi ? 60 : 15],
         outline: isXinshi
           ? { color: [15, 23, 42, 210], width: 1.8 }
-          : { color: [203, 213, 225, 130], width: 0.5 },
+          : { color: [203, 213, 225, 80], width: 0.4 },
       } as any,
     }))
   }
@@ -833,7 +833,7 @@ onMounted(async () => {
             geometry: f.geometry,
             symbol: {
               type: 'simple-fill',
-              color: [240, 202, 80, 30],
+              color: [0, 0, 0, 0],
               outline: { color: [207, 149, 70, 230], width: 2.5 },
             } as any,
           }))

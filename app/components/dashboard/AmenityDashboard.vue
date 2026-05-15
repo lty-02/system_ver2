@@ -306,21 +306,21 @@ async function initMap(): Promise<void> {
 }
 
 // ── Render village polygons ───────────────────────────────────
-function renderVillages(allFeatures: any[], xinshiFeatures: any[]) {
+function renderVillages(allFeatures: any[], _xinshiFeatures: any[]) {
   if (!mapView || !allFeatures.length) return
-  const xinshiSet = new Set(xinshiFeatures)
   const gl = new GraphicsLayer({ id: 'village-gl' })
   for (const f of allFeatures) {
     if (!f.geometry) continue
-    const isXinshi = xinshiSet.has(f)
+    const a = f.attributes ?? {}
+    const isXinshi = a.TOWN === '新市區' || a.TOWNNAME === '新市區' || String(a.TOWNCODE) === '67000200'
     gl.add(new Graphic({
       geometry: f.geometry,
       symbol: {
         type: 'simple-fill',
-        color: [248, 250, 252, isXinshi ? 200 : 130],
+        color: [248, 250, 252, isXinshi ? 180 : 100],
         outline: isXinshi
-          ? { color: [15, 23, 42, 230], width: 1.8 }
-          : { color: [203, 213, 225, 140], width: 0.5 },
+          ? { color: [15, 23, 42, 240], width: 2.0 }
+          : { color: [203, 213, 225, 100], width: 0.4 },
       } as any,
     }))
   }
@@ -576,7 +576,7 @@ async function loadData() {
             geometry: f.geometry,
             symbol: {
               type: 'simple-fill',
-              color: [240, 202, 80, 30],
+              color: [0, 0, 0, 0],
               outline: { color: [207, 149, 70, 230], width: 2.5 },
             } as any,
           }))
