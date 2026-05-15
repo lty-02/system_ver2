@@ -549,7 +549,7 @@ async function initMap() {
   const m = new ArcMap({ basemap: 'gray-vector' })
   mapView = markRaw(new MapView({
     container: mapDivRef.value, map: m,
-    center: [120.31, 23.07], zoom: 13,
+    center: [120.31, 23.07], zoom: 12,
     ui: { components: ['zoom'] },
   }))
   mapView.ui.remove('attribution')
@@ -611,7 +611,7 @@ function applyChoro(idxKey: IdxKey) {
   for (const { name, geometry } of cachedGeos) {
     const v = sm.get(name)
     const color = v != null ? toRgba(v.score) : [200, 200, 200, 100]
-    gl.add(new Graphic({ geometry, attributes: { name }, symbol: { type: 'simple-fill', color, outline: { color: [255,255,255,160], width: 0.6 } } as any }))
+    gl.add(new Graphic({ geometry, attributes: { name }, symbol: { type: 'simple-fill', color, outline: { color: [15,23,42,160], width: 1.0 } } as any }))
   }
   mapView.map.add(gl)
   if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }
@@ -640,7 +640,7 @@ function applyChangeChoro(idxKey: IdxKey) {
   for (const { name, geometry } of cachedGeos) {
     const d = diffs.get(name)
     if (d == null) continue
-    gl.add(new Graphic({ geometry, attributes: { name }, symbol: { type: 'simple-fill', color: toColor(d), outline: { color: [255,255,255,160], width: 0.6 } } as any }))
+    gl.add(new Graphic({ geometry, attributes: { name }, symbol: { type: 'simple-fill', color: toColor(d), outline: { color: [15,23,42,160], width: 1.0 } } as any }))
   }
   mapView.map.add(gl)
   if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }

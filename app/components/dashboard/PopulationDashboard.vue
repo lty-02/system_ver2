@@ -334,7 +334,7 @@ async function findLayerUrls(): Promise<{ url24: string|null; url23: string|null
 async function initMap(url: string) {
   if (!mapDivRef.value) return
   const m = new ArcMap({ basemap: 'gray-vector' })
-  mapView = markRaw(new MapView({ container: mapDivRef.value, map: m, center: [120.31, 23.07], zoom: 13, ui: { components: ['zoom'] } }))
+  mapView = markRaw(new MapView({ container: mapDivRef.value, map: m, center: [120.31, 23.07], zoom: 12, ui: { components: ['zoom'] } }))
   mapView.ui.remove('attribution')
   await mapView.when()
   mapView.on('click', handlePopClick)
@@ -393,7 +393,7 @@ async function applyChoro(key: CardKey, colors: readonly string[]) {
     for (const f of features) {
       const v = dataMap.get(f.name)
       const color = v != null ? toColor(v) : [200,200,200,120]
-      gl.add(new Graphic({ geometry: f.geometry, attributes: { name: f.name }, symbol: { type:'simple-fill', color, outline:{color:[255,255,255,180],width:0.6} } as any }))
+      gl.add(new Graphic({ geometry: f.geometry, attributes: { name: f.name }, symbol: { type:'simple-fill', color, outline:{color:[15,23,42,160],width:1.0} } as any }))
     }
     mapView.map.add(gl)
     if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }
@@ -420,7 +420,7 @@ async function applyChangeChoro(fieldGetter: (r: ChangeRow) => number) {
     for (const f of features) {
       const row = dataMap.get(f.name)
       if (!row) continue
-      gl.add(new Graphic({ geometry: f.geometry, attributes: { name: f.name }, symbol: { type:'simple-fill', color: toColor(fieldGetter(row)), outline:{color:[255,255,255,180],width:0.6} } as any }))
+      gl.add(new Graphic({ geometry: f.geometry, attributes: { name: f.name }, symbol: { type:'simple-fill', color: toColor(fieldGetter(row)), outline:{color:[15,23,42,160],width:1.0} } as any }))
     }
     mapView.map.add(gl)
     if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }

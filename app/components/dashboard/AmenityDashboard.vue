@@ -298,7 +298,7 @@ async function initMap(): Promise<void> {
     container: mapDivRef.value,
     map: m,
     center: [120.31, 23.07],
-    zoom: 13,
+    zoom: 12,
     ui: { components: ['zoom'] },
   }))
   mapView.ui.remove('attribution')
