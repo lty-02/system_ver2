@@ -39,6 +39,16 @@ export const LayerCategoryNames: Record<LayerCategory, string> = {
 }
 
 /**
+ * 基礎設施類別中，預設關閉的圖層（不自動加入地圖）
+ */
+const INFRASTRUCTURE_DEFAULT_OFF = new Set([
+  '2025年臺南市都市計畫區',
+  '2025年臺南市都市計畫使用分區',
+  '2025年臺南市非都市土地使用編定',
+  '2025年臺南市非都市土地使用分區',
+])
+
+/**
  * 排除的圖層列表（不納入任何分類，完全隱藏）
  */
 const EXCLUDED_LAYERS = [
@@ -337,20 +347,21 @@ export const useLayerStore = defineStore('layer', () => {
         }
         
         const isInfrastructure = category === LayerCategory.Infrastructure
-        
+        const isDefaultOn = isInfrastructure && !INFRASTRUCTURE_DEFAULT_OFF.has(layer.title)
+
         processedLayers.push({
           id: layer.id,
           title: layer.title || layer.id,
           type: layer.type || 'unknown',
           category: category,
-          visible: isInfrastructure ? true : false,  // 只有基礎設施預設可見
+          visible: isDefaultOn,
           opacity: layer.opacity ?? 1,
           url: layer.url,
           minScale: layer.minScale,
           maxScale: layer.maxScale,
           legendEnabled: layer.legendEnabled ?? true,
           popupEnabled: layer.popupEnabled ?? true,
-          isAddedToMap: isInfrastructure,  // 只有基礎設施預設添加
+          isAddedToMap: isDefaultOn,
         })
       }
       
@@ -365,7 +376,7 @@ export const useLayerStore = defineStore('layer', () => {
       createLayerGroups()
       
       console.log(`✅ 已載入 ${allLayers.value.length} 個圖層（已排除 ${layers.length - allLayers.value.length} 個圖層）`)
-      console.log(`📍 預設開啟 ${addedLayerIds.value.length} 個基礎設施圖層`)
+      console.log(`📍 預設開啟 ${addedLayerIds.value.length} 個圖層`)
       
       // 顯示分類統計
       console.log('📊 圖層分類統計:')
