@@ -761,8 +761,10 @@ const loadLayers = (): void => {
       layer.visible = false
       return false
     }
-    return (layer.type === 'feature' || layer.type === 'tile' || layer.type === 'scene')
-      && layer.listMode !== 'hide'
+    return (
+      layer.type === 'feature' || layer.type === 'tile' || layer.type === 'scene' ||
+      layer.type === 'imagery-tile' || layer.type === 'imagery' || layer.type === 'map-image'
+    ) && layer.listMode !== 'hide'
   })
 
   console.log(`📊 找到 ${layers.length} 個圖層`)
