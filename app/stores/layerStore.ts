@@ -87,7 +87,7 @@ const LAYER_CATEGORY_MAP: Record<string, LayerCategory> = {
   '2020年1月31日SPOT衛星真實色彩影像': LayerCategory.Satellite,
   '2020年1月31日SPOT衛星NIR假色影像':  LayerCategory.Satellite,
   '2022年3月5日SPOT衛星真實色彩影像':  LayerCategory.Satellite,
-  '2022年3月5日SPOT衛星NIR假色':        LayerCategory.Satellite,
+  '2022年3月5日SPOT衛星NIR假色影像':   LayerCategory.Satellite,
 
   // ── 公共設施與社會福利 ──
   '2022年臺南市加油站位置':             LayerCategory.PublicFacilities,
