@@ -582,7 +582,7 @@ async function loadData() {
             geometry: f.geometry,
             symbol: {
               type: 'simple-fill',
-              color: [240, 202, 80, 0],
+              color: [240, 202, 80, 30],
               outline: { color: [207, 149, 70, 230], width: 2.5 },
             } as any,
           }))

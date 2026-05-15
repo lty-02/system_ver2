@@ -549,7 +549,7 @@ async function initMap() {
   const m = new ArcMap({ basemap: 'gray-vector' })
   mapView = markRaw(new MapView({
     container: mapDivRef.value, map: m,
-    center: [120.31, 23.07], zoom: 12,
+    center: [120.35, 23.04], zoom: 12,
     ui: { components: ['zoom'] },
   }))
   mapView.ui.remove('attribution')
@@ -971,7 +971,7 @@ onMounted(async () => {
             geometry: f.geometry,
             symbol: {
               type: 'simple-fill',
-              color: [240, 202, 80, 0],
+              color: [0, 0, 0, 0],
               outline: { color: [207, 149, 70, 230], width: 2.5 },
             } as any,
           }))
