@@ -384,7 +384,7 @@ async function initMap() {
   const m = new ArcMap({ basemap: 'gray-vector' })
   mapView = markRaw(new MapView({
     container: mapDivRef.value, map: m,
-    center: [120.32, 23.06], zoom: 12,
+    center: [120.29, 23.08], zoom: 12,
     ui: { components: ['zoom'] },
   }))
   mapView.ui.remove('attribution')

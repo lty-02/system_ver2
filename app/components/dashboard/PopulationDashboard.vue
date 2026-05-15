@@ -334,7 +334,7 @@ async function findLayerUrls(): Promise<{ url24: string|null; url23: string|null
 async function initMap(url: string) {
   if (!mapDivRef.value) return
   const m = new ArcMap({ basemap: 'gray-vector' })
-  mapView = markRaw(new MapView({ container: mapDivRef.value, map: m, center: [120.32, 23.06], zoom: 12, ui: { components: ['zoom'] } }))
+  mapView = markRaw(new MapView({ container: mapDivRef.value, map: m, center: [120.29, 23.08], zoom: 12, ui: { components: ['zoom'] } }))
   mapView.ui.remove('attribution')
   await mapView.when()
   mapView.on('click', handlePopClick)
