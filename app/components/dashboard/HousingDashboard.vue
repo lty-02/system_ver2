@@ -646,7 +646,7 @@ async function initMap() {
   mapView = markRaw(new MapView({
     container: mapDivRef.value,
     map,
-    center: [120.29, 23.08],
+    center: [120.295483, 23.080482],
     zoom: 12,
     ui: { components: ['zoom'] },
   }))

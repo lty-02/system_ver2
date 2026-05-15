@@ -314,16 +314,21 @@ async function initMap(): Promise<void> {
 // ── Render village polygons ───────────────────────────────────
 function renderVillages(allFeatures: any[], _xinshiFeatures: any[]) {
   if (!mapView || !allFeatures.length) return
+  const matchCount = allFeatures.filter(f => {
+    const a = f.attributes ?? {}
+    return a.TOWN === '新市區' || a.TOWNNAME === '新市區' || String(a.TOWNCODE) === '67000200'
+  }).length
+  const allAreXinshi = matchCount === 0
   const gl = new GraphicsLayer({ id: 'village-gl' })
   for (const f of allFeatures) {
     if (!f.geometry) continue
     const a = f.attributes ?? {}
-    const isXinshi = a.TOWN === '新市區' || a.TOWNNAME === '新市區' || String(a.TOWNCODE) === '67000200'
+    const isXinshi = allAreXinshi || a.TOWN === '新市區' || a.TOWNNAME === '新市區' || String(a.TOWNCODE) === '67000200'
     gl.add(new Graphic({
       geometry: f.geometry,
       symbol: {
         type: 'simple-fill',
-        color: [248, 250, 252, isXinshi ? 180 : 100],
+        color: [248, 250, 252, isXinshi ? 40 : 100],
         outline: isXinshi
           ? { color: [15, 23, 42, 240], width: 2.0 }
           : { color: [203, 213, 225, 100], width: 0.4 },
