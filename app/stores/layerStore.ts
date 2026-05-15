@@ -40,13 +40,13 @@ export const LayerCategoryNames: Record<LayerCategory, string> = {
 
 /**
  * 基礎設施類別中，預設關閉的圖層（不自動加入地圖）
+ * 使用 includes 判斷，兼容 WebScene 標題略有差異的情況
  */
-const INFRASTRUCTURE_DEFAULT_OFF = new Set([
-  '2025年臺南市都市計畫區',
-  '2025年臺南市都市計畫使用分區',
-  '2025年臺南市非都市土地使用編定',
-  '2025年臺南市非都市土地使用分區',
-])
+const isInfrastructureDefaultOff = (title: string): boolean =>
+  title.includes('都市計畫區') ||
+  title.includes('都市計畫使用分區') ||
+  title.includes('非都市土地使用編定') ||
+  title.includes('非都市土地使用分區')
 
 /**
  * 排除的圖層列表（不納入任何分類，完全隱藏）
@@ -179,7 +179,20 @@ const getCategoryByTitle = (title: string): LayerCategory | null => {
   if (LAYER_CATEGORY_MAP[title]) {
     return LAYER_CATEGORY_MAP[title]
   }
-  
+
+  // 關鍵字後備比對（處理 WebScene 標題與映射表略有差異的情況）
+  if (title.includes('SPOT') || title.includes('衛星影像') || title.includes('衛星NIR')) {
+    return LayerCategory.Satellite
+  }
+  if (
+    title.includes('都市計畫區') ||
+    title.includes('都市計畫使用分區') ||
+    title.includes('非都市土地使用編定') ||
+    title.includes('非都市土地使用分區')
+  ) {
+    return LayerCategory.Infrastructure
+  }
+
   // 如果映射表中沒有，記錄警告並返回 null（不歸類）
   console.warn(`⚠️ 圖層 "${title}" 不在映射表中，將被排除`)
   return null
@@ -347,7 +360,7 @@ export const useLayerStore = defineStore('layer', () => {
         }
         
         const isInfrastructure = category === LayerCategory.Infrastructure
-        const isDefaultOn = isInfrastructure && !INFRASTRUCTURE_DEFAULT_OFF.has(layer.title)
+        const isDefaultOn = isInfrastructure && !isInfrastructureDefaultOff(layer.title)
 
         processedLayers.push({
           id: layer.id,
