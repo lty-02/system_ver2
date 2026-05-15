@@ -492,23 +492,51 @@ async function toggleChange(key: CardKey) {
 }
 
 // ── 查詢兩年資料 ──────────────────────────────────────────────
-async function loadYearData(url: string): Promise<Row[]> {
-  const fl = new FeatureLayer({ url, outFields:['*'], definitionExpression: TOWN_FILTER })
-  try { await fl.load() } catch (e) { console.warn('[PopDash] year layer load 失敗', e) }
-  const res = await fl.queryFeatures({ where:'1=1', outFields:['*'], returnGeometry:false })
-  if (!res.features.length) return []
-  const a0 = res.features[0].attributes ?? {}
+function featuresToRows(features: any[]): Row[] {
+  if (!features.length) return []
+  const a0 = features[0].attributes ?? {}
   const vk = resolveKey(a0, F.village)
-  const dk = resolveKey(a0, F.density)
+  const dk  = resolveKey(a0, F.density)
   const dpk = resolveKey(a0, F.dep)
   const yk  = resolveKey(a0, F.youth)
   const ek  = resolveKey(a0, F.elder)
   const ak  = resolveKey(a0, F.aging)
   console.log('[PopDash] 欄位:', {vk,dk,dpk,yk,ek,ak})
-  return res.features.map((f:any) => {
+  return features.map((f: any) => {
     const a = f.attributes ?? {}
     return { name: String(a[vk]??''), density: +a[dk], dep: +a[dpk], youth: +a[yk], elder: +a[ek], aging: +a[ak] }
-  }).filter((r:Row)=>r.name)
+  }).filter((r: Row) => r.name)
+}
+
+async function loadYearData(url: string): Promise<Row[]> {
+  const fl = new FeatureLayer({ url, outFields: ['*'] })
+  try { await fl.load() } catch (e) { console.warn('[PopDash] year layer load 失敗', e) }
+
+  // 逐一嘗試各種可能的新市區篩選條件，取第一個回傳合理筆數（≤50）的結果
+  const filters = [
+    TOWN_FILTER,
+    "TOWNNAME = '新市區'",
+    "TOWN = '新市區'",
+    "TOWNCODE = 67000200",
+    "TOWNCODE = '67000200'",
+    "VILLCODE LIKE '670002%'",
+  ]
+  for (const where of filters) {
+    try {
+      const res = await fl.queryFeatures({ where, outFields: ['*'], returnGeometry: false })
+      if (res.features.length > 0 && res.features.length <= 50) {
+        console.log(`[PopDash] loadYearData OK (${where}): ${res.features.length} 筆`)
+        return featuresToRows(res.features)
+      }
+    } catch {}
+  }
+
+  // 最後手段：全量載入，交由後置 boundary 名稱過濾
+  try {
+    const res = await fl.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: false })
+    console.warn(`[PopDash] loadYearData 全量載入 ${res.features.length} 筆，需後置過濾`)
+    return featuresToRows(res.features)
+  } catch (e) { console.warn('[PopDash] loadYearData 查詢失敗', e); return [] }
 }
 
 // ── 統計摘要 ──────────────────────────────────────────────────
@@ -738,11 +766,20 @@ onMounted(async () => {
         const allFeats = bRes.features
         const xinshiFeats = allFeats.filter((f: any) => {
           const a = f.attributes ?? {}
-          return a.TOWN === '新市區' || a.TOWNNAME === '新市區' || String(a.TOWNCODE) === '67000200'
+          // 大小寫不敏感地比對所有可能的鄉鎮欄位
+          const keys = Object.keys(a)
+          const townKey  = keys.find(k => /^TOWN(NAME)?$/i.test(k))
+          const codeKey  = keys.find(k => /^TOWNCODE$/i.test(k))
+          const townVal  = townKey  ? String(a[townKey]  ?? '') : ''
+          const codeVal  = codeKey  ? String(a[codeKey]  ?? '') : ''
+          return townVal === '新市區' || codeVal === '67000200'
         })
+        // 大小寫不敏感地萃取村里名稱
         const xinshiNames = new Set<string>(xinshiFeats.map((f: any) => {
           const a = f.attributes ?? {}
-          return String(a.VILLAGE ?? a.VILLNAME ?? a.VILNAME ?? a.VIL_NAME ?? '')
+          const keys = Object.keys(a)
+          const villKey = keys.find(k => /^(VILLAGE|VILLNAME|VILNAME|VIL_NAME|VNAME|VILLAGENAME)$/i.test(k))
+          return villKey ? String(a[villKey] ?? '') : ''
         }).filter(Boolean))
         console.log('[PopDash] boundary loaded:', allFeats.length, '新市區:', xinshiFeats.length)
         return { allFeats, xinshiFeats, xinshiNames }
@@ -750,14 +787,22 @@ onMounted(async () => {
     })() : Promise.resolve({ allFeats: [] as any[], xinshiFeats: [] as any[], xinshiNames: new Set<string>() }),
   ])
 
-  // Filter village data to 新市區 only using boundary names
+  // Filter village data to 新市區 only
   const { allFeats: bAllFeats, xinshiFeats: bXinshiFeats, xinshiNames } = boundaryResult
-  const rows24 = xinshiNames.size > 0
-    ? rows24raw.filter((r: Row) => xinshiNames.has(r.name))
-    : rows24raw
-  const finalRows = rows24.length > 0 ? rows24 : rows24raw
+  let finalRows: Row[]
+  if (xinshiNames.size > 0) {
+    // 有 boundary 名稱 → 精確比對
+    finalRows = rows24raw.filter((r: Row) => xinshiNames.has(r.name))
+    prevData.value = prevData.value.filter((r: Row) => xinshiNames.has(r.name))
+  } else if (rows24raw.length <= 50) {
+    // server-side filter 已成功（合理的單一行政區筆數）
+    finalRows = rows24raw
+  } else {
+    // 兩種過濾皆失敗，顯示空資料並記錄警告
+    console.warn('[PopDash] 無法確定新市區村里，請確認欄位名稱。rows:', rows24raw.length)
+    finalRows = []
+  }
   villageData.value = finalRows
-  if (xinshiNames.size > 0) prevData.value = prevData.value.filter((r: Row) => xinshiNames.has(r.name))
   buildStats(finalRows)
 
   await loadChartJS()
