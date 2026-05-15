@@ -117,6 +117,14 @@ const authorityThemes = [
     lightBg: '#f5eef7',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4M12 16h.01"/></svg>',
   },
+  {
+    id: 'landuse',
+    name: '土地利用',
+    sub: '都市計畫、非都市土地、使用分區',
+    color: '#5B8260',
+    lightBg: '#edf3ee',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+  },
 ]
 
 const themes = [

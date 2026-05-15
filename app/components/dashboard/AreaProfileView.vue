@@ -3,6 +3,7 @@
 
     <!-- 決策機關：社會脆弱度 -->
     <SocialVulnerabilityDashboard v-if="userRole === 'authority' && theme === 'vulnerability'" />
+    <LandUseDashboard v-else-if="userRole === 'authority' && theme === 'landuse'" />
 
     <!-- 決策機關：尚未選擇主題 -->
     <div v-else-if="userRole === 'authority'" class="empty-authority">
@@ -240,6 +241,7 @@ import ElderlyDashboard             from '@/components/dashboard/ElderlyDashboar
 import SocialVulnerabilityDashboard from '@/components/dashboard/SocialVulnerabilityDashboard.vue'
 import AmenityDashboard             from '@/components/dashboard/AmenityDashboard.vue'
 import EducationDashboard           from '@/components/dashboard/EducationDashboard.vue'
+import LandUseDashboard             from '@/components/dashboard/LandUseDashboard.vue'
 
 const props = withDefaults(defineProps<{
   userRole?: 'public' | 'authority'

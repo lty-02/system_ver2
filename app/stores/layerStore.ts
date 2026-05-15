@@ -20,8 +20,9 @@ export enum LayerCategory {
   PublicFacilities = 'public_facilities',  // 公共設施與社會福利
   Economic = 'economic',                    // 經濟資料
   Transportation = 'transportation',        // 交通運輸與規劃
-  Environment = 'environment', 
+  Environment = 'environment',
   Cadastral = 'cadastral',              //地籍圖層
+  Satellite = 'satellite',              // SPOT衛星影像
 }
 
 /**
@@ -33,7 +34,8 @@ export const LayerCategoryNames: Record<LayerCategory, string> = {
   [LayerCategory.Economic]: '經濟資料',
   [LayerCategory.Transportation]: '交通運輸與規劃',
   [LayerCategory.Environment]: '自然環境與災害',
-  [LayerCategory.Cadastral]:         '地政圖資', 
+  [LayerCategory.Cadastral]:         '地政圖資',
+  [LayerCategory.Satellite]:        'SPOT衛星影像',
 }
 
 /**
@@ -66,6 +68,16 @@ const LAYER_CATEGORY_MAP: Record<string, LayerCategory> = {
   '計畫實驗區村里界':                   LayerCategory.Infrastructure,
   '計畫實驗區鄉鎮市區界':               LayerCategory.Infrastructure,
   '2020年臺南市河川河道':               LayerCategory.Infrastructure,
+  '2025年臺南市都市計畫區':             LayerCategory.Infrastructure,
+  '2025年臺南市都市計畫使用分區':       LayerCategory.Infrastructure,
+  '2025年臺南市非都市土地使用編定':     LayerCategory.Infrastructure,
+  '2025年臺南市非都市土地使用分區':     LayerCategory.Infrastructure,
+
+  // ── SPOT 衛星影像 ──
+  '2020年1月31日SPOT衛星真實色彩影像': LayerCategory.Satellite,
+  '2020年1月31日SPOT衛星NIR假色影像':  LayerCategory.Satellite,
+  '2022年3月5日SPOT衛星真實色彩影像':  LayerCategory.Satellite,
+  '2022年3月5日SPOT衛星NIR假色':        LayerCategory.Satellite,
 
   // ── 公共設施與社會福利 ──
   '2022年臺南市加油站位置':             LayerCategory.PublicFacilities,
