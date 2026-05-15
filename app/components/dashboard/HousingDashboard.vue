@@ -258,9 +258,10 @@ const refVillBuy   = ref<HTMLCanvasElement | null>(null)
 
 const charts = new Map<string, any>()
 
-let mapView: any = null
-let choroGL: any = null
-let sciGL: any   = null
+let mapView: any     = null
+let choroGL: any     = null
+let sciGL: any       = null
+let boundaryGL: any  = null
 
 // ── Helpers ───────────────────────────────────────────────────
 function fmtPrice(v: number | null | undefined): string {
@@ -645,7 +646,7 @@ async function initMap() {
   mapView = markRaw(new MapView({
     container: mapDivRef.value,
     map,
-    center: [120.35, 23.04],
+    center: [120.32, 23.06],
     zoom: 12,
     ui: { components: ['zoom'] },
   }))
@@ -679,9 +680,10 @@ async function switchYear(yi: number) {
 }
 
 // ── WebScene 圖層探查 ─────────────────────────────────────────
-async function findLayerUrls(): Promise<{ housingUrl: string | null; sciUrl: string | null }> {
-  let housingUrl: string | null = null
-  let sciUrl: string | null = null
+async function findLayerUrls(): Promise<{ housingUrl: string | null; sciUrl: string | null; boundaryUrl: string | null }> {
+  let housingUrl: string | null  = null
+  let sciUrl: string | null      = null
+  let boundaryUrl: string | null = null
   try {
     const { default: Portal }   = await import('@arcgis/core/portal/Portal')
     const { default: WebScene } = await import('@arcgis/core/WebScene')
@@ -701,11 +703,12 @@ async function findLayerUrls(): Promise<{ housingUrl: string | null; sciUrl: str
       if (!raw) return
       const url = fmt(raw)
       if (!sciUrl && title.includes('南部科學園區_台南園區範圍')) { sciUrl = url; return }
-      if (!housingUrl && title.includes('房市交易指標')) { housingUrl = url }
+      if (!housingUrl && title.includes('房市交易指標')) { housingUrl = url; return }
+      if (!boundaryUrl && title.includes('計畫實驗區村里界')) { boundaryUrl = url }
     })
-    console.log('[HousingDash] housingUrl:', housingUrl, 'sciUrl:', sciUrl)
+    console.log('[HousingDash] housingUrl:', housingUrl, 'sciUrl:', sciUrl, 'boundaryUrl:', boundaryUrl)
   } catch (e) { console.warn('[HousingDash] WebScene 查找失敗', e) }
-  return { housingUrl, sciUrl }
+  return { housingUrl, sciUrl, boundaryUrl }
 }
 
 // ── 載入圖層資料 ──────────────────────────────────────────────
@@ -764,12 +767,44 @@ async function loadSciPark(url: string) {
   } catch (e) { console.warn('[HousingDash] 南科圖層失敗', e) }
 }
 
+async function loadBoundaryLayer(url: string) {
+  try {
+    const fl = new FeatureLayer({ url, outFields: ['TOWN', 'TOWNNAME', 'TOWNCODE', 'VILLNAME'] })
+    try { await fl.load() } catch {}
+    const res = await fl.queryFeatures({ where: '1=1', returnGeometry: true, outFields: ['TOWN', 'TOWNNAME', 'TOWNCODE', 'VILLNAME'] })
+    const features: any[] = res?.features ?? []
+    if (!features.length) return
+    const existing = mapView?.map?.findLayerById?.('boundary-gl')
+    if (existing) mapView.map.remove(existing)
+    const gl = new GraphicsLayer({ id: 'boundary-gl' })
+    for (const f of features) {
+      if (!f.geometry) continue
+      const a = f.attributes ?? {}
+      const isXinshi = a.TOWN === '新市區' || a.TOWNNAME === '新市區' || String(a.TOWNCODE) === '67000200'
+      gl.add(new Graphic({
+        geometry: markRaw(f.geometry),
+        symbol: {
+          type: 'simple-fill',
+          color: [248, 250, 252, isXinshi ? 30 : 8],
+          outline: isXinshi
+            ? { color: [15, 23, 42, 240], width: 2.0 }
+            : { color: [203, 213, 225, 80], width: 0.4 },
+        } as any,
+      }))
+    }
+    boundaryGL = gl
+    mapView.map.add(gl, 0)
+    if (choroGL) { try { mapView.map.reorder(choroGL, mapView.map.layers.length - 1) } catch {} }
+    console.log(`[HousingDash] boundary loaded: ${features.length} features`)
+  } catch (e) { console.warn('[HousingDash] 村里界圖層失敗', e) }
+}
+
 // ── 生命週期 ──────────────────────────────────────────────────
 onMounted(async () => {
   await loadArcGIS()
   await loadChartJS()
 
-  const { housingUrl, sciUrl } = await findLayerUrls()
+  const { housingUrl, sciUrl, boundaryUrl } = await findLayerUrls()
 
   await initMap()
 
@@ -781,6 +816,7 @@ onMounted(async () => {
   renderChoropleth()
   mapLoading.value = false
 
+  if (boundaryUrl) await loadBoundaryLayer(boundaryUrl)
   if (sciUrl) await loadSciPark(sciUrl)
 
   await nextTick()
@@ -790,7 +826,7 @@ onMounted(async () => {
 onUnmounted(() => {
   charts.forEach(c => c?.destroy()); charts.clear()
   try { mapView?.destroy() } catch {}
-  mapView = null; sciGL = null; choroGL = null
+  mapView = null; sciGL = null; choroGL = null; boundaryGL = null
   rows = []
 })
 </script>
