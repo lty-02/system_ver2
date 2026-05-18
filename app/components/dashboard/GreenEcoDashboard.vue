@@ -42,15 +42,28 @@
             <button class="popup-close" @click="selectedVill = null">✕</button>
           </div>
           <div class="popup-rows">
-            <div class="popup-row"><span>村里面積</span><b style="color:#16a34a">{{ fmtArea(selectedVill.villArea) }}</b><span>km²</span></div>
-            <div class="popup-row"><span>綠覆蓋面積</span><b style="color:#4ade80">{{ fmtArea(selectedVill.greenArea) }}</b><span>km²</span></div>
-            <div class="popup-row"><span>綠覆蓋比率</span><b style="color:#14532d">{{ fmtPct(selectedVill.ratio) }}</b></div>
+            <div class="popup-row"><span>村里面積</span><b style="color:#5d8f72">{{ fmtArea(selectedVill.villArea) }}</b><span>km²</span></div>
+            <div class="popup-row"><span>綠覆蓋面積</span><b style="color:#92b89f">{{ fmtArea(selectedVill.greenArea) }}</b><span>km²</span></div>
+            <div class="popup-row"><span>綠覆蓋比率</span><b style="color:#2e5c45">{{ fmtPct(selectedVill.ratio) }}</b></div>
             <div v-if="selectedVill.delta != null" class="popup-row">
               <span>2020→2022 變化</span>
-              <b :style="{ color: (selectedVill.delta ?? 0) >= 0 ? '#16a34a' : '#f97316' }">
+              <b :style="{ color: (selectedVill.delta ?? 0) >= 0 ? '#5d8f72' : '#f97316' }">
                 {{ (selectedVill.delta ?? 0) >= 0 ? '+' : '' }}{{ ((selectedVill.delta ?? 0) * 100).toFixed(2) }}%
               </b>
             </div>
+          </div>
+        </div>
+      </transition>
+
+      <!-- 生態點位 Popup -->
+      <transition name="popup-fade">
+        <div v-if="selectedEco" class="map-popup">
+          <div class="popup-hd">
+            <span class="popup-name">{{ selectedEco.label }}</span>
+            <button class="popup-close" @click="selectedEco = null">✕</button>
+          </div>
+          <div class="popup-rows">
+            <div class="popup-row"><span>名稱</span><b>{{ selectedEco.name }}</b></div>
           </div>
         </div>
       </transition>
@@ -87,7 +100,7 @@
     <div class="right-col">
       <div class="ind-card">
         <div class="card-hd">
-          <span class="card-title"><span class="card-dot" style="background:#16a34a"></span>村里綠覆蓋比率排名</span>
+          <span class="card-title"><span class="card-dot" style="background:#5d8f72"></span>村里綠覆蓋比率排名</span>
           <span class="stat-mini">{{ activeYear }} 年</span>
         </div>
         <div class="ind-desc">各村里排名（由高至低）</div>
@@ -107,14 +120,14 @@
     <div class="bottom-row">
       <div class="ind-card">
         <div class="card-hd">
-          <span class="card-title"><span class="card-dot" style="background:#4ade80"></span>2020 vs 2022 對照</span>
+          <span class="card-title"><span class="card-dot" style="background:#92b89f"></span>2020 vs 2022 對照</span>
         </div>
         <div class="ind-desc">雙色漸層・各村里綠覆蓋比率比較</div>
         <div class="canvas-wrap"><canvas ref="refCompare"></canvas></div>
       </div>
       <div class="ind-card">
         <div class="card-hd">
-          <span class="card-title"><span class="card-dot" style="background:#86efac"></span>綠覆蓋面積組成</span>
+          <span class="card-title"><span class="card-dot" style="background:#c8dece"></span>綠覆蓋面積組成</span>
           <span class="stat-mini">km²</span>
         </div>
         <div class="ind-desc">綠色=綠覆蓋・灰色=非綠覆蓋</div>
@@ -122,7 +135,7 @@
       </div>
       <div class="ind-card">
         <div class="card-hd">
-          <span class="card-title"><span class="card-dot" style="background:#14532d"></span>面積 vs 比率散點</span>
+          <span class="card-title"><span class="card-dot" style="background:#2e5c45"></span>面積 vs 比率散點</span>
         </div>
         <div class="ind-desc">X=村里面積 km²・Y=綠覆蓋比率</div>
         <div class="canvas-wrap"><canvas ref="refScatter"></canvas></div>
@@ -140,7 +153,7 @@ const WEBSCENE_ID = '85502d8e84934fef9412dce360fc7165'
 const YEARS = [2020, 2022] as const
 type Year = typeof YEARS[number]
 
-const GREEN_RAMP = ['#dcfce7', '#86efac', '#4ade80', '#16a34a', '#14532d'] as const
+const GREEN_RAMP = ['#f0f7f2', '#c8dece', '#92b89f', '#5d8f72', '#2e5c45'] as const
 
 const ECO_LAYERS = [
   { key: 'flower', label: '花蹤',       color: '#f472b6', title: '花蹤',       markerColor: [244, 114, 182, 220] },
@@ -206,11 +219,12 @@ const activeYear = ref<Year>(2022)
 const selectedVill = ref<Popup | null>(null)
 const sciVisible = ref(false)
 const ecoVisible = reactive<Record<EcoKey, boolean>>({ flower: false, bird: false, pond: false })
+const selectedEco = ref<{ label: string; name: string } | null>(null)
 
 const kpis = ref([
-  { label: '全區均值', color: '#16a34a', val: null as string|null, unit: '%' },
-  { label: '最高村里', color: '#14532d', val: null as string|null, unit: '' },
-  { label: '綠覆蓋積',  color: '#4ade80', val: null as string|null, unit: 'km²' },
+  { label: '全區均值', color: '#5d8f72', val: null as string|null, unit: '%' },
+  { label: '最高村里', color: '#2e5c45', val: null as string|null, unit: '' },
+  { label: '綠覆蓋積',  color: '#92b89f', val: null as string|null, unit: 'km²' },
   { label: '2020→2022 變化', color: '#60a5fa', val: null as string|null, unit: 'pp' },
 ])
 
@@ -251,7 +265,7 @@ function buildKPIs() {
   kpis.value[1]!.val = maxVill
   kpis.value[2]!.val = totalGreen.toFixed(3)
   kpis.value[3]!.val = ((avgDelta) * 100).toFixed(2)
-  kpis.value[3]!.color = avgDelta >= 0 ? '#16a34a' : '#f97316'
+  kpis.value[3]!.color = avgDelta >= 0 ? '#5d8f72' : '#f97316'
 }
 
 // ── 面量圖渲染 ────────────────────────────────────────────────
@@ -292,6 +306,19 @@ function renderChoropleth() {
 async function handleMapClick(evt: any) {
   if (!mapView) return
   const hit = await mapView.hitTest(evt)
+
+  // Eco point hit
+  const ecoMatch = hit.results?.find((r: any) => r.graphic?.attributes?.ecoType != null)
+  if (ecoMatch) {
+    const attrs = ecoMatch.graphic.attributes
+    const elDef = ECO_LAYERS.find(e => e.key === attrs.ecoType)
+    selectedEco.value = { label: elDef?.label ?? attrs.ecoType, name: attrs.name || '（無名稱）' }
+    selectedVill.value = null
+    return
+  }
+  selectedEco.value = null
+
+  // Village polygon hit
   const match = hit.results?.find((r: any) => r.graphic?.attributes?.vi != null)
   if (!match) { selectedVill.value = null; return }
   const { vi } = match.graphic.attributes
@@ -481,14 +508,16 @@ async function loadEcoLayer(key: EcoKey, layerObj: any) {
       const sub = layerObj.sublayers.getItemAt(0)
       if (sub) { try { await sub.load() } catch {}; queryable = sub }
     }
-    const res = await queryable.queryFeatures({ where: '1=1', returnGeometry: true, outFields: [] })
+    const res = await queryable.queryFeatures({ where: '1=1', returnGeometry: true, outFields: ['*'] })
     const feats: any[] = res?.features ?? []
     if (!feats.length) { console.warn(`[GreenEco] eco "${key}" 無資料`); return }
     const gl = new GraphicsLayer({ id: `eco-${key}`, visible: false })
     for (const f of feats) {
       if (!f.geometry) continue
+      const name = f.attributes?.['名稱'] ?? f.attributes?.['name'] ?? f.attributes?.['NAME'] ?? ''
       gl.add(new Graphic({
         geometry: markRaw(f.geometry),
+        attributes: { ecoType: key, name },
         symbol: {
           type: 'simple-marker',
           color: elDef.markerColor,
@@ -550,10 +579,10 @@ function drawRankChart() {
       datasets: [{
         label: '綠覆蓋比率 (%)',
         data: vals,
-        backgroundColor: vals.map((v, i) => {
+        backgroundColor: vals.map((_v, i) => {
           const pct = i / Math.max(labels.length - 1, 1)
-          const dark = Math.round((1 - pct) * 53 + pct * 20)
-          return `rgb(${dark},${Math.round(160 - pct * 50)},${dark})`
+          const idx = Math.min(Math.floor((1 - pct) * GREEN_RAMP.length), GREEN_RAMP.length - 1)
+          return GREEN_RAMP[idx]
         }),
         borderRadius: 2,
       }],
@@ -581,7 +610,7 @@ function drawDeltaChart() {
       datasets: [{
         label: '變化量 (pp)',
         data: sorted.map(r => parseFloat((r.delta * 100).toFixed(3))),
-        backgroundColor: sorted.map(r => r.delta >= 0 ? '#16a34a' : '#f97316'),
+        backgroundColor: sorted.map(r => r.delta >= 0 ? '#5d8f72' : '#f97316'),
         borderRadius: 2,
       }],
     },
@@ -608,13 +637,13 @@ function drawCompareChart() {
         {
           label: '2020 (%)',
           data: sorted.map(r => parseFloat((r.ratio20 * 100).toFixed(2))),
-          backgroundColor: '#86efac',
+          backgroundColor: '#c8dece',
           borderRadius: 2,
         },
         {
           label: '2022 (%)',
           data: sorted.map(r => parseFloat((r.ratio22 * 100).toFixed(2))),
-          backgroundColor: '#16a34a',
+          backgroundColor: '#5d8f72',
           borderRadius: 2,
         },
       ],
@@ -640,7 +669,7 @@ function drawAreaChart() {
         {
           label: '綠覆蓋 (km²)',
           data: sorted.map(r => parseFloat(r.greenArea22.toFixed(4))),
-          backgroundColor: '#4ade80',
+          backgroundColor: '#5d8f72',
           borderRadius: 2,
         },
         {
@@ -670,13 +699,13 @@ function drawScatterChart() {
         {
           label: '2020',
           data: rows.map(r => ({ x: parseFloat(r.villArea20.toFixed(4)), y: parseFloat((r.ratio20 * 100).toFixed(2)), name: r.name })),
-          backgroundColor: '#86efac',
+          backgroundColor: '#c8dece',
           pointRadius: 5,
         },
         {
           label: '2022',
           data: rows.map(r => ({ x: parseFloat(r.villArea22.toFixed(4)), y: parseFloat((r.ratio22 * 100).toFixed(2)), name: r.name })),
-          backgroundColor: '#16a34a',
+          backgroundColor: '#5d8f72',
           pointRadius: 5,
         },
       ],
@@ -780,7 +809,7 @@ onUnmounted(() => {
   padding: 2px 8px; border-radius: 12px; border: 1.5px solid #d1d5db;
   background: #fff; font-size: 11px; color: #475569; cursor: pointer;
 }
-.yr-pill.active { background: #16a34a; border-color: #16a34a; color: #fff; font-weight: 600; }
+.yr-pill.active { background: #5d8f72; border-color: #5d8f72; color: #fff; font-weight: 600; }
 
 /* Popup */
 .map-popup {
@@ -799,7 +828,7 @@ onUnmounted(() => {
 
 /* Eco toggles */
 .eco-toggles {
-  position: absolute; bottom: 10px; left: 10px; z-index: 10;
+  position: absolute; bottom: 116px; left: 10px; z-index: 11;
   display: flex; flex-direction: column; gap: 4px;
 }
 .eco-btn {
@@ -833,6 +862,7 @@ onUnmounted(() => {
 
 /* Right column */
 .right-col { display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+.right-col > .ind-card { flex: 1; min-height: 0; }
 
 /* Bottom row */
 .bottom-row {
