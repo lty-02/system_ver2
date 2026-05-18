@@ -3,7 +3,8 @@
 
     <!-- 決策機關：社會脆弱度 -->
     <SocialVulnerabilityDashboard v-if="userRole === 'authority' && theme === 'vulnerability'" />
-    <LandUseDashboard v-else-if="userRole === 'authority' && theme === 'landuse'" />
+    <LandUseDashboard    v-else-if="userRole === 'authority' && theme === 'landuse'" />
+    <GreenEcoDashboard  v-else-if="userRole === 'authority' && theme === 'nature'" />
 
     <!-- 決策機關：尚未選擇主題 -->
     <div v-else-if="userRole === 'authority'" class="empty-authority">
@@ -204,6 +205,7 @@ import SocialVulnerabilityDashboard from '@/components/dashboard/SocialVulnerabi
 import AmenityDashboard             from '@/components/dashboard/AmenityDashboard.vue'
 import EducationDashboard           from '@/components/dashboard/EducationDashboard.vue'
 import LandUseDashboard             from '@/components/dashboard/LandUseDashboard.vue'
+import GreenEcoDashboard            from '@/components/dashboard/GreenEcoDashboard.vue'
 import HousingDashboard             from '@/components/dashboard/HousingDashboard.vue'
 
 const props = withDefaults(defineProps<{
