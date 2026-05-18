@@ -403,22 +403,30 @@ async function findLayerUrls(): Promise<{
 // ── 綠覆蓋資料載入（直接對 WebScene 圖層物件查詢）────────────
 async function loadGreenFeatures(layerObj: any): Promise<any[]> {
   try {
-    try { await layerObj.load() } catch {}
+    try { await layerObj.load() } catch (e) { console.warn('[GreenEco] layer.load() error:', e) }
     let queryable = layerObj
-    if (layerObj.sublayers?.length) {
-      const sub = layerObj.sublayers.getItemAt(0)
+    if (layerObj.type === 'map-image' || layerObj.sublayers?.length) {
+      const sub = layerObj.sublayers?.getItemAt(0)
       if (sub) { try { await sub.load() } catch {}; queryable = sub }
     }
     const res = await queryable.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
+    const n = res?.features?.length ?? 0
+    console.log(`[GreenEco] loadGreenFeatures "${layerObj.title}": ${n} 筆`)
+    if (n > 0) {
+      const sample = res.features[0].attributes
+      console.log('[GreenEco] sample fields:', Object.keys(sample).join(', '))
+    }
     return res?.features ?? []
   } catch (e) {
-    console.warn('[GreenEco] loadGreenFeatures failed', e)
+    console.warn('[GreenEco] loadGreenFeatures failed:', e)
     return []
   }
 }
 
 function getVillName(a: Record<string, any>): string {
-  return a.VILLNAME ?? a.Village_na ?? a.Village_n ?? a.NAME ?? a.name ?? '未知'
+  const v = a.VILLNAME ?? a.Village_na ?? a.Village_n ?? a.VNAME ?? a.Vname ?? a.NAME ?? a.name ?? null
+  if (v == null) console.warn('[GreenEco] 無村里名欄位，可用欄位:', Object.keys(a).join(', '))
+  return v ?? '未知'
 }
 
 async function loadBothYears(obj20: any|null, obj22: any|null) {
@@ -460,9 +468,9 @@ async function loadBothYears(obj20: any|null, obj22: any|null) {
       greenArea22: read(a22, 'Green_area'),
       ratio22:     read(a22, 'Green_rati'),
     }
-  }).filter(r => r.name !== '未知' || r.ratio22 > 0 || r.ratio20 > 0)
+  }).filter(r => r.geo20 != null || r.geo22 != null)
 
-  console.log(`[GreenEco] rows: ${rows.length}`)
+  console.log(`[GreenEco] rows: ${rows.length} (feats20=${feats20.length}, feats22=${feats22.length})`)
 }
 
 // ── 生態點位圖層載入（使用 WebScene 圖層物件直接查詢）────────
