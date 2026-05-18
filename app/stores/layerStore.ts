@@ -20,9 +20,10 @@ export enum LayerCategory {
   PublicFacilities = 'public_facilities',  // 公共設施與社會福利
   Economic = 'economic',                    // 經濟資料
   Transportation = 'transportation',        // 交通運輸與規劃
-  Environment = 'environment',
-  Cadastral = 'cadastral',              //地籍圖層
-  Satellite = 'satellite',              // SPOT衛星影像
+  Environment = 'environment',              // 自然環境與災害
+  Cadastral = 'cadastral',                  // 地政圖資
+  Satellite = 'satellite',                  // SPOT衛星影像
+  Cultural = 'cultural',                    // 園區人文生態景觀
 }
 
 /**
@@ -34,8 +35,9 @@ export const LayerCategoryNames: Record<LayerCategory, string> = {
   [LayerCategory.Economic]: '經濟資料',
   [LayerCategory.Transportation]: '交通運輸與規劃',
   [LayerCategory.Environment]: '自然環境與災害',
-  [LayerCategory.Cadastral]:         '地政圖資',
-  [LayerCategory.Satellite]:        'SPOT衛星影像',
+  [LayerCategory.Cadastral]:  '地政圖資',
+  [LayerCategory.Satellite]:  'SPOT衛星影像',
+  [LayerCategory.Cultural]:   '園區人文生態景觀',
 }
 
 /**
@@ -161,6 +163,16 @@ const LAYER_CATEGORY_MAP: Record<string, LayerCategory> = {
   '2017年臺南市地下水二級管制區':       LayerCategory.Environment,
   '2025年臺南市地下水區分範圍':         LayerCategory.Environment,
   '2025年臺南市保安林分布':             LayerCategory.Environment,
+  '2020年臺南市綠覆蓋':                 LayerCategory.Environment,
+  '2022年臺南市綠覆蓋':                 LayerCategory.Environment,
+
+  // ── 園區人文生態景觀 ──
+  '藝術變電箱':                         LayerCategory.Cultural,
+  '花蹤':                               LayerCategory.Cultural,
+  '景觀水塔':                           LayerCategory.Cultural,
+  '生態水鳥點位':                       LayerCategory.Cultural,
+  '生態滯洪池點位':                     LayerCategory.Cultural,
+  '考古遺跡點位':                       LayerCategory.Cultural,
 
 }
 
@@ -191,6 +203,15 @@ const getCategoryByTitle = (title: string): LayerCategory | null => {
     title.includes('非都市土地使用分區')
   ) {
     return LayerCategory.Infrastructure
+  }
+  if (title.includes('綠覆蓋')) {
+    return LayerCategory.Environment
+  }
+  if (
+    title === '藝術變電箱' || title === '花蹤' || title === '景觀水塔' ||
+    title.includes('生態水鳥') || title.includes('生態滯洪池') || title.includes('考古遺跡')
+  ) {
+    return LayerCategory.Cultural
   }
 
   // 如果映射表中沒有，記錄警告並返回 null（不歸類）

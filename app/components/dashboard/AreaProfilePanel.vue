@@ -125,6 +125,14 @@ const authorityThemes = [
     lightBg: '#edf3ee',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
   },
+  {
+    id: 'nature',
+    name: '自然生態',
+    sub: '綠覆蓋、花蹤、水鳥、滯洪池',
+    color: '#16a34a',
+    lightBg: '#f0fdf4',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 22V12M12 12C12 12 7 9 7 4a5 5 0 0 1 10 0c0 5-5 8-5 8z"/><path d="M5 20c1.5-2 4-3 7-3s5.5 1 7 3"/></svg>',
+  },
 ]
 
 const themes = [
