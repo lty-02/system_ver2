@@ -346,18 +346,16 @@ async function switchYear(yr: Year) {
 
 // ── WebScene 圖層探查 ─────────────────────────────────────────
 async function findLayerUrls(): Promise<{
-  url20: string|null; url22: string|null; sciUrl: string|null
+  sciUrl: string|null
+  green20Obj: any|null
+  green22Obj: any|null
   ecoLayerObjs: Partial<Record<EcoKey, any>>
 }> {
-  let url20: string|null = null
-  let url22: string|null = null
-  let sciUrl: string|null = null
-  // Eco layers collected as WebScene layer OBJECTS (not URLs), to avoid
-  // FeatureLayer load failures caused by sublayer URL format issues.
-  // Primary: exact title match. Fallback: ordered collection of layers
-  // titled '園區人文生態景觀點位' (all eco sublayers share this title).
+  let sciUrl: string|null   = null
+  let green20Obj: any|null  = null
+  let green22Obj: any|null  = null
   const ecoLayerObjs: Partial<Record<EcoKey, any>> = {}
-  const ecoCandidates: any[] = []  // ordered fallback pool
+  const ecoCandidates: any[] = []
 
   try {
     const { default: Portal }   = await import('@arcgis/core/portal/Portal')
@@ -375,54 +373,58 @@ async function findLayerUrls(): Promise<{
     ws.allLayers.forEach((l: any) => {
       const title: string = l.title ?? ''
       const raw: string   = l.url ?? l.parsedUrl?.path ?? ''
-      if (!sciUrl && title.includes('南部科學園區_台南園區範圍') && raw) { sciUrl = fmt(raw); return }
-      if (!url20  && title.includes('2020') && title.includes('綠覆蓋') && raw) { url20 = fmt(raw); return }
-      if (!url22  && title.includes('2022') && title.includes('綠覆蓋') && raw) { url22 = fmt(raw); return }
 
-      // Try exact title match first
+      if (!sciUrl && title.includes('南部科學園區_台南園區範圍') && raw) { sciUrl = fmt(raw); return }
+      // Use layer objects directly for green coverage (avoids sublayer URL format issues)
+      if (!green20Obj && title.includes('2020') && title.includes('綠覆蓋')) { green20Obj = l; return }
+      if (!green22Obj && title.includes('2022') && title.includes('綠覆蓋')) { green22Obj = l; return }
+
       for (const el of ECO_LAYERS) {
-        if (!ecoLayerObjs[el.key] && title === el.title) {
-          ecoLayerObjs[el.key] = l; return
-        }
+        if (!ecoLayerObjs[el.key] && title === el.title) { ecoLayerObjs[el.key] = l; return }
       }
-      // Fallback pool: layers whose title suggests ecology point data
       if (title === '園區人文生態景觀點位' || title.includes('園區人文生態')) {
         ecoCandidates.push(l)
       }
     })
 
-    // Assign fallback pool by order: 花蹤=0, 生態水鳥=1, 生態滯洪池=2
     const ECO_KEYS: EcoKey[] = ['flower', 'bird', 'pond']
     ECO_KEYS.forEach((key, i) => {
-      if (!ecoLayerObjs[key] && ecoCandidates[i]) {
-        ecoLayerObjs[key] = ecoCandidates[i]
-      }
+      if (!ecoLayerObjs[key] && ecoCandidates[i]) ecoLayerObjs[key] = ecoCandidates[i]
     })
 
-    console.log('[GreenEco] urls:', { url20, url22, sciUrl })
+    console.log('[GreenEco] green20:', green20Obj?.title, '/ green22:', green22Obj?.title)
     console.log('[GreenEco] ecoLayerObjs:', Object.fromEntries(
-      Object.entries(ecoLayerObjs).map(([k, v]) => [k, v?.title])
+      Object.entries(ecoLayerObjs).map(([k, v]) => [k, (v as any)?.title])
     ))
   } catch (e) { console.warn('[GreenEco] WebScene 查找失敗', e) }
-  return { url20, url22, sciUrl, ecoLayerObjs }
+  return { sciUrl, green20Obj, green22Obj, ecoLayerObjs }
 }
 
-// ── 綠覆蓋資料載入 ────────────────────────────────────────────
-async function loadGreenFeatures(url: string): Promise<any[]> {
-  const fl = new FeatureLayer({ url, outFields: ['*'] })
-  try { await fl.load() } catch {}
-  const res = await fl.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
-  return res?.features ?? []
+// ── 綠覆蓋資料載入（直接對 WebScene 圖層物件查詢）────────────
+async function loadGreenFeatures(layerObj: any): Promise<any[]> {
+  try {
+    try { await layerObj.load() } catch {}
+    let queryable = layerObj
+    if (layerObj.sublayers?.length) {
+      const sub = layerObj.sublayers.getItemAt(0)
+      if (sub) { try { await sub.load() } catch {}; queryable = sub }
+    }
+    const res = await queryable.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
+    return res?.features ?? []
+  } catch (e) {
+    console.warn('[GreenEco] loadGreenFeatures failed', e)
+    return []
+  }
 }
 
 function getVillName(a: Record<string, any>): string {
   return a.VILLNAME ?? a.Village_na ?? a.Village_n ?? a.NAME ?? a.name ?? '未知'
 }
 
-async function loadBothYears(url20: string|null, url22: string|null) {
+async function loadBothYears(obj20: any|null, obj22: any|null) {
   const [feats20, feats22] = await Promise.all([
-    url20 ? loadGreenFeatures(url20) : Promise.resolve([]),
-    url22 ? loadGreenFeatures(url22) : Promise.resolve([]),
+    obj20 ? loadGreenFeatures(obj20) : Promise.resolve([]),
+    obj22 ? loadGreenFeatures(obj22) : Promise.resolve([]),
   ])
 
   // Build lookup by village name for 2020
@@ -706,10 +708,10 @@ onMounted(async () => {
   await loadArcGIS()
   await loadChartJS()
 
-  const { url20, url22, sciUrl, ecoLayerObjs } = await findLayerUrls()
+  const { sciUrl, green20Obj, green22Obj, ecoLayerObjs } = await findLayerUrls()
   await initMap()
 
-  await loadBothYears(url20, url22)
+  await loadBothYears(green20Obj, green22Obj)
 
   buildKPIs()
   renderChoropleth()
