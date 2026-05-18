@@ -392,10 +392,6 @@ async function findLayerUrls(): Promise<{
       if (!ecoLayerObjs[key] && ecoCandidates[i]) ecoLayerObjs[key] = ecoCandidates[i]
     })
 
-    console.log('[GreenEco] green20:', green20Obj?.title, '/ green22:', green22Obj?.title)
-    console.log('[GreenEco] ecoLayerObjs:', Object.fromEntries(
-      Object.entries(ecoLayerObjs).map(([k, v]) => [k, (v as any)?.title])
-    ))
   } catch (e) { console.warn('[GreenEco] WebScene 查找失敗', e) }
   return { sciUrl, green20Obj, green22Obj, ecoLayerObjs }
 }
@@ -410,12 +406,6 @@ async function loadGreenFeatures(layerObj: any): Promise<any[]> {
       if (sub) { try { await sub.load() } catch {}; queryable = sub }
     }
     const res = await queryable.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
-    const n = res?.features?.length ?? 0
-    console.log(`[GreenEco] loadGreenFeatures "${layerObj.title}": ${n} 筆`)
-    if (n > 0) {
-      const sample = res.features[0].attributes
-      console.log('[GreenEco] sample fields:', Object.keys(sample).join(', '))
-    }
     return res?.features ?? []
   } catch (e) {
     console.warn('[GreenEco] loadGreenFeatures failed:', e)
@@ -424,53 +414,60 @@ async function loadGreenFeatures(layerObj: any): Promise<any[]> {
 }
 
 function getVillName(a: Record<string, any>): string {
-  const v = a.VILLNAME ?? a.Village_na ?? a.Village_n ?? a.VNAME ?? a.Vname ?? a.NAME ?? a.name ?? null
-  if (v == null) console.warn('[GreenEco] 無村里名欄位，可用欄位:', Object.keys(a).join(', '))
-  return v ?? '未知'
+  return a.villname ?? a.VILLNAME ?? a.Village_na ?? a.Village_n ?? a.NAME ?? a.name ?? '未知'
 }
 
 async function loadBothYears(obj20: any|null, obj22: any|null) {
-  const [feats20, feats22] = await Promise.all([
+  const isXinshi = (f: any) => {
+    const a = f.attributes ?? {}
+    return a.townname === '新市區' || a.TOWNNAME === '新市區'
+  }
+  const read = (a: Record<string, any>, ...fields: string[]): number => {
+    for (const fld of fields) {
+      const v = a[fld]
+      if (typeof v === 'number') return v
+      const p = parseFloat(v)
+      if (!isNaN(p)) return p
+    }
+    return 0
+  }
+
+  const [all20, all22] = await Promise.all([
     obj20 ? loadGreenFeatures(obj20) : Promise.resolve([]),
     obj22 ? loadGreenFeatures(obj22) : Promise.resolve([]),
   ])
 
-  // Build lookup by village name for 2020
+  const feats22 = all22.filter(isXinshi)
+  const feats20 = all20.filter(isXinshi)
+
+  // Build 2020 lookup by village name
   const map20 = new Map<string, any>()
-  feats20.forEach((f: any) => {
-    const name = getVillName(f.attributes ?? {})
-    map20.set(name, f)
-  })
+  feats20.forEach((f: any) => map20.set(getVillName(f.attributes ?? {}), f))
 
-  // Merge: use 2022 as base
-  const baseFeats = feats22.length ? feats22 : feats20
-  const isBase22  = feats22.length > 0
+  // Use 2022 as base; merge 2020 by name
+  const base = feats22.length ? feats22 : feats20
+  const is22 = feats22.length > 0
 
-  rows = baseFeats.map((f: any) => {
-    const a22 = f.attributes ?? {}
-    const name = getVillName(a22)
-    const peer = map20.get(name)
-    const a20  = peer?.attributes ?? {}
+  rows = base
+    .filter((f: any) => f.geometry != null)
+    .map((f: any) => {
+      const a22 = f.attributes ?? {}
+      const name = getVillName(a22)
+      const peer = map20.get(name)
+      const a20  = peer?.attributes ?? {}
+      return {
+        name,
+        geo20: peer?.geometry ? markRaw(peer.geometry) : null,
+        geo22: is22 ? markRaw(f.geometry) : null,
+        villArea20:  read(a20, 'village_ar', 'Village_ar'),
+        greenArea20: read(a20, 'green_area', 'Green_area'),
+        ratio20:     read(a20, 'green_rati', 'Green_rati'),
+        villArea22:  read(a22, 'village_ar', 'Village_ar'),
+        greenArea22: read(a22, 'green_area', 'Green_area'),
+        ratio22:     read(a22, 'green_rati', 'Green_rati'),
+      }
+    })
 
-    const read = (a: Record<string, any>, field: string): number => {
-      const v = a[field]
-      return typeof v === 'number' ? v : parseFloat(v ?? '0') || 0
-    }
-
-    return {
-      name,
-      geo20: peer?.geometry ? markRaw(peer.geometry) : null,
-      geo22: isBase22 && f.geometry ? markRaw(f.geometry) : null,
-      villArea20:  read(a20, 'Village_ar'),
-      greenArea20: read(a20, 'Green_area'),
-      ratio20:     read(a20, 'Green_rati'),
-      villArea22:  read(a22, 'Village_ar'),
-      greenArea22: read(a22, 'Green_area'),
-      ratio22:     read(a22, 'Green_rati'),
-    }
-  }).filter(r => r.geo20 != null || r.geo22 != null)
-
-  console.log(`[GreenEco] rows: ${rows.length} (feats20=${feats20.length}, feats22=${feats22.length})`)
 }
 
 // ── 生態點位圖層載入（使用 WebScene 圖層物件直接查詢）────────
@@ -502,7 +499,6 @@ async function loadEcoLayer(key: EcoKey, layerObj: any) {
     }
     ecoGLs[key] = gl
     mapView.map.add(gl)
-    console.log(`[GreenEco] eco "${key}": ${feats.length} 點`)
   } catch (e) { console.warn(`[GreenEco] eco layer "${key}" failed`, e) }
 }
 
