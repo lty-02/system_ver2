@@ -173,16 +173,19 @@
       <div class="bld-map-wrap">
         <div ref="bldMapDivRef" class="map-div"></div>
         <div class="map-loading" v-if="isLoading"><div class="spinner"></div><span>載入建物資料中…</span></div>
+        <!-- 年份 badge：懸浮左上 -->
         <div class="bld-badge" v-if="bldYears.length">
+          <span class="bld-year-label">年份</span>
           <span class="bld-year">{{ bldYear }}</span>
-          <span class="bld-count" v-if="bldCount !== null">累計 {{ bldCount.toLocaleString() }} 棟</span>
+          <span class="bld-count" v-if="bldCount !== null">{{ bldCount.toLocaleString() }} 棟</span>
         </div>
+        <!-- 播放鍵：懸浮右下 -->
+        <button class="bld-play-fab" @click="toggleBldPlay" v-if="bldYears.length">
+          <svg v-if="!isBldPlaying" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>
+          <svg v-else viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
+        </button>
       </div>
       <div class="bld-ts-bar" v-if="bldYears.length">
-        <button class="ts-play" @click="toggleBldPlay">
-          <svg v-if="!isBldPlaying" viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><path d="M8 5v14l11-7z"/></svg>
-          <svg v-else viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
-        </button>
         <div class="bld-track-wrap">
           <div class="bld-track" ref="bldTrackRef" @click="onBldTrackClick">
             <div class="bld-fill" :style="{ width: bldProgress + '%' }"></div>
@@ -553,9 +556,9 @@ async function initBuilding() {
 async function applyBldFilter() {
   if (!bldLayer) return
   const yr = bldYear.value
-  bldLayer.definitionExpression = `EXTRACT(YEAR FROM date) <= ${yr}`
+  bldLayer.definitionExpression = `date < timestamp '${yr + 1}-01-01 00:00:00'`
   try {
-    bldCount.value = await bldLayer.queryFeatureCount({ where: bldLayer.definitionExpression })
+    bldCount.value = await bldLayer.queryFeatureCount({ where: `date < timestamp '${yr + 1}-01-01 00:00:00'` })
   } catch { bldCount.value = null }
 }
 
@@ -1056,28 +1059,45 @@ onUnmounted(() => {
   flex: 1; min-height: 0; position: relative;
   border-bottom: 0.5px solid var(--color-border-tertiary);
 }
+
+/* 年份 badge — 輕量系統風格 */
 .bld-badge {
-  position: absolute; top: 12px; left: 12px; z-index: 10;
-  background: rgba(15,23,42,0.78); border-radius: 10px;
-  padding: 8px 14px; display: flex; flex-direction: column; gap: 2px;
-  pointer-events: none; backdrop-filter: blur(6px);
+  position: absolute; top: 10px; left: 10px; z-index: 10;
+  background: var(--color-background-primary, #fff);
+  border: 0.5px solid var(--color-border-secondary, #e2e8f0);
+  border-radius: 8px; padding: 6px 10px;
+  display: flex; flex-direction: column; gap: 1px;
+  pointer-events: none;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
 }
-.bld-year  { font-size: 26px; font-weight: 800; color: #fff; line-height: 1; }
-.bld-count { font-size: 11px; color: #94a3b8; }
+.bld-year-label { font-size: 9px; font-weight: 600; color: var(--color-text-tertiary, #9ca3af); text-transform: uppercase; letter-spacing: 0.06em; }
+.bld-year  { font-size: 18px; font-weight: 700; color: var(--color-text-primary, #1e293b); line-height: 1.1; }
+.bld-count { font-size: 10px; color: var(--color-text-secondary, #64748b); margin-top: 1px; }
+
+/* 播放鍵 FAB — 懸浮右下 */
+.bld-play-fab {
+  position: absolute; bottom: 12px; right: 12px; z-index: 10;
+  width: 36px; height: 36px; border-radius: 50%;
+  border: none; background: #3B5BDB; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; box-shadow: 0 2px 10px rgba(59,91,219,0.4);
+  transition: background 0.15s, transform 0.15s;
+}
+.bld-play-fab:hover { background: #2f4ec8; transform: scale(1.08); }
+.bld-play-fab:active { transform: scale(0.96); }
 
 .bld-ts-bar {
   flex-shrink: 0;
-  display: flex; align-items: center; gap: 10px;
   padding: 10px 16px;
   background: var(--color-background-primary);
   border-top: 0.5px solid var(--color-border-tertiary);
 }
-.bld-track-wrap { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.bld-track-wrap { display: flex; flex-direction: column; gap: 5px; }
 .bld-track {
   height: 4px; background: var(--color-border-tertiary);
   border-radius: 2px; position: relative; cursor: pointer;
 }
-.bld-fill { height: 100%; background: #3b82f6; border-radius: 2px; pointer-events: none; }
+.bld-fill { height: 100%; background: #3B5BDB; border-radius: 2px; pointer-events: none; }
 .bld-node {
   position: absolute; top: 50%; transform: translate(-50%, -50%);
   width: 8px; height: 8px; border-radius: 50%;
@@ -1085,7 +1105,7 @@ onUnmounted(() => {
   transition: background 0.15s, transform 0.15s;
   cursor: pointer;
 }
-.bld-node.passed { background: #3b82f6; }
+.bld-node.passed { background: #3B5BDB; }
 .bld-node.active { background: #1d4ed8; transform: translate(-50%, -50%) scale(1.5); }
 .bld-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--color-text-tertiary); }
 </style>
