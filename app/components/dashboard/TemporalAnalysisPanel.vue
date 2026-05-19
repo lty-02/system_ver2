@@ -54,29 +54,6 @@
       </div>
     </section>
 
-    <!-- ③ 分析視角 -->
-    <section class="panel-section">
-      <div class="section-label">分析視角</div>
-      <div class="mode-list">
-        <button
-          v-for="mode in modes"
-          :key="mode.id"
-          class="mode-card"
-          :class="{ active: selectedMode === mode.id }"
-          @click="selectedMode = mode.id as 'single' | 'dual' | 'multi'"
-        >
-          <div class="mode-icon-wrap" v-html="mode.icon"></div>
-          <div class="mode-body">
-            <div class="mode-label">{{ mode.label }}</div>
-            <div class="mode-desc">{{ mode.desc }}</div>
-          </div>
-          <div class="mode-radio" :class="{ checked: selectedMode === mode.id }">
-            <div v-if="selectedMode === mode.id" class="mode-radio-dot"></div>
-          </div>
-        </button>
-      </div>
-    </section>
-
     <!-- 套用按鈕 -->
     <div class="panel-footer">
       <button class="apply-btn" @click="applySettings" :disabled="!selectedLayerKey">
@@ -102,34 +79,12 @@ const emit = defineEmits<{
 // ── 狀態 ──
 const selectedCat      = ref<string>(TEMPORAL_CATEGORIES[0]?.label ?? '')
 const selectedLayerKey = ref<string>(TEMPORAL_CATEGORIES[0]?.layers[0]?.key ?? '')
-const selectedMode     = ref<'single' | 'dual' | 'multi'>('single')
+const selectedMode = 'single'
 
 // ── Computed ──
 const currentCatLayers = computed(() =>
   TEMPORAL_CATEGORIES.find((c: TemporalCategory) => c.label === selectedCat.value)?.layers ?? []
 )
-
-// ── 模式設定 ──
-const modes = [
-  {
-    id: 'single',
-    label: '單時期觀察',
-    desc: '地圖 + 統計指標排名',
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>',
-  },
-  {
-    id: 'dual',
-    label: '雙時期比較',
-    desc: '差異渲染 + 變動數據',
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="2" y="4" width="9" height="16" rx="2"/><rect x="13" y="4" width="9" height="16" rx="2"/></svg>',
-  },
-  {
-    id: 'multi',
-    label: '多時期趨勢',
-    desc: '折線圖 + 時序數據表',
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M3 17l5-5 4 4 6-8"/><path d="M3 20h18"/></svg>',
-  },
-]
 
 // ── 類別顏色（保留原有功能）──
 function getCategoryColor(cat: string): string {
@@ -354,70 +309,6 @@ function applySettings() {
 .layer-check {
   color: var(--cat-color, #3B5BDB);
   flex-shrink: 0;
-}
-
-/* ── 分析視角卡片 ── */
-.mode-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.mode-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 11px 12px;
-  border-radius: 10px;
-  border: 1.5px solid var(--color-border-secondary, #e5e7eb);
-  background: var(--color-background-primary, #fff);
-  cursor: pointer;
-  transition: all 0.13s;
-  text-align: left;
-  width: 100%;
-}
-.mode-card:hover { border-color: #3B5BDB; }
-.mode-card.active {
-  border-color: #3B5BDB;
-  background: #EEF2FF;
-}
-.mode-icon-wrap {
-  width: 36px; height: 36px;
-  border-radius: 8px;
-  background: var(--color-background-secondary, #f3f4f6);
-  display: flex; align-items: center; justify-content: center;
-  color: var(--color-text-secondary, #6b7280);
-  flex-shrink: 0;
-  transition: all 0.13s;
-}
-.mode-card.active .mode-icon-wrap {
-  background: #dce4ff;
-  color: #3B5BDB;
-}
-.mode-body { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.mode-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-primary, #111);
-}
-.mode-card.active .mode-label { color: #3B5BDB; }
-.mode-desc {
-  font-size: 11px;
-  color: var(--color-text-secondary, #6b7280);
-  line-height: 1.4;
-}
-.mode-radio {
-  width: 16px; height: 16px;
-  border-radius: 50%;
-  border: 2px solid var(--color-border-secondary, #d1d5db);
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  transition: border-color 0.13s;
-}
-.mode-radio.checked { border-color: #3B5BDB; }
-.mode-radio-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: #3B5BDB;
 }
 
 /* ── 套用按鈕 ── */
