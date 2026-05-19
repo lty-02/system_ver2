@@ -31,6 +31,10 @@
             @click="activateCard(c.key)"
           ><span class="pill-dot" :style="activeCard===c.key?{background:'#fff'}:{background:c.color}"></span>{{ c.shortLabel }}</button>
         </div>
+        <div class="scale-tabs">
+          <button class="scale-tab" :class="{active:scaleMode==='town'}" @click="switchScaleMode('town')">鄉鎮市區</button>
+          <button class="scale-tab" :class="{active:scaleMode==='village'}" @click="switchScaleMode('village')">村里</button>
+        </div>
       </div>
 
       <!-- 村里 Popup -->
@@ -255,11 +259,15 @@ const chartInst = new Map<string, any>()
 interface Row {
   name: string
   density: number; dep: number; youth: number; elder: number; aging: number
+  townname: string
 }
 interface ChangeRow { name: string; density: number; dep: number; youth: number; elder: number; aging: number }
 
 const villageData  = ref<Row[]>([])
 const prevData     = ref<Row[]>([])   // 2023
+const allTainanData = ref<Row[]>([])
+let allBoundaryFeatures: Array<{geometry: any; name: string; townname: string}> = []
+const scaleMode = ref<'village'|'town'>('village')
 
 const kpis = ref([
   { key: 'cnt',   label: '村里', unit: '里', color: '#8CABD9', val: null as string|null },
@@ -367,14 +375,20 @@ const rowFieldGetters: Record<CardKey, (r:Row)=>number> = {
   A65UP_A15A64_RAT: r => r.elder,
 }
 
-// ── 面量圖渲染（GraphicsLayer，從 villageData 取 min/max）───
+// ── 面量圖渲染（GraphicsLayer，從 allTainanData 取 min/max）──
 async function applyChoro(key: CardKey, colors: readonly string[]) {
-  if (!mapView || !villageData.value.length) return
+  if (!mapView) return
+  // Use all-Tainan data if available, fall back to villageData
+  const sourceData = allTainanData.value.length ? allTainanData.value : villageData.value
+  if (!sourceData.length) return
   try {
-    const features = await getGeometries()
+    // Use allBoundaryFeatures for geometry if available, else fall back to cachedFeatures
+    const features: Array<{geometry: any; name: string}> = allBoundaryFeatures.length
+      ? allBoundaryFeatures
+      : await getGeometries()
     if (!features.length) return
     const getter = rowFieldGetters[key]
-    const dataMap = new Map(villageData.value.map(r => [r.name, getter(r)]))
+    const dataMap = new Map(sourceData.map(r => [r.name, getter(r)]))
     const vals = [...dataMap.values()].filter(v => isFinite(v))
     const mn = Math.min(...vals), mx = Math.max(...vals)
     if (!isFinite(mn) || mn === mx) return
@@ -396,6 +410,19 @@ async function applyChoro(key: CardKey, colors: readonly string[]) {
       gl.add(new Graphic({ geometry: f.geometry, attributes: { name: f.name }, symbol: { type:'simple-fill', color, outline:{color:[15,23,42,160],width:1.0} } as any }))
     }
     mapView.map.add(gl)
+
+    // Draw 新市區 dissolved border in village mode
+    const xinshiGeoms = allBoundaryFeatures.filter(f=>f.townname==='新市區').map(f=>f.geometry).filter(Boolean)
+    if (xinshiGeoms.length > 0) {
+      const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+      const dissolved = xinshiGeoms.length===1 ? xinshiGeoms[0] : geometryEngine.union(xinshiGeoms)
+      const existingBgl = mapView.map.findLayerById('xinshi-border-gl')
+      if (existingBgl) mapView.map.remove(existingBgl)
+      const bgl = new GraphicsLayer({ id: 'xinshi-border-gl' })
+      bgl.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type:'simple-fill', color:[0,0,0,0], outline:{color:[0,0,0,255],width:2.5} } as any }))
+      mapView.map.add(bgl)
+    }
+
     if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }
   } catch (e) { console.warn('[PopDash] applyChoro 失敗', e) }
 }
@@ -428,10 +455,67 @@ async function applyChangeChoro(fieldGetter: (r: ChangeRow) => number) {
 }
 
 function removeAllGL() {
-  for (const id of ['choro-gl', 'calc-gl']) {
+  for (const id of ['choro-gl', 'calc-gl', 'town-border-gl', 'xinshi-border-gl']) {
     const gl = mapView?.map?.findLayerById?.(id)
     if (gl) mapView.map.remove(gl)
   }
+}
+
+async function applyTownChoro(key: CardKey) {
+  if (!mapView || !allTainanData.value.length || !allBoundaryFeatures.length) return
+  const getter = rowFieldGetters[key]
+  const townRows = buildTownRows()
+  const townDataMap = new Map(townRows.map(r => [r.townname, getter(r)]))
+
+  const card = CARDS.find(c=>c.key===key)!
+  const { colors } = card
+  const hexToRgba = (hex: string, a: number) =>
+    [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16), a]
+  const vals = [...townDataMap.values()].filter(isFinite)
+  const mn = Math.min(...vals), mx = Math.max(...vals)
+  const range = mn===mx ? 1 : mx-mn
+  const toColor = (v: number) => {
+    const t = (v-mn)/range
+    const idx = Math.min(colors.length-1, Math.floor(t*colors.length))
+    return hexToRgba(colors[idx]!, 210)
+  }
+
+  removeAllGL()
+  // Remove 新市區 border too
+  const xbgl = mapView.map.findLayerById('xinshi-border-gl'); if(xbgl) mapView.map.remove(xbgl)
+
+  const gl = new GraphicsLayer({ id:'choro-gl' })
+  const borderGL = new GraphicsLayer({ id:'town-border-gl' })
+
+  const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+
+  // Group boundary features by townname
+  const townGeoMap = new Map<string, any[]>()
+  for (const f of allBoundaryFeatures) {
+    if (!f.townname || !f.geometry) continue
+    if (!townGeoMap.has(f.townname)) townGeoMap.set(f.townname, [])
+    townGeoMap.get(f.townname)!.push(f.geometry)
+  }
+
+  for (const [townname, geoms] of townGeoMap) {
+    const v = townDataMap.get(townname)
+    const color = v!=null ? toColor(v) : [200,200,200,120]
+    // Draw village fills
+    for (const geo of geoms) {
+      gl.add(new Graphic({ geometry: geo, attributes:{townname}, symbol:{type:'simple-fill', color, outline:{color:[...(color as number[]).slice(0,3),60],width:0.3}} as any }))
+    }
+    // Dissolve and draw town boundary
+    try {
+      const dissolved = geoms.length===1 ? geoms[0] : geometryEngine.union(geoms.filter(Boolean))
+      if (dissolved) {
+        const isX = townname==='新市區'
+        borderGL.add(new Graphic({ geometry: markRaw(dissolved), symbol:{type:'simple-fill',color:[0,0,0,0],outline:{color:isX?[0,0,0,255]:[15,23,42,200],width:isX?3.0:2.0}} as any }))
+      }
+    } catch {}
+  }
+  mapView.map.add(gl)
+  mapView.map.add(borderGL)
+  if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length-1) } catch {} }
 }
 
 function renderBoundaryBg(allFeatures: any[], xinshiSet: Set<any>) {
@@ -461,12 +545,16 @@ function renderBoundaryBg(allFeatures: any[], xinshiSet: Set<any>) {
 async function rerenderMap(key: CardKey) {
   if (!mapView) return
   mapLoading.value = true
-  const card = CARDS.find(c => c.key === key)!
-  if (changeMode[key]) {
-    const getter = changeGetters[key]
-    if (getter) await applyChangeChoro(getter)
+  if (scaleMode.value === 'town') {
+    await applyTownChoro(key)
   } else {
-    await applyChoro(key, card.colors)
+    const card = CARDS.find(c => c.key === key)!
+    if (changeMode[key]) {
+      const getter = changeGetters[key]
+      if (getter) await applyChangeChoro(getter)
+    } else {
+      await applyChoro(key, card.colors)
+    }
   }
   mapLoading.value = false
 }
@@ -501,10 +589,13 @@ function featuresToRows(features: any[]): Row[] {
   const yk  = resolveKey(a0, F.youth)
   const ek  = resolveKey(a0, F.elder)
   const ak  = resolveKey(a0, F.aging)
+  const keys0 = Object.keys(a0)
+  const townKey = keys0.find(k => /^TOWN(NAME)?$/i.test(k))
   console.log('[PopDash] 欄位:', {vk,dk,dpk,yk,ek,ak})
   return features.map((f: any) => {
     const a = f.attributes ?? {}
-    return { name: String(a[vk]??''), density: +a[dk], dep: +a[dpk], youth: +a[yk], elder: +a[ek], aging: +a[ak] }
+    const tn = townKey ? String(a[townKey]??'') : ''
+    return { name: String(a[vk]??''), density: +a[dk], dep: +a[dpk], youth: +a[yk], elder: +a[ek], aging: +a[ak], townname: tn }
   }).filter((r: Row) => r.name)
 }
 
@@ -537,6 +628,33 @@ async function loadYearData(url: string): Promise<Row[]> {
     console.warn(`[PopDash] loadYearData 全量載入 ${res.features.length} 筆，需後置過濾`)
     return featuresToRows(res.features)
   } catch (e) { console.warn('[PopDash] loadYearData 查詢失敗', e); return [] }
+}
+
+async function loadAllTainanData(url: string): Promise<Row[]> {
+  const fl = new FeatureLayer({ url, outFields: ['*'] })
+  try { await fl.load() } catch {}
+  try {
+    const res = await fl.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: false })
+    return featuresToRows(res.features)
+  } catch (e) { console.warn('[PopDash] loadAllTainanData failed', e); return [] }
+}
+
+// ── 鄉鎮彙總 ─────────────────────────────────────────────────
+function buildTownRows(): Array<{townname: string; density: number; dep: number; youth: number; elder: number; aging: number}> {
+  const map = new Map<string, {density: number[]; dep: number[]; youth: number[]; elder: number[]; aging: number[]}>()
+  for (const r of allTainanData.value) {
+    const tn = (r as any).townname ?? ''; if (!tn) continue
+    if (!map.has(tn)) map.set(tn, {density:[], dep:[], youth:[], elder:[], aging:[]})
+    const t = map.get(tn)!
+    t.density.push(r.density); t.dep.push(r.dep); t.youth.push(r.youth)
+    t.elder.push(r.elder); t.aging.push(r.aging)
+  }
+  const avg = (arr: number[]) => arr.reduce((s,v)=>s+v,0)/(arr.length||1)
+  return [...map.entries()].map(([townname, t]) => ({
+    townname,
+    density: avg(t.density), dep: avg(t.dep), youth: avg(t.youth),
+    elder: avg(t.elder), aging: avg(t.aging)
+  }))
 }
 
 // ── 統計摘要 ──────────────────────────────────────────────────
@@ -745,6 +863,115 @@ function resolveKey(attrs:Record<string,unknown>, key:string) {
   return Object.keys(attrs).find(k=>k.toUpperCase()===key.toUpperCase()) ?? key
 }
 
+// ── 鄉鎮圖表 ──────────────────────────────────────────────────
+function drawAllTownCharts() {
+  if (!Chart) return
+  const townRows = buildTownRows()
+  if (!townRows.length) return
+  drawTownDependency(townRows)
+  drawTownAging(townRows)
+  drawTownDensity(townRows)
+  drawTownYouth(townRows)
+  drawTownElder(townRows)
+}
+
+function drawTownDependency(townRows: ReturnType<typeof buildTownRows>) {
+  const canvas = canvasRefs.get('DEPENDENCY_RAT'); if (!canvas || !Chart) return
+  chartInst.get('DEPENDENCY_RAT')?.destroy()
+  chartInst.get('_depDonut')?.destroy()
+  const sorted = [...townRows].sort((a,b)=>b.dep-a.dep)
+  chartInst.set('DEPENDENCY_RAT', new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: sorted.map(r => r.townname),
+      datasets: [
+        { label: '扶幼比', data: sorted.map(r=>+r.youth.toFixed(2)), backgroundColor: '#F0CA50cc', borderColor: '#F0CA50', borderWidth:1, borderRadius:0, stack:'dep' },
+        { label: '扶老比', data: sorted.map(r=>+r.elder.toFixed(2)), backgroundColor: '#C67052cc', borderColor: '#C67052', borderWidth:1, borderRadius:2, stack:'dep' },
+      ],
+    },
+    options: {
+      indexAxis: 'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:true, position:'top', labels:{font:{size:8},boxWidth:9,padding:4} }, tooltip:{callbacks:{label:(c:any)=>` ${c.dataset.label}: ${Number(c.raw).toFixed(2)}`}} },
+      scales:{ x:{stacked:true,grid:{color:'#f1f5f9'},ticks:{font:{size:8}}}, y:{stacked:true,grid:{display:false},ticks:{font:{size:8}}} },
+    },
+  }))
+}
+
+function drawTownAging(townRows: ReturnType<typeof buildTownRows>) {
+  const canvas = canvasRefs.get('A65_A0A14_RAT'); if (!canvas || !Chart) return
+  chartInst.get('A65_A0A14_RAT')?.destroy()
+  const maxA = Math.max(...townRows.map(r=>r.aging), 0.001)
+  chartInst.set('A65_A0A14_RAT', new Chart(canvas, {
+    type: 'bubble',
+    data: {
+      datasets: [{
+        data: townRows.map(r => ({ x: +r.youth.toFixed(3), y: +r.elder.toFixed(3), r: Math.max(4, r.aging/maxA*18) })),
+        backgroundColor: townRows.map(r => { const t=r.aging/maxA; const idx=Math.min(4,Math.floor(t*5)); return CARDS[1]!.colors[idx]!+'aa' }),
+        borderColor: townRows.map(r => { const t=r.aging/maxA; const idx=Math.min(4,Math.floor(t*5)); return CARDS[1]!.colors[idx]! }),
+        borderWidth: 1,
+      }],
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:(c:any)=>{ const r=townRows[c.dataIndex]; return r?[`${r.townname}`,`扶幼:${r.youth.toFixed(2)} 扶老:${r.elder.toFixed(2)}`,`老化指數:${r.aging.toFixed(2)}`]:[] }}} },
+      scales:{ x:{title:{display:true,text:'扶幼比',font:{size:9}},ticks:{font:{size:9}}}, y:{title:{display:true,text:'扶老比',font:{size:9}},ticks:{font:{size:9}}} },
+    },
+  }))
+}
+
+function drawTownDensity(townRows: ReturnType<typeof buildTownRows>) {
+  const canvas = canvasRefs.get('P_DEN'); if (!canvas || !Chart) return
+  chartInst.get('P_DEN')?.destroy()
+  const sorted = [...townRows].sort((a,b)=>b.density-a.density)
+  const maxD = sorted[0]?.density ?? 1
+  chartInst.set('P_DEN', new Chart(canvas, {
+    type:'bar',
+    data:{ labels:sorted.map(r=>r.townname), datasets:[{ data:sorted.map(r=>Math.round(r.density)), backgroundColor:sorted.map(r=>{const idx=Math.min(4,Math.floor(r.density/maxD*4.99));return CARDS[2]!.colors[idx]!+'cc'}), borderWidth:0, borderRadius:2 }] },
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{grid:{color:'#f1f5f9'},ticks:{font:{size:9}}}, y:{grid:{display:false},ticks:{font:{size:9}}} } },
+  }))
+}
+
+function drawTownYouth(townRows: ReturnType<typeof buildTownRows>) {
+  const canvas = canvasRefs.get('A0A14_A15A65_RAT'); if (!canvas || !Chart) return
+  chartInst.get('A0A14_A15A65_RAT')?.destroy()
+  const sorted = [...townRows].sort((a,b)=>b.youth-a.youth)
+  const avg = townRows.reduce((s,r)=>s+r.youth,0)/(townRows.length||1)
+  chartInst.set('A0A14_A15A65_RAT', new Chart(canvas, {
+    type:'bar',
+    data:{ labels:sorted.map(r=>r.townname), datasets:[
+      { type:'bar', data:sorted.map(r=>+r.youth.toFixed(3)), backgroundColor:'#F0CA50cc', borderColor:'#F0CA50', borderWidth:1, borderRadius:2, yAxisID:'y' },
+      { type:'line', data:sorted.map(()=>+avg.toFixed(3)), borderColor:'#94a3b8', borderDash:[4,3], borderWidth:1.5, pointRadius:0, yAxisID:'y', tension:0, label:'均值' },
+    ] },
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{grid:{color:'#f1f5f9'},ticks:{font:{size:9}}}, y:{grid:{display:false},ticks:{font:{size:9}}} } },
+  }))
+}
+
+function drawTownElder(townRows: ReturnType<typeof buildTownRows>) {
+  const canvas = canvasRefs.get('A65UP_A15A64_RAT'); if (!canvas || !Chart) return
+  chartInst.get('A65UP_A15A64_RAT')?.destroy()
+  const sorted = [...townRows].sort((a,b)=>b.elder-a.elder)
+  chartInst.set('A65UP_A15A64_RAT', new Chart(canvas, {
+    type:'bar',
+    data:{ labels:sorted.map(r=>r.townname), datasets:[{ data:sorted.map(r=>+r.elder.toFixed(3)), backgroundColor:'#C67052cc', borderColor:'#C67052', borderWidth:1, borderRadius:2 }] },
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{grid:{color:'#f1f5f9'},ticks:{font:{size:9}}}, y:{grid:{display:false},ticks:{font:{size:9}}} } },
+  }))
+}
+
+// ── 模式切換 ──────────────────────────────────────────────────
+async function switchScaleMode(mode: 'village'|'town') {
+  scaleMode.value = mode
+  selectedVill.value = null
+  if (mode === 'town') {
+    await applyTownChoro(activeCard.value)
+    try { await mapView?.goTo({ center:[120.2,23.05], zoom:10 }) } catch {}
+    drawAllTownCharts()
+  } else {
+    await rerenderMap(activeCard.value)
+    try { await mapView?.goTo({ center:[120.295483,23.080482], zoom:12 }) } catch {}
+    redrawAll()
+  }
+}
+
 // ── 生命週期 ──────────────────────────────────────────────────
 onMounted(async () => {
   await loadArcGIS()
@@ -789,6 +1016,19 @@ onMounted(async () => {
 
   // Filter village data to 新市區 only
   const { allFeats: bAllFeats, xinshiFeats: bXinshiFeats, xinshiNames } = boundaryResult
+
+  // Build allBoundaryFeatures from bAllFeats (all Tainan villages with geometry + townname)
+  allBoundaryFeatures = bAllFeats.map((f: any) => {
+    const a = f.attributes ?? {}
+    const keys = Object.keys(a)
+    const townKey = keys.find(k => /^TOWN(NAME)?$/i.test(k))
+    const codeKey = keys.find(k => /^TOWNCODE$/i.test(k))
+    const tn = townKey ? String(a[townKey]??'') : (codeKey&&String(a[codeKey])==='67000200' ? '新市區' : '')
+    const villKey = keys.find(k => /^(VILLAGE|VILLNAME|VILNAME)$/i.test(k))
+    const name = villKey ? String(a[villKey]??'') : ''
+    return { geometry: markRaw(f.geometry), name, townname: tn }
+  }).filter((f: {geometry:any; name:string; townname:string}) => f.geometry)
+
   let finalRows: Row[]
   if (xinshiNames.size > 0) {
     // 有 boundary 名稱 → 精確比對
@@ -804,6 +1044,9 @@ onMounted(async () => {
   }
   villageData.value = finalRows
   buildStats(finalRows)
+
+  // Load all Tainan data (for town mode + village choropleth)
+  loadAllTainanData(url24).then(rows => { allTainanData.value = rows })
 
   await loadChartJS()
   await nextTick()
@@ -853,6 +1096,7 @@ onUnmounted(() => {
   fl24 = null
   sciGL = null
   cachedFeatures = []
+  allBoundaryFeatures = []
   chartInst.forEach(c => c?.destroy()); chartInst.clear()
 })
 </script>
@@ -1008,4 +1252,9 @@ onUnmounted(() => {
   background: #CF9546; transition: background 0.15s;
 }
 .sci-toggle.on .sci-dot { background: #fff; }
+
+/* 尺度切換 */
+.scale-tabs { display: flex; gap: 4px; margin-top: 6px; }
+.scale-tab { padding: 2px 8px; border-radius: 10px; border: 1px solid #d1d5db; background: #fff; font-size: 10px; color: #475569; cursor: pointer; }
+.scale-tab.active { background: #1e293b; color: #fff; border-color: #1e293b; }
 </style>
