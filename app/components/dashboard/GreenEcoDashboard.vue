@@ -15,7 +15,7 @@
             <path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z"/>
             <circle cx="12" cy="9" r="2.5"/>
           </svg>
-          <span>新市區・自然生態</span>
+          <span>{{ scaleMode === 'town' ? '臺南市' : '新市區' }}・自然生態</span>
         </div>
         <div class="kpi-row">
           <div class="kpi-item" v-for="k in kpis" :key="k.label">
@@ -31,6 +31,10 @@
             :class="{ active: activeYear === yr }"
             @click="switchYear(yr)"
           >{{ yr }} 年</button>
+        </div>
+        <div class="scale-tabs">
+          <button class="scale-tab" :class="{active:scaleMode==='town'}" @click="switchScaleMode('town')">鄉鎮市區</button>
+          <button class="scale-tab" :class="{active:scaleMode==='village'}" @click="switchScaleMode('village')">村里</button>
         </div>
       </div>
 
@@ -165,6 +169,7 @@ type EcoKey = typeof ECO_LAYERS[number]['key']
 // ── 資料型別 ──────────────────────────────────────────────────
 interface VillRow {
   name:      string
+  townname:  string
   geo20:     any | null
   geo22:     any | null
   villArea20: number; greenArea20: number; ratio20: number
@@ -206,6 +211,7 @@ async function loadChartJS() {
 
 // ── 非響應式狀態（含 ArcGIS 物件）────────────────────────────
 let rows: VillRow[] = []
+let allRows: VillRow[] = []
 let mapView: any    = null
 let choroGL: any    = null
 let sciGL: any      = null
@@ -220,6 +226,7 @@ const selectedVill = ref<Popup | null>(null)
 const sciVisible = ref(false)
 const ecoVisible = reactive<Record<EcoKey, boolean>>({ flower: false, bird: false, pond: false })
 const selectedEco = ref<{ label: string; name: string } | null>(null)
+const scaleMode = ref<'village'|'town'>('village')
 
 const kpis = ref([
   { label: '全區均值', color: '#5d8f72', val: null as string|null, unit: '%' },
@@ -250,36 +257,178 @@ function quantileColor(value: number, sorted: number[], ramp: readonly string[])
 // ── KPI 建立 ──────────────────────────────────────────────────
 function buildKPIs() {
   const yr = activeYear.value
-  const ratios = rows.map(r => yr === 2020 ? r.ratio20 : r.ratio22).filter(v => v > 0)
-  if (!ratios.length) return
+  if (scaleMode.value === 'town') {
+    const townData = buildTownRows(yr)
+    if (!townData.length) return
+    const ratios = townData.map(t => t.ratio).filter(v => v > 0)
+    if (!ratios.length) return
+    const avg = ratios.reduce((a, b) => a + b, 0) / ratios.length
+    const maxR = Math.max(...ratios)
+    const bestTown = townData.find(t => t.ratio === maxR)?.townname ?? ''
+    const totalGreen = townData.reduce((s, t) => s + t.greenArea, 0)
+    const deltas = townData.map(t => t.delta).filter((d): d is number => d !== null)
+    const avgDelta = deltas.length ? deltas.reduce((a, b) => a + b, 0) / deltas.length : 0
+    kpis.value[0]!.val = (avg * 100).toFixed(2)
+    kpis.value[1]!.val = bestTown
+    kpis.value[2]!.val = totalGreen.toFixed(3)
+    kpis.value[3]!.val = (avgDelta * 100).toFixed(2)
+    kpis.value[3]!.color = avgDelta >= 0 ? '#5d8f72' : '#f97316'
+  } else {
+    const ratios = rows.map(r => yr === 2020 ? r.ratio20 : r.ratio22).filter(v => v > 0)
+    if (!ratios.length) return
 
-  const avg = ratios.reduce((a, b) => a + b, 0) / ratios.length
-  const maxR = Math.max(...ratios)
-  const maxVill = rows.find(r => (yr === 2020 ? r.ratio20 : r.ratio22) === maxR)?.name ?? ''
-  const totalGreen = rows.reduce((s, r) => s + (yr === 2020 ? r.greenArea20 : r.greenArea22), 0)
+    const avg = ratios.reduce((a, b) => a + b, 0) / ratios.length
+    const maxR = Math.max(...ratios)
+    const maxVill = rows.find(r => (yr === 2020 ? r.ratio20 : r.ratio22) === maxR)?.name ?? ''
+    const totalGreen = rows.reduce((s, r) => s + (yr === 2020 ? r.greenArea20 : r.greenArea22), 0)
 
-  const deltas = rows.map(r => r.ratio22 - r.ratio20)
-  const avgDelta = deltas.reduce((a, b) => a + b, 0) / deltas.length
+    const deltas = rows.map(r => r.ratio22 - r.ratio20)
+    const avgDelta = deltas.reduce((a, b) => a + b, 0) / deltas.length
 
-  kpis.value[0]!.val = (avg * 100).toFixed(2)
-  kpis.value[1]!.val = maxVill
-  kpis.value[2]!.val = totalGreen.toFixed(3)
-  kpis.value[3]!.val = ((avgDelta) * 100).toFixed(2)
-  kpis.value[3]!.color = avgDelta >= 0 ? '#5d8f72' : '#f97316'
+    kpis.value[0]!.val = (avg * 100).toFixed(2)
+    kpis.value[1]!.val = maxVill
+    kpis.value[2]!.val = totalGreen.toFixed(3)
+    kpis.value[3]!.val = ((avgDelta) * 100).toFixed(2)
+    kpis.value[3]!.color = avgDelta >= 0 ? '#5d8f72' : '#f97316'
+  }
+}
+
+// ── 工具：移除所有 GL 圖層 ────────────────────────────────────
+function removeAllGL() {
+  for (const id of ['choro-gl', 'town-border-gl', 'xinshi-border-gl']) {
+    const gl = mapView?.map?.findLayerById?.(id)
+    if (gl) mapView.map.remove(gl)
+  }
+}
+
+// ── 鄉鎮市區彙總 ─────────────────────────────────────────────
+function buildTownRows(yr: Year): Array<{townname: string; greenArea: number; villArea: number; ratio: number; delta: number | null; ratio20: number; ratio22: number; greenArea20: number; greenArea22: number}> {
+  const map = new Map<string, {ga20: number; va20: number; ga22: number; va22: number}>()
+  for (const r of allRows) {
+    if (!r.townname) continue
+    if (!map.has(r.townname)) map.set(r.townname, {ga20: 0, va20: 0, ga22: 0, va22: 0})
+    const t = map.get(r.townname)!
+    t.ga20 += r.greenArea20; t.va20 += r.villArea20
+    t.ga22 += r.greenArea22; t.va22 += r.villArea22
+  }
+  return [...map.entries()].map(([townname, t]) => {
+    const ga = yr === 2020 ? t.ga20 : t.ga22
+    const va = yr === 2020 ? t.va20 : t.va22
+    const ratio = va > 0 ? ga / va : 0
+    const r20 = t.va20 > 0 ? t.ga20 / t.va20 : 0
+    const r22 = t.va22 > 0 ? t.ga22 / t.va22 : 0
+    return {
+      townname, greenArea: ga, villArea: va, ratio,
+      delta: r20 > 0 ? r22 - r20 : null,
+      ratio20: r20, ratio22: r22, greenArea20: t.ga20, greenArea22: t.ga22,
+    }
+  })
+}
+
+// ── 鄉鎮市區面量圖渲染 ────────────────────────────────────────
+async function renderTownChoropleth() {
+  if (!mapView || !allRows.length) return
+  removeAllGL()
+  const yr = activeYear.value
+
+  // Group allRows by townname; collect geometries
+  const townGeoms = new Map<string, any[]>()
+  const townRowMap = new Map<string, VillRow[]>()
+  for (const r of allRows) {
+    if (!r.townname) continue
+    if (!townGeoms.has(r.townname)) { townGeoms.set(r.townname, []); townRowMap.set(r.townname, []) }
+    const geo = yr === 2020 ? r.geo20 : r.geo22
+    if (geo) townGeoms.get(r.townname)!.push(geo)
+    townRowMap.get(r.townname)!.push(r)
+  }
+
+  // Compute town ratios for quantile coloring
+  const townData = buildTownRows(yr)
+  const townRatioMap = new Map(townData.map(t => [t.townname, t.ratio]))
+  const sortedRatios = [...townRatioMap.values()].sort((a, b) => a - b)
+
+  const gl = new GraphicsLayer({ id: 'choro-gl' })
+
+  // Draw village fills colored by town ratio
+  for (const r of allRows) {
+    if (!r.townname) continue
+    const geo = yr === 2020 ? r.geo20 : r.geo22
+    if (!geo) continue
+    const ratio = townRatioMap.get(r.townname) ?? 0
+    const hex = quantileColor(ratio, sortedRatios, GREEN_RAMP)
+    const rv = parseInt(hex.slice(1, 3), 16)
+    const gv = parseInt(hex.slice(3, 5), 16)
+    const bv = parseInt(hex.slice(5, 7), 16)
+    gl.add(new Graphic({
+      geometry: geo,
+      attributes: { townname: r.townname },
+      symbol: {
+        type: 'simple-fill',
+        color: [rv, gv, bv, 200],
+        outline: { color: [rv, gv, bv, 80], width: 0.3 },
+      } as any,
+    }))
+  }
+
+  mapView.map.add(gl)
+  choroGL = gl
+
+  // Draw dissolved town boundaries
+  try {
+    const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+    const borderGL = new GraphicsLayer({ id: 'town-border-gl' })
+    for (const [townname, geoms] of townGeoms.entries()) {
+      const filtered = geoms.filter(Boolean)
+      if (!filtered.length) continue
+      const dissolved = filtered.length === 1 ? filtered[0] : geometryEngine.union(filtered)
+      if (!dissolved) continue
+      const isXinshi = townname === '新市區'
+      borderGL.add(new Graphic({
+        geometry: markRaw(dissolved),
+        attributes: { townname },
+        symbol: {
+          type: 'simple-fill',
+          color: [0, 0, 0, 0],
+          outline: {
+            color: isXinshi ? [0, 0, 0, 255] : [15, 23, 42, 200],
+            width: isXinshi ? 3.0 : 2.0,
+          },
+        } as any,
+      }))
+    }
+    mapView.map.add(borderGL)
+  } catch (e) { console.warn('[GreenEco] town border failed', e) }
+
+  if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }
+}
+
+// ── 切換尺度模式 ──────────────────────────────────────────────
+async function switchScaleMode(mode: 'village' | 'town') {
+  scaleMode.value = mode
+  selectedVill.value = null; selectedEco.value = null
+  if (mode === 'town') {
+    renderTownChoropleth()
+    try { await mapView.goTo({ center: [120.2, 23.05], zoom: 10 }) } catch {}
+  } else {
+    renderChoropleth()
+    try { await mapView.goTo({ center: [120.295483, 23.080482], zoom: 12 }) } catch {}
+  }
+  buildKPIs()
+  await nextTick()
+  drawAllCharts()
 }
 
 // ── 面量圖渲染 ────────────────────────────────────────────────
-function renderChoropleth() {
-  if (!mapView || !rows.length) return
+async function renderChoropleth() {
+  if (!mapView || !allRows.length) return
+  removeAllGL()
   const yr  = activeYear.value
-  const old = mapView.map.findLayerById?.('choro-gl')
-  if (old) mapView.map.remove(old)
 
   const gl   = new GraphicsLayer({ id: 'choro-gl' })
-  const vals = rows.map(r => yr === 2020 ? r.ratio20 : r.ratio22)
+  const vals = allRows.map(r => yr === 2020 ? r.ratio20 : r.ratio22)
   const sorted = [...vals].sort((a, b) => a - b)
 
-  rows.forEach((r, i) => {
+  allRows.forEach((r, i) => {
     const geo = yr === 2020 ? r.geo20 : r.geo22
     if (!geo) return
     const hex = quantileColor(vals[i]!, sorted, GREEN_RAMP)
@@ -299,6 +448,19 @@ function renderChoropleth() {
 
   choroGL = gl
   mapView.map.add(gl)
+
+  // Add 新市區 border
+  const xinshiGeoms = allRows.filter(r => r.townname === '新市區').map(r => yr === 2020 ? r.geo20 : r.geo22).filter(Boolean)
+  if (xinshiGeoms.length > 0) {
+    try {
+      const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+      const dissolved = xinshiGeoms.length === 1 ? xinshiGeoms[0] : geometryEngine.union(xinshiGeoms)
+      const borderGL = new GraphicsLayer({ id: 'xinshi-border-gl' })
+      borderGL.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type: 'simple-fill', color: [0,0,0,0], outline: { color: [0,0,0,255], width: 2.5 } } as any }))
+      mapView.map.add(borderGL)
+    } catch (e) { console.warn('[GreenEco] xinshi border failed', e) }
+  }
+
   if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }
 }
 
@@ -322,7 +484,7 @@ async function handleMapClick(evt: any) {
   const match = hit.results?.find((r: any) => r.graphic?.attributes?.vi != null)
   if (!match) { selectedVill.value = null; return }
   const { vi } = match.graphic.attributes
-  const r = rows[vi]
+  const r = allRows[vi]
   if (!r) return
   const yr = activeYear.value
   selectedVill.value = {
@@ -366,9 +528,13 @@ async function switchYear(yr: Year) {
   activeYear.value = yr
   selectedVill.value = null
   buildKPIs()
-  renderChoropleth()
+  if (scaleMode.value === 'town') {
+    renderTownChoropleth()
+  } else {
+    renderChoropleth()
+  }
   await nextTick()
-  drawRankChart()
+  drawAllCharts()
 }
 
 // ── WebScene 圖層探查 ─────────────────────────────────────────
@@ -445,10 +611,6 @@ function getVillName(a: Record<string, any>): string {
 }
 
 async function loadBothYears(obj20: any|null, obj22: any|null) {
-  const isXinshi = (f: any) => {
-    const a = f.attributes ?? {}
-    return a.townname === '新市區' || a.TOWNNAME === '新市區'
-  }
   const read = (a: Record<string, any>, ...fields: string[]): number => {
     for (const fld of fields) {
       const v = a[fld]
@@ -464,26 +626,25 @@ async function loadBothYears(obj20: any|null, obj22: any|null) {
     obj22 ? loadGreenFeatures(obj22) : Promise.resolve([]),
   ])
 
-  const feats22 = all22.filter(isXinshi)
-  const feats20 = all20.filter(isXinshi)
-
-  // Build 2020 lookup by village name
+  // Build 2020 lookup by village name (all features)
   const map20 = new Map<string, any>()
-  feats20.forEach((f: any) => map20.set(getVillName(f.attributes ?? {}), f))
+  all20.forEach((f: any) => map20.set(getVillName(f.attributes ?? {}), f))
 
-  // Use 2022 as base; merge 2020 by name
-  const base = feats22.length ? feats22 : feats20
-  const is22 = feats22.length > 0
+  // Use 2022 as base; merge 2020 by name (all features, no isXinshi filter)
+  const base = all22.length ? all22 : all20
+  const is22 = all22.length > 0
 
-  rows = base
+  allRows = base
     .filter((f: any) => f.geometry != null)
     .map((f: any) => {
       const a22 = f.attributes ?? {}
       const name = getVillName(a22)
+      const townname = a22.townname ?? a22.TOWNNAME ?? ''
       const peer = map20.get(name)
       const a20  = peer?.attributes ?? {}
       return {
         name,
+        townname,
         geo20: peer?.geometry ? markRaw(peer.geometry) : null,
         geo22: is22 ? markRaw(f.geometry) : null,
         villArea20:  read(a20, 'village_ar', 'Village_ar'),
@@ -495,6 +656,7 @@ async function loadBothYears(obj20: any|null, obj22: any|null) {
       }
     })
 
+  rows = allRows.filter(r => r.townname === '新市區')
 }
 
 // ── 生態點位圖層載入（使用 WebScene 圖層物件直接查詢）────────
@@ -567,165 +729,330 @@ function mkChart(key: string, el: HTMLCanvasElement | undefined, cfg: any) {
 
 function drawRankChart() {
   const yr = activeYear.value
-  const sorted = [...rows]
-    .map(r => ({ name: r.name, val: yr === 2020 ? r.ratio20 : r.ratio22 }))
-    .sort((a, b) => b.val - a.val)
-  const labels = sorted.map(r => r.name)
-  const vals   = sorted.map(r => parseFloat((r.val * 100).toFixed(2)))
-  mkChart('rank', refRank.value, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        label: '綠覆蓋比率 (%)',
-        data: vals,
-        backgroundColor: vals.map((_v, i) => {
-          const pct = i / Math.max(labels.length - 1, 1)
-          const idx = Math.min(Math.floor((1 - pct) * GREEN_RAMP.length), GREEN_RAMP.length - 1)
-          return GREEN_RAMP[idx]
-        }),
-        borderRadius: 2,
-      }],
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { font: { size: 9 } }, title: { display: true, text: '%', font: { size: 9 } } },
-        y: { ticks: { font: { size: 9 } } },
+  if (scaleMode.value === 'town') {
+    const townData = buildTownRows(yr)
+    const sorted = [...townData].sort((a, b) => b.ratio - a.ratio)
+    const labels = sorted.map(t => t.townname)
+    const vals   = sorted.map(t => parseFloat((t.ratio * 100).toFixed(2)))
+    mkChart('rank', refRank.value, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: '綠覆蓋比率 (%)',
+          data: vals,
+          backgroundColor: vals.map((_v, i) => {
+            const pct = i / Math.max(labels.length - 1, 1)
+            const idx = Math.min(Math.floor((1 - pct) * GREEN_RAMP.length), GREEN_RAMP.length - 1)
+            return GREEN_RAMP[idx]
+          }),
+          borderRadius: 2,
+        }],
       },
-    },
-  })
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { font: { size: 9 } }, title: { display: true, text: '%', font: { size: 9 } } },
+          y: { ticks: { font: { size: 9 } } },
+        },
+      },
+    })
+  } else {
+    const sorted = [...rows]
+      .map(r => ({ name: r.name, val: yr === 2020 ? r.ratio20 : r.ratio22 }))
+      .sort((a, b) => b.val - a.val)
+    const labels = sorted.map(r => r.name)
+    const vals   = sorted.map(r => parseFloat((r.val * 100).toFixed(2)))
+    mkChart('rank', refRank.value, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: '綠覆蓋比率 (%)',
+          data: vals,
+          backgroundColor: vals.map((_v, i) => {
+            const pct = i / Math.max(labels.length - 1, 1)
+            const idx = Math.min(Math.floor((1 - pct) * GREEN_RAMP.length), GREEN_RAMP.length - 1)
+            return GREEN_RAMP[idx]
+          }),
+          borderRadius: 2,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { font: { size: 9 } }, title: { display: true, text: '%', font: { size: 9 } } },
+          y: { ticks: { font: { size: 9 } } },
+        },
+      },
+    })
+  }
 }
 
 function drawDeltaChart() {
-  const sorted = [...rows]
-    .map(r => ({ name: r.name, delta: r.ratio22 - r.ratio20 }))
-    .sort((a, b) => b.delta - a.delta)
-  mkChart('delta', refDelta.value, {
-    type: 'bar',
-    data: {
-      labels: sorted.map(r => r.name),
-      datasets: [{
-        label: '變化量 (pp)',
-        data: sorted.map(r => parseFloat((r.delta * 100).toFixed(3))),
-        backgroundColor: sorted.map(r => r.delta >= 0 ? '#5d8f72' : '#f97316'),
-        borderRadius: 2,
-      }],
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { font: { size: 9 } }, title: { display: true, text: 'pp', font: { size: 9 } } },
-        y: { ticks: { font: { size: 9 } } },
+  if (scaleMode.value === 'town') {
+    const townData = buildTownRows(activeYear.value)
+    const sorted = [...townData]
+      .map(t => ({ name: t.townname, delta: t.ratio22 - t.ratio20 }))
+      .sort((a, b) => b.delta - a.delta)
+    mkChart('delta', refDelta.value, {
+      type: 'bar',
+      data: {
+        labels: sorted.map(t => t.name),
+        datasets: [{
+          label: '變化量 (pp)',
+          data: sorted.map(t => parseFloat((t.delta * 100).toFixed(3))),
+          backgroundColor: sorted.map(t => t.delta >= 0 ? '#5d8f72' : '#f97316'),
+          borderRadius: 2,
+        }],
       },
-    },
-  })
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { font: { size: 9 } }, title: { display: true, text: 'pp', font: { size: 9 } } },
+          y: { ticks: { font: { size: 9 } } },
+        },
+      },
+    })
+  } else {
+    const sorted = [...rows]
+      .map(r => ({ name: r.name, delta: r.ratio22 - r.ratio20 }))
+      .sort((a, b) => b.delta - a.delta)
+    mkChart('delta', refDelta.value, {
+      type: 'bar',
+      data: {
+        labels: sorted.map(r => r.name),
+        datasets: [{
+          label: '變化量 (pp)',
+          data: sorted.map(r => parseFloat((r.delta * 100).toFixed(3))),
+          backgroundColor: sorted.map(r => r.delta >= 0 ? '#5d8f72' : '#f97316'),
+          borderRadius: 2,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { font: { size: 9 } }, title: { display: true, text: 'pp', font: { size: 9 } } },
+          y: { ticks: { font: { size: 9 } } },
+        },
+      },
+    })
+  }
 }
 
 function drawCompareChart() {
-  const sorted = [...rows].sort((a, b) => b.ratio22 - a.ratio22)
-  const labels = sorted.map(r => r.name)
-  mkChart('compare', refCompare.value, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: '2020 (%)',
-          data: sorted.map(r => parseFloat((r.ratio20 * 100).toFixed(2))),
-          backgroundColor: '#c8dece',
-          borderRadius: 2,
-        },
-        {
-          label: '2022 (%)',
-          data: sorted.map(r => parseFloat((r.ratio22 * 100).toFixed(2))),
-          backgroundColor: '#5d8f72',
-          borderRadius: 2,
-        },
-      ],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'top', labels: { font: { size: 9 }, boxWidth: 10 } } },
-      scales: {
-        x: { ticks: { font: { size: 8 }, maxRotation: 40 } },
-        y: { ticks: { font: { size: 9 } }, title: { display: true, text: '%', font: { size: 9 } } },
+  if (scaleMode.value === 'town') {
+    const townData = buildTownRows(activeYear.value)
+    const sorted = [...townData].sort((a, b) => b.ratio22 - a.ratio22)
+    const labels = sorted.map(t => t.townname)
+    mkChart('compare', refCompare.value, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: '2020 (%)',
+            data: sorted.map(t => parseFloat((t.ratio20 * 100).toFixed(2))),
+            backgroundColor: '#c8dece',
+            borderRadius: 2,
+          },
+          {
+            label: '2022 (%)',
+            data: sorted.map(t => parseFloat((t.ratio22 * 100).toFixed(2))),
+            backgroundColor: '#5d8f72',
+            borderRadius: 2,
+          },
+        ],
       },
-    },
-  })
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top', labels: { font: { size: 9 }, boxWidth: 10 } } },
+        scales: {
+          x: { ticks: { font: { size: 8 }, maxRotation: 40 } },
+          y: { ticks: { font: { size: 9 } }, title: { display: true, text: '%', font: { size: 9 } } },
+        },
+      },
+    })
+  } else {
+    const sorted = [...rows].sort((a, b) => b.ratio22 - a.ratio22)
+    const labels = sorted.map(r => r.name)
+    mkChart('compare', refCompare.value, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: '2020 (%)',
+            data: sorted.map(r => parseFloat((r.ratio20 * 100).toFixed(2))),
+            backgroundColor: '#c8dece',
+            borderRadius: 2,
+          },
+          {
+            label: '2022 (%)',
+            data: sorted.map(r => parseFloat((r.ratio22 * 100).toFixed(2))),
+            backgroundColor: '#5d8f72',
+            borderRadius: 2,
+          },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top', labels: { font: { size: 9 }, boxWidth: 10 } } },
+        scales: {
+          x: { ticks: { font: { size: 8 }, maxRotation: 40 } },
+          y: { ticks: { font: { size: 9 } }, title: { display: true, text: '%', font: { size: 9 } } },
+        },
+      },
+    })
+  }
 }
 
 function drawAreaChart() {
-  const sorted = [...rows].sort((a, b) => b.greenArea22 - a.greenArea22)
-  mkChart('area', refArea.value, {
-    type: 'bar',
-    data: {
-      labels: sorted.map(r => r.name),
-      datasets: [
-        {
-          label: '綠覆蓋 (km²)',
-          data: sorted.map(r => parseFloat(r.greenArea22.toFixed(4))),
-          backgroundColor: '#5d8f72',
-          borderRadius: 2,
-        },
-        {
-          label: '其他 (km²)',
-          data: sorted.map(r => parseFloat(Math.max(0, r.villArea22 - r.greenArea22).toFixed(4))),
-          backgroundColor: '#e2e8f0',
-          borderRadius: 2,
-        },
-      ],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'top', labels: { font: { size: 9 }, boxWidth: 10 } } },
-      scales: {
-        x: { stacked: true, ticks: { font: { size: 8 }, maxRotation: 40 } },
-        y: { stacked: true, ticks: { font: { size: 9 } }, title: { display: true, text: 'km²', font: { size: 9 } } },
+  if (scaleMode.value === 'town') {
+    const townData = buildTownRows(activeYear.value)
+    const sorted = [...townData].sort((a, b) => b.greenArea22 - a.greenArea22)
+    mkChart('area', refArea.value, {
+      type: 'bar',
+      data: {
+        labels: sorted.map(t => t.townname),
+        datasets: [
+          {
+            label: '綠覆蓋 (km²)',
+            data: sorted.map(t => parseFloat(t.greenArea22.toFixed(4))),
+            backgroundColor: '#5d8f72',
+            borderRadius: 2,
+          },
+          {
+            label: '其他 (km²)',
+            data: sorted.map(t => parseFloat(Math.max(0, t.villArea - t.greenArea).toFixed(4))),
+            backgroundColor: '#e2e8f0',
+            borderRadius: 2,
+          },
+        ],
       },
-    },
-  })
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top', labels: { font: { size: 9 }, boxWidth: 10 } } },
+        scales: {
+          x: { stacked: true, ticks: { font: { size: 8 }, maxRotation: 40 } },
+          y: { stacked: true, ticks: { font: { size: 9 } }, title: { display: true, text: 'km²', font: { size: 9 } } },
+        },
+      },
+    })
+  } else {
+    const sorted = [...rows].sort((a, b) => b.greenArea22 - a.greenArea22)
+    mkChart('area', refArea.value, {
+      type: 'bar',
+      data: {
+        labels: sorted.map(r => r.name),
+        datasets: [
+          {
+            label: '綠覆蓋 (km²)',
+            data: sorted.map(r => parseFloat(r.greenArea22.toFixed(4))),
+            backgroundColor: '#5d8f72',
+            borderRadius: 2,
+          },
+          {
+            label: '其他 (km²)',
+            data: sorted.map(r => parseFloat(Math.max(0, r.villArea22 - r.greenArea22).toFixed(4))),
+            backgroundColor: '#e2e8f0',
+            borderRadius: 2,
+          },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top', labels: { font: { size: 9 }, boxWidth: 10 } } },
+        scales: {
+          x: { stacked: true, ticks: { font: { size: 8 }, maxRotation: 40 } },
+          y: { stacked: true, ticks: { font: { size: 9 } }, title: { display: true, text: 'km²', font: { size: 9 } } },
+        },
+      },
+    })
+  }
 }
 
 function drawScatterChart() {
-  mkChart('scatter', refScatter.value, {
-    type: 'scatter',
-    data: {
-      datasets: [
-        {
-          label: '2020',
-          data: rows.map(r => ({ x: parseFloat(r.villArea20.toFixed(4)), y: parseFloat((r.ratio20 * 100).toFixed(2)), name: r.name })),
-          backgroundColor: '#c8dece',
-          pointRadius: 5,
-        },
-        {
-          label: '2022',
-          data: rows.map(r => ({ x: parseFloat(r.villArea22.toFixed(4)), y: parseFloat((r.ratio22 * 100).toFixed(2)), name: r.name })),
-          backgroundColor: '#5d8f72',
-          pointRadius: 5,
-        },
-      ],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'top', labels: { font: { size: 9 }, boxWidth: 10 } },
-        tooltip: {
-          callbacks: {
-            label: (ctx: any) => `${ctx.raw.name}: 面積=${ctx.raw.x} km², 比率=${ctx.raw.y}%`,
+  if (scaleMode.value === 'town') {
+    const townData = buildTownRows(activeYear.value)
+    mkChart('scatter', refScatter.value, {
+      type: 'scatter',
+      data: {
+        datasets: [
+          {
+            label: '2020',
+            data: townData.map(t => ({ x: parseFloat((t.villArea).toFixed(4)), y: parseFloat((t.ratio20 * 100).toFixed(2)), name: t.townname })),
+            backgroundColor: '#c8dece',
+            pointRadius: 5,
+          },
+          {
+            label: '2022',
+            data: townData.map(t => ({ x: parseFloat((t.villArea).toFixed(4)), y: parseFloat((t.ratio22 * 100).toFixed(2)), name: t.townname })),
+            backgroundColor: '#5d8f72',
+            pointRadius: 5,
+          },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top', labels: { font: { size: 9 }, boxWidth: 10 } },
+          tooltip: {
+            callbacks: {
+              label: (ctx: any) => `${ctx.raw.name}: 面積=${ctx.raw.x} km², 比率=${ctx.raw.y}%`,
+            },
           },
         },
+        scales: {
+          x: { ticks: { font: { size: 9 } }, title: { display: true, text: '鄉鎮市區面積 (km²)', font: { size: 9 } } },
+          y: { ticks: { font: { size: 9 } }, title: { display: true, text: '綠覆蓋比率 (%)', font: { size: 9 } } },
+        },
       },
-      scales: {
-        x: { ticks: { font: { size: 9 } }, title: { display: true, text: '村里面積 (km²)', font: { size: 9 } } },
-        y: { ticks: { font: { size: 9 } }, title: { display: true, text: '綠覆蓋比率 (%)', font: { size: 9 } } },
+    })
+  } else {
+    mkChart('scatter', refScatter.value, {
+      type: 'scatter',
+      data: {
+        datasets: [
+          {
+            label: '2020',
+            data: rows.map(r => ({ x: parseFloat(r.villArea20.toFixed(4)), y: parseFloat((r.ratio20 * 100).toFixed(2)), name: r.name })),
+            backgroundColor: '#c8dece',
+            pointRadius: 5,
+          },
+          {
+            label: '2022',
+            data: rows.map(r => ({ x: parseFloat(r.villArea22.toFixed(4)), y: parseFloat((r.ratio22 * 100).toFixed(2)), name: r.name })),
+            backgroundColor: '#5d8f72',
+            pointRadius: 5,
+          },
+        ],
       },
-    },
-  })
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top', labels: { font: { size: 9 }, boxWidth: 10 } },
+          tooltip: {
+            callbacks: {
+              label: (ctx: any) => `${ctx.raw.name}: 面積=${ctx.raw.x} km², 比率=${ctx.raw.y}%`,
+            },
+          },
+        },
+        scales: {
+          x: { ticks: { font: { size: 9 } }, title: { display: true, text: '村里面積 (km²)', font: { size: 9 } } },
+          y: { ticks: { font: { size: 9 } }, title: { display: true, text: '綠覆蓋比率 (%)', font: { size: 9 } } },
+        },
+      },
+    })
+  }
 }
 
 function drawAllCharts() {
@@ -765,7 +1092,7 @@ onUnmounted(() => {
   charts.forEach(c => c?.destroy()); charts.clear()
   try { mapView?.destroy() } catch {}
   mapView = null; sciGL = null; choroGL = null
-  rows = []
+  rows = []; allRows = []
 })
 </script>
 
@@ -810,6 +1137,12 @@ onUnmounted(() => {
   background: #fff; font-size: 11px; color: #475569; cursor: pointer;
 }
 .yr-pill.active { background: #5d8f72; border-color: #5d8f72; color: #fff; font-weight: 600; }
+.scale-tabs { display: flex; gap: 4px; margin-top: 6px; }
+.scale-tab {
+  padding: 2px 8px; border-radius: 10px; border: 1px solid #d1d5db;
+  background: #fff; font-size: 10px; color: #475569; cursor: pointer;
+}
+.scale-tab.active { background: #2e5c45; color: #fff; border-color: #2e5c45; }
 
 /* Popup */
 .map-popup {

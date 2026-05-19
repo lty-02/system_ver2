@@ -17,7 +17,7 @@
             <rect x="3" y="14" width="7" height="7" rx="1"/>
             <rect x="14" y="14" width="7" height="7" rx="1"/>
           </svg>
-          <span>新市區・2025 土地利用</span>
+          <span>{{ scaleMode === 'town' ? '臺南市' : '新市區' }}・2025 土地利用</span>
         </div>
         <div class="kpi-row">
           <div class="kpi-item" v-for="k in kpis" :key="k.label">
@@ -38,6 +38,11 @@
             <span class="pill-dot" :style="activeLayer === lyr.key ? { background: '#fff' } : { background: lyr.color }"></span>
             {{ lyr.label }}
           </button>
+        </div>
+        <!-- 尺度切換 tabs -->
+        <div class="scale-tabs">
+          <button class="scale-tab" :class="{ active: scaleMode === 'town' }" @click="switchScaleMode('town')">鄉鎮市區</button>
+          <button class="scale-tab" :class="{ active: scaleMode === 'village' }" @click="switchScaleMode('village')">村里</button>
         </div>
       </div>
 
@@ -222,6 +227,11 @@ const mapDivRef  = ref<HTMLDivElement | null>(null)
 const mapLoading = ref(true)
 const activeLayer = ref<LayerKey>('urbanZone')
 
+// ── 尺度切換 State ────────────────────────────────────────────
+const scaleMode = ref<'village' | 'town'>('village')
+let allBoundaryFeatures: Array<{ geometry: any; townname: string; name: string }> = []
+const townDominantZone = new Map<string, { label: string; color: string }>()
+
 const activeLayerDef = computed(() => LAYER_DEFS.find(l => l.key === activeLayer.value))
 
 const layerData = ref<Record<string, LayerData>>({
@@ -395,6 +405,10 @@ async function initMap() {
 function removeAllGL() {
   const existing = mapView?.map?.findLayerById?.('choro-gl')
   if (existing) mapView.map.remove(existing)
+  const xinshiGL = mapView?.map?.findLayerById?.('xinshi-border-gl')
+  if (xinshiGL) mapView.map.remove(xinshiGL)
+  const townGL = mapView?.map?.findLayerById?.('town-border-gl')
+  if (townGL) mapView.map.remove(townGL)
 }
 
 function renderChoropleth(key: LayerKey) {
@@ -414,21 +428,9 @@ function renderChoropleth(key: LayerKey) {
   removeAllGL()
   const gl = new GraphicsLayer({ id: 'choro-gl' })
 
-  // For urbanSub, we need to use the sub-field geos; but geos are stored by 分區類 label
-  // So for choropleth: use the main field label for color lookup
-  // For urbanSub we still use the same geos (分區類 based), but color by 使用分 if available
-  // Since geos are stored by main field label, for urbanSub we color by 分區類 mapping to 使用分 color isn't directly available
-  // We'll color urbanSub using the geo's label against the subStats colorMap (approximate)
-  // Actually geos.label = main field value, so for urbanSub we need a different approach
-  // We'll render the urbanZone geos colored by the 分區類 (still best we can do without per-feature sub field lookup in geos)
-  // The geos only carry the main label. For true urbanSub choropleth we'd need subField per geo.
-  // We stored geos with just main label. Let's color by sub stats colorMap with main label fallback.
-
   for (const geo of data.geos) {
-    // For urbanSub, try to match label against subStats labels (won't match), fallback to AUTO
     let hexColor: string
     if (key === 'urbanSub') {
-      // best effort: use catColor from subStats index if label matches, else fallback
       const subIdx = srcStats.findIndex(s => s.label === geo.label)
       hexColor = subIdx >= 0 ? catColor(srcStats[subIdx]!.label, subIdx) : catColor(geo.label, 0)
     } else {
@@ -455,6 +457,173 @@ function renderChoropleth(key: LayerKey) {
   }
 }
 
+// ── 新市區 border ─────────────────────────────────────────────
+async function addXinshiBorder() {
+  const existing = mapView?.map?.findLayerById?.('xinshi-border-gl')
+  if (existing) mapView.map.remove(existing)
+  const xinshiGeoms = allBoundaryFeatures
+    .filter(f => f.townname === '新市區')
+    .map(f => f.geometry)
+    .filter(Boolean)
+  if (!xinshiGeoms.length || !mapView) return
+  try {
+    const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+    const dissolved = xinshiGeoms.length === 1
+      ? xinshiGeoms[0]
+      : geometryEngine.union(xinshiGeoms)
+    if (!dissolved) return
+    const bgl = new GraphicsLayer({ id: 'xinshi-border-gl' })
+    bgl.add(new Graphic({
+      geometry: markRaw(dissolved),
+      symbol: {
+        type: 'simple-fill',
+        color: [0, 0, 0, 0],
+        outline: { color: [0, 0, 0, 255], width: 2.5 },
+      } as any,
+    }))
+    mapView.map.add(bgl)
+    if (sciGL) {
+      try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {}
+    }
+  } catch (e) {
+    console.warn('[LandUseDash] xinshi border failed', e)
+  }
+}
+
+// ── 鄉鎮市區模式渲染 ──────────────────────────────────────────
+async function buildAndRenderTownMode(key: LayerKey) {
+  if (!mapView || !allBoundaryFeatures.length) return
+  const srcKey = key === 'urbanSub' ? 'urbanZone' : key
+  const data = layerData.value[srcKey]
+  if (!data || !data.geos.length) return
+
+  const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+
+  // Build town → dominant zone map using spatial intersect (if not cached)
+  if (townDominantZone.size === 0) {
+    // Group boundary features by townname
+    const townGeoMap = new Map<string, any[]>()
+    for (const f of allBoundaryFeatures) {
+      if (!f.townname || !f.geometry) continue
+      if (!townGeoMap.has(f.townname)) townGeoMap.set(f.townname, [])
+      townGeoMap.get(f.townname)!.push(f.geometry)
+    }
+
+    // Dissolve each town polygon
+    const townPolygons = new Map<string, any>()
+    for (const [tn, geoms] of townGeoMap) {
+      try {
+        const dissolved = geoms.length === 1
+          ? geoms[0]
+          : geometryEngine.union(geoms.filter(Boolean))
+        if (dissolved) townPolygons.set(tn, dissolved)
+      } catch {}
+    }
+
+    // For each land use feature, find which town it intersects and accumulate area
+    const townZoneArea = new Map<string, Map<string, number>>()
+    for (const geo of data.geos) {
+      for (const [tn, townPoly] of townPolygons) {
+        try {
+          if (geometryEngine.intersects(geo.geometry, townPoly)) {
+            if (!townZoneArea.has(tn)) townZoneArea.set(tn, new Map())
+            const zm = townZoneArea.get(tn)!
+            zm.set(geo.label, (zm.get(geo.label) ?? 0) + geo.area)
+          }
+        } catch {}
+      }
+    }
+
+    // Determine dominant zone per town
+    for (const [tn, zm] of townZoneArea) {
+      let bestLabel = '', bestArea = 0
+      for (const [lbl, area] of zm) {
+        if (area > bestArea) { bestArea = area; bestLabel = lbl }
+      }
+      if (bestLabel) {
+        const colorIdx = data.stats.findIndex(s => s.label === bestLabel)
+        townDominantZone.set(tn, {
+          label: bestLabel,
+          color: catColor(bestLabel, colorIdx >= 0 ? colorIdx : 0),
+        })
+      }
+    }
+  }
+
+  // Remove old layers
+  removeAllGL()
+
+  const gl = new GraphicsLayer({ id: 'choro-gl' })
+  const borderGL = new GraphicsLayer({ id: 'town-border-gl' })
+
+  const townGeoMap = new Map<string, any[]>()
+  for (const f of allBoundaryFeatures) {
+    if (!f.townname || !f.geometry) continue
+    if (!townGeoMap.has(f.townname)) townGeoMap.set(f.townname, [])
+    townGeoMap.get(f.townname)!.push(f.geometry)
+  }
+
+  for (const [tn, geoms] of townGeoMap) {
+    const zone = townDominantZone.get(tn)
+    const hexColor = zone?.color ?? '#e2e8f0'
+    const r = parseInt(hexColor.slice(1, 3), 16)
+    const g = parseInt(hexColor.slice(3, 5), 16)
+    const b = parseInt(hexColor.slice(5, 7), 16)
+
+    for (const geo of geoms) {
+      gl.add(new Graphic({
+        geometry: geo,
+        attributes: { townname: tn, label: zone?.label ?? '' },
+        symbol: {
+          type: 'simple-fill',
+          color: [r, g, b, 200],
+          outline: { color: [r, g, b, 80], width: 0.3 },
+        } as any,
+      }))
+    }
+
+    try {
+      const dissolved = geoms.length === 1
+        ? geoms[0]
+        : geometryEngine.union(geoms.filter(Boolean))
+      if (dissolved) {
+        const isX = tn === '新市區'
+        borderGL.add(new Graphic({
+          geometry: markRaw(dissolved),
+          symbol: {
+            type: 'simple-fill',
+            color: [0, 0, 0, 0],
+            outline: {
+              color: isX ? [0, 0, 0, 255] : [15, 23, 42, 200],
+              width: isX ? 3.0 : 2.0,
+            },
+          } as any,
+        }))
+      }
+    } catch {}
+  }
+
+  mapView.map.add(gl)
+  mapView.map.add(borderGL)
+  if (sciGL) {
+    try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {}
+  }
+}
+
+// ── 尺度切換 ──────────────────────────────────────────────────
+async function switchScaleMode(mode: 'village' | 'town') {
+  scaleMode.value = mode
+  popupInfo.value = null
+  if (mode === 'town') {
+    await buildAndRenderTownMode(activeLayer.value)
+    try { await mapView?.goTo({ center: [120.2, 23.05], zoom: 10 }) } catch {}
+  } else {
+    renderChoropleth(activeLayer.value)
+    await addXinshiBorder()
+    try { await mapView?.goTo({ center: [120.295483, 23.080482], zoom: 12 }) } catch {}
+  }
+}
+
 async function handleMapClick(event: any) {
   if (!mapView) return
   const hit = await mapView.hitTest(event)
@@ -466,10 +635,14 @@ async function handleMapClick(event: any) {
 }
 
 // ── 圖層切換 ──────────────────────────────────────────────────
-function switchLayer(key: LayerKey) {
+async function switchLayer(key: LayerKey) {
   activeLayer.value = key
-  renderChoropleth(key)
-  // re-highlight active card chart (just rerender to update active state visually)
+  if (scaleMode.value === 'town') {
+    await buildAndRenderTownMode(key)
+  } else {
+    renderChoropleth(key)
+    await addXinshiBorder()
+  }
 }
 
 // ── Chart.js ──────────────────────────────────────────────────
@@ -579,6 +752,7 @@ onMounted(async () => {
     planZone: null, urbanZone: null, ruralEdit: null, ruralZone: null,
   }
   let sciParkUrl: string | null = null
+  let boundaryUrl: string | null = null
 
   try {
     const { default: Portal }   = await import('@arcgis/core/portal/Portal')
@@ -601,6 +775,11 @@ onMounted(async () => {
 
       if (!sciParkUrl && title.includes('南部科學園區_台南園區範圍')) { sciParkUrl = url; return }
 
+      // 行政界 / 村里界 boundary layer
+      if (!boundaryUrl && (title.includes('村里界') || title.includes('行政區界') || title.includes('鄉鎮市區'))) {
+        boundaryUrl = url; return
+      }
+
       // 都市計畫區（不含使用分區）
       if (title.includes('都市計畫區') && !title.includes('使用分區')) {
         if (!urls.planZone || title.includes('新市區')) urls.planZone = url
@@ -618,7 +797,7 @@ onMounted(async () => {
         if (!urls.ruralZone || title.includes('新市區')) urls.ruralZone = url
       }
     })
-    console.log('[LandUseDash] URLs:', urls, 'sciPark:', sciParkUrl)
+    console.log('[LandUseDash] URLs:', urls, 'sciPark:', sciParkUrl, 'boundary:', boundaryUrl)
   } catch (e) {
     console.warn('[LandUseDash] WebScene 查找失敗', e)
   }
@@ -680,12 +859,41 @@ onMounted(async () => {
       console.warn('[LandUseDash] 南科圖層載入失敗', e)
     }
   }
+
+  // 非同步背景載入 boundary 圖層供鄉鎮市區模式使用
+  if (boundaryUrl) {
+    const bFL = new FeatureLayer({ url: boundaryUrl, outFields: ['*'] })
+    try { await bFL.load() } catch {}
+    try {
+      const bRes = await bFL.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
+      allBoundaryFeatures = (bRes?.features ?? []).map((f: any) => {
+        const a = f.attributes ?? {}
+        const keys = Object.keys(a)
+        const townKey = keys.find(k => /^TOWN(NAME)?$/i.test(k))
+        const tn = townKey ? String(a[townKey] ?? '') : ''
+        const villKey = keys.find(k => /^(VILLAGE|VILLNAME|VILNAME)$/i.test(k))
+        return {
+          geometry: markRaw(f.geometry),
+          townname: tn,
+          name: villKey ? String(a[villKey] ?? '') : '',
+        }
+      }).filter((f: any) => f.geometry)
+      console.log('[LandUseDash] boundary loaded', allBoundaryFeatures.length, 'features')
+    } catch (e) {
+      console.warn('[LandUseDash] boundary failed', e)
+    }
+  }
+
+  // 在村里模式下繪製新市區外框
+  addXinshiBorder()
 })
 
 onUnmounted(() => {
   mapView?.destroy(); mapView = null
   sciGL = null
   chartInst.forEach(c => c?.destroy()); chartInst.clear()
+  allBoundaryFeatures = []
+  townDominantZone.clear()
 })
 </script>
 
@@ -747,6 +955,11 @@ onUnmounted(() => {
 }
 .layer-pill.active { color: #fff; }
 .pill-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+/* Scale tabs */
+.scale-tabs { display: flex; gap: 4px; margin-top: 6px; }
+.scale-tab { padding: 2px 8px; border-radius: 10px; border: 1px solid #d1d5db; background: #fff; font-size: 10px; color: #475569; cursor: pointer; }
+.scale-tab.active { background: #1e293b; color: #fff; border-color: #1e293b; }
 
 /* 南科開關 */
 .sci-toggle {
