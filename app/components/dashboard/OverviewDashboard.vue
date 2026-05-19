@@ -272,18 +272,29 @@ async function discoverLayers() {
 // ── Data loaders ─────────────────────────────────────────────
 
 async function loadBoundary(url: string): Promise<{ name: string; geometry: any; townname: string }[]> {
-  try {
-    const fl = new FeatureLayer({ url, outFields: ['*'] })
-    await fl.load()
-    const res = await fl.queryFeatures({ where: TOWN_FILTER, outFields: ['*'], returnGeometry: true })
-    return (res?.features ?? []).map((f: any) => {
-      const a = f.attributes ?? {}
-      const keys = Object.keys(a)
-      const townKey = keys.find(k => /^TOWN(NAME)?$/i.test(k))
-      const tn = townKey ? String(a[townKey] ?? '') : ''
-      return { name: getVillname(a), geometry: markRaw(f.geometry), townname: tn }
-    }).filter((x: any) => x.name && x.geometry)
-  } catch (e) { console.warn('[Ov] boundary failed', e); return [] }
+  // Try multiple where clauses — avoid complex OR that some servers reject
+  const queries = ["TOWNCODE = '67000200'", 'TOWNCODE = 67000200', "TOWN = '新市區'", "TOWNNAME = '新市區'", '1=1']
+  for (const where of queries) {
+    try {
+      const fl = new FeatureLayer({ url, outFields: ['*'] })
+      await fl.load()
+      const res = await fl.queryFeatures({ where, outFields: ['*'], returnGeometry: true })
+      if (!res?.features?.length) continue
+      const results = (res.features).map((f: any) => {
+        const a = f.attributes ?? {}
+        const keys = Object.keys(a)
+        const townKey = keys.find(k => /^TOWN(NAME)?$/i.test(k))
+        const tn = townKey ? String(a[townKey] ?? '') : ''
+        return { name: getVillname(a), geometry: markRaw(f.geometry), townname: tn }
+      }).filter((x: any) => x.name && x.geometry)
+      // Filter to 新市區 in memory when loading all
+      const xinshi = where === '1=1'
+        ? results.filter((x: any) => x.townname === '新市區' || x.townname.includes('新市'))
+        : results
+      if (xinshi.length) { console.log('[Ov] boundary ok:', xinshi.length, 'where:', where); return xinshi }
+    } catch (e) { console.warn('[Ov] boundary attempt failed:', where, e) }
+  }
+  return []
 }
 
 async function loadPop(url: string): Promise<Map<string, number>> {
@@ -505,7 +516,7 @@ async function applyChoro(key: TK) {
   const xinshiGeoms = vills.map(v => v.geometry).filter(Boolean)
   if (xinshiGeoms.length) {
     try {
-      const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+      const geometryEngine = await import('@arcgis/core/geometry/geometryEngine').then((m: any) => m.default ?? m)
       const dissolved = xinshiGeoms.length === 1 ? xinshiGeoms[0] : geometryEngine.union(xinshiGeoms)
       if (dissolved) {
         const bgl = new GraphicsLayer({ id: 'xinshi-gl' })

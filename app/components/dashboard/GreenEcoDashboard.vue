@@ -375,7 +375,7 @@ async function renderTownChoropleth() {
 
   // Draw dissolved town boundaries
   try {
-    const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+    const geometryEngine = await import('@arcgis/core/geometry/geometryEngine').then((m: any) => m.default ?? m)
     const borderGL = new GraphicsLayer({ id: 'town-border-gl' })
     for (const [townname, geoms] of townGeoms.entries()) {
       const filtered = geoms.filter(Boolean)
@@ -466,7 +466,7 @@ async function renderChoropleth() {
   const xinshiGeoms = allRows.filter(r => r.townname === '新市區').map(r => yr === 2020 ? r.geo20 : r.geo22).filter(Boolean)
   if (xinshiGeoms.length > 0) {
     try {
-      const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+      const geometryEngine = await import('@arcgis/core/geometry/geometryEngine').then((m: any) => m.default ?? m)
       const dissolved = xinshiGeoms.length === 1 ? xinshiGeoms[0] : geometryEngine.union(xinshiGeoms)
       const borderGL = new GraphicsLayer({ id: 'xinshi-border-gl' })
       borderGL.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type: 'simple-fill', color: [0,0,0,0], outline: { color: [220,38,38,255], width: 2.5 } } as any }))
@@ -479,7 +479,7 @@ async function renderChoropleth() {
   for (const r of allRows) {
     const geo = activeYear.value === 2020 ? r.geo20 : r.geo22
     if (!geo) continue
-    const centroid = geo.centroid ?? geo.extent?.center
+    const centroid = geo.extent?.center
     if (!centroid) continue
     lgl.add(new Graphic({ geometry: centroid, symbol: { type: 'text', text: r.name, color: [30,41,59,220], haloColor: [255,255,255,200], haloSize: 1.5, font: { size: 9 } } as any }))
   }

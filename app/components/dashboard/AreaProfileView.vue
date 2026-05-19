@@ -218,7 +218,7 @@ const props = withDefaults(defineProps<{
   theme?: string
 }>(), {
   userRole: 'public',
-  theme: 'population',
+  theme: 'overview',
 })
 
 const THEMES = [

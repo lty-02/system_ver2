@@ -427,7 +427,7 @@ async function applyChoro(key: CardKey, colors: readonly string[]) {
     // Draw 新市區 dissolved border in village mode
     const xinshiGeoms = allBoundaryFeatures.filter(f=>f.townname==='新市區').map(f=>f.geometry).filter(Boolean)
     if (xinshiGeoms.length > 0) {
-      const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+      const geometryEngine = await import('@arcgis/core/geometry/geometryEngine').then((m: any) => m.default ?? m)
       const dissolved = xinshiGeoms.length===1 ? xinshiGeoms[0] : geometryEngine.union(xinshiGeoms)
       const existingBgl = mapView.map.findLayerById('xinshi-border-gl')
       if (existingBgl) mapView.map.remove(existingBgl)
@@ -500,7 +500,7 @@ async function applyTownChoro(key: CardKey) {
   const gl = new GraphicsLayer({ id:'choro-gl' })
   const borderGL = new GraphicsLayer({ id:'town-border-gl' })
 
-  const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+  const geometryEngine = await import('@arcgis/core/geometry/geometryEngine').then((m: any) => m.default ?? m)
 
   // Group boundary features by townname
   const townGeoMap = new Map<string, any[]>()
