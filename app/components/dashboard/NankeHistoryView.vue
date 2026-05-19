@@ -168,37 +168,36 @@
       </div>
     </div>
 
-    <!-- ═══════ 動畫播放 ═══════ -->
-    <div v-else-if="activeMode === 'animate'" class="animate-layout">
-      <div class="anim-map-wrap">
-        <div ref="animMapDivRef" class="map-div"></div>
-        <div class="map-loading" v-if="isLoading"><div class="spinner"></div><span>載入影像中…</span></div>
-        <div class="anim-badge">
-          <span class="anim-year">{{ activeEra?.year }}</span>
-          <span class="anim-tag" :style="{ background: activeEra?.color + '33', color: activeEra?.color }">{{ activeEra?.tag }}</span>
-        </div>
-        <!-- 播放控制 -->
-        <div class="anim-ctrl">
-          <button class="anim-prev" @click="prevEra">‹</button>
-          <button class="anim-play" @click="togglePlay">
-            <svg v-if="!isPlaying" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>
-            <svg v-else viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
-          </button>
-          <button class="anim-next" @click="nextEra">›</button>
+    <!-- ═══════ 建物發展 ═══════ -->
+    <div v-else-if="activeMode === 'building'" class="building-layout">
+      <div class="bld-map-wrap">
+        <div ref="bldMapDivRef" class="map-div"></div>
+        <div class="map-loading" v-if="isLoading"><div class="spinner"></div><span>載入建物資料中…</span></div>
+        <div class="bld-badge" v-if="bldYears.length">
+          <span class="bld-year">{{ bldYear }}</span>
+          <span class="bld-count" v-if="bldCount !== null">累計 {{ bldCount.toLocaleString() }} 棟</span>
         </div>
       </div>
-      <!-- 時期縮圖列 -->
-      <div class="anim-thumb-row">
-        <div
-          v-for="era in ERAS"
-          :key="era.id"
-          class="anim-thumb"
-          :class="{ active: activeEraId === era.id }"
-          :style="{ borderColor: activeEraId === era.id ? era.color : 'transparent' }"
-          @click="jumpToEra(era.id)"
-        >
-          <div class="thumb-year">{{ era.shortYear }}</div>
-          <div class="thumb-tag" :style="{ color: era.color }">{{ era.tag }}</div>
+      <div class="bld-ts-bar" v-if="bldYears.length">
+        <button class="ts-play" @click="toggleBldPlay">
+          <svg v-if="!isBldPlaying" viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><path d="M8 5v14l11-7z"/></svg>
+          <svg v-else viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
+        </button>
+        <div class="bld-track-wrap">
+          <div class="bld-track" ref="bldTrackRef" @click="onBldTrackClick">
+            <div class="bld-fill" :style="{ width: bldProgress + '%' }"></div>
+            <div
+              v-for="yr in bldYears" :key="yr"
+              class="bld-node"
+              :class="{ active: yr === bldYear, passed: yr < bldYear }"
+              :style="{ left: ((bldYears.indexOf(yr)) / (bldYears.length - 1) * 100) + '%' }"
+              @click.stop="jumpBldYear(yr)"
+            ></div>
+          </div>
+          <div class="bld-labels">
+            <span>{{ bldYears[0] }}</span>
+            <span>{{ bldYears[bldYears.length - 1] }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -236,7 +235,8 @@ const swipeMapsRef      = ref<HTMLDivElement | null>(null)
 const swipeMapDivRef    = ref<HTMLDivElement | null>(null)   // 底層（右側影像）
 const swipeMapOverlayRef= ref<HTMLDivElement | null>(null)   // 上層（左側影像，clip）
 const swipeClipRef      = ref<HTMLDivElement | null>(null)
-const animMapDivRef     = ref<HTMLDivElement | null>(null)
+const bldMapDivRef      = ref<HTMLDivElement | null>(null)
+const bldTrackRef       = ref<HTMLElement | null>(null)
 const storyColRef       = ref<HTMLElement | null>(null)
 const eraBlockRefs      = ref<HTMLElement[]>([])
 const tsTrackRef        = ref<HTMLElement | null>(null)
@@ -246,7 +246,18 @@ const chartRef          = ref<HTMLCanvasElement | null>(null)
 let mapView: any        = null
 let swipeViewBase: any  = null   // 底層 MapView（右側 / 近期影像）
 let swipeViewOver: any  = null   // 上層 MapView（左側 / 早期影像，clip-path 裁切）
-let animView: any       = null
+let bldView: any        = null
+let bldLayer: any       = null
+let bldPlayTimer: ReturnType<typeof setInterval> | null = null
+const bldYears    = ref<number[]>([])
+const bldYear     = ref(2000)
+const bldCount    = ref<number | null>(null)
+const isBldPlaying = ref(false)
+const bldProgress = computed(() => {
+  if (!bldYears.value.length) return 0
+  const i = bldYears.value.indexOf(bldYear.value)
+  return i < 0 ? 0 : i / (bldYears.value.length - 1) * 100
+})
 let currentLayer: any   = null
 let playTimer: ReturnType<typeof setInterval> | null = null
 let chartInstance: any  = null
@@ -275,7 +286,7 @@ watch(() => props.mode, async (val) => {
   await nextTick()
   if (val === 'story')   await initStoryMap()
   if (val === 'swipe')   await initSwipeMap()
-  if (val === 'animate') await initAnimMap()
+  if (val === 'building') await initBuilding()
 })
 watch(() => props.swipeLeft,  v => { swipeLeft.value  = v; if (activeMode.value === 'swipe') rebuildSwipe() })
 watch(() => props.swipeRight, v => { swipeRight.value = v; if (activeMode.value === 'swipe') rebuildSwipe() })
@@ -472,42 +483,113 @@ function onDragEnd() {
 }
 
 // ──────────────────────────────────────────────
-// 動畫模式
+// 建物發展模式
 // ──────────────────────────────────────────────
-async function initAnimMap() {
-  if (!animMapDivRef.value) return
+async function initBuilding() {
+  if (!bldMapDivRef.value) return
   isLoading.value = true
+  try {
+    const [
+      { default: SceneView },
+      { default: WebScene },
+      { default: Portal },
+      { default: esriConfig },
+    ] = await Promise.all([
+      import('@arcgis/core/views/SceneView'),
+      import('@arcgis/core/WebScene'),
+      import('@arcgis/core/portal/Portal'),
+      import('@arcgis/core/config'),
+    ])
+    esriConfig.portalUrl = PORTAL_URL
 
-  const { MapView, Map, MapImageLayer, Portal } = await getArcGIS()
-  const portal = makePortal(Portal)
-  await ensurePortalAuth(portal)
-  const map = new Map({ basemap: 'satellite' })
+    const portal = new Portal({ url: PORTAL_URL })
+    try { await portal.load() } catch {}
 
-  if (animView) { animView.destroy(); animView = null }
-  animView = markRaw(new MapView({
-    container: animMapDivRef.value,
-    map,
-    center: [120.28370671141899, 23.100996752910074],
-    zoom: 14,
-    ui: { components: ['zoom'] },
-  }))
-  await animView.when()
-  const firstEra = ERAS[0]
-  if (firstEra) await loadAnimLayer(firstEra, MapImageLayer, portal, map)
+    const ws = new WebScene({ portalItem: { id: 'e76348c50ea34790b75cda8ac103d339', portal } })
+
+    if (bldView) { bldView.destroy(); bldView = null }
+    bldView = markRaw(new SceneView({
+      container: bldMapDivRef.value,
+      map: ws,
+      ui: { components: ['zoom', 'compass', 'navigation-toggle'] },
+    }))
+    await bldView.when()
+    await ws.load()
+
+    // Find the building feature layer by title, then fall back to field names
+    let found: any = null
+    ws.allLayers.forEach((l: any) => {
+      if (found) return
+      if (String(l.title ?? '').includes('南科園區三維建物使用執照年份')) found = l
+    })
+    if (!found) ws.allLayers.forEach((l: any) => {
+      if (found) return
+      const names: string[] = (l.fields ?? []).map((f: any) => String(f.name).toLowerCase())
+      if (names.includes('date') || names.includes('b_name')) found = l
+    })
+    if (!found) ws.allLayers.forEach((l: any) => { if (!found && l.type === 'feature') found = l })
+    if (!found) { isLoading.value = false; return }
+
+    bldLayer = found
+    try { await bldLayer.load() } catch {}
+
+    const res = await bldLayer.queryFeatures({
+      where: '1=1', outFields: ['date'], returnGeometry: false, num: 20000,
+    })
+    const yearSet = new Set<number>()
+    for (const f of res?.features ?? []) {
+      const d = f.attributes?.date ?? f.attributes?.DATE
+      if (d != null) { const y = new Date(d).getFullYear(); if (y > 1980 && y < 2050) yearSet.add(y) }
+    }
+    bldYears.value = [...yearSet].sort((a, b) => a - b)
+    if (bldYears.value.length) {
+      bldYear.value = bldYears.value[0]!
+      await applyBldFilter()
+    }
+  } catch (e) { console.error('[Bld] init failed', e) }
   isLoading.value = false
 }
 
-async function loadAnimLayer(era: EraData, MapImageLayer: any, portal: any, map: any) {
-  if (currentLayer) { map.remove(currentLayer); currentLayer = null }
-  const id = IMAGE_LAYERS[era.imageKey]
-  if (!id) return
-  currentLayer = markRaw(new MapImageLayer({ portalItem: { id, portal }, opacity: 1 }))
-  map.add(currentLayer)
-  try { await currentLayer.load() } catch (err) {
-    console.error('[NankeHistory] loadAnimLayer 失敗:', err)
-    map.remove(currentLayer)
-    currentLayer = null
-  }
+async function applyBldFilter() {
+  if (!bldLayer) return
+  const yr = bldYear.value
+  bldLayer.definitionExpression = `EXTRACT(YEAR FROM date) <= ${yr}`
+  try {
+    bldCount.value = await bldLayer.queryFeatureCount({ where: bldLayer.definitionExpression })
+  } catch { bldCount.value = null }
+}
+
+async function jumpBldYear(yr: number) {
+  bldYear.value = yr
+  await applyBldFilter()
+}
+
+async function onBldTrackClick(e: MouseEvent) {
+  if (!bldTrackRef.value || !bldYears.value.length) return
+  const rect = bldTrackRef.value.getBoundingClientRect()
+  const pct = (e.clientX - rect.left) / rect.width
+  const i = Math.min(Math.max(Math.round(pct * (bldYears.value.length - 1)), 0), bldYears.value.length - 1)
+  bldYear.value = bldYears.value[i]!
+  await applyBldFilter()
+}
+
+function toggleBldPlay() {
+  isBldPlaying.value = !isBldPlaying.value
+  if (isBldPlaying.value) {
+    bldPlayTimer = setInterval(async () => {
+      const i = bldYears.value.indexOf(bldYear.value)
+      if (i >= bldYears.value.length - 1) {
+        stopBldPlay(); return
+      }
+      bldYear.value = bldYears.value[i + 1]!
+      await applyBldFilter()
+    }, 1200)
+  } else { stopBldPlay() }
+}
+
+function stopBldPlay() {
+  isBldPlaying.value = false
+  if (bldPlayTimer) { clearInterval(bldPlayTimer); bldPlayTimer = null }
 }
 
 // ──────────────────────────────────────────────
@@ -530,13 +612,6 @@ async function jumpToEra(eraId: string) {
     highlightChartYear(era.shortYear)
   }
 
-  if (activeMode.value === 'animate' && animView) {
-    const era = ERAS.find(e => e.id === eraId)
-    if (!era) return
-    const { MapImageLayer, Portal } = await getArcGIS()
-    await loadAnimLayer(era, MapImageLayer, makePortal(Portal), animView.map)
-    animView.goTo({ center: era.center, zoom: era.zoom }, { duration: 600 })
-  }
 }
 
 function prevEra() {
@@ -668,9 +743,9 @@ function highlightChartYear(yearStr: string) {
 // ── 生命週期 ──
 onMounted(async () => {
   await nextTick()
-  if (activeMode.value === 'story')   await initStoryMap()
-  if (activeMode.value === 'swipe')   await initSwipeMap()
-  if (activeMode.value === 'animate') await initAnimMap()
+  if (activeMode.value === 'story')    await initStoryMap()
+  if (activeMode.value === 'swipe')    await initSwipeMap()
+  if (activeMode.value === 'building') await initBuilding()
 })
 
 onUnmounted(() => {
@@ -683,7 +758,8 @@ onUnmounted(() => {
   mapView?.destroy()
   swipeViewBase?.destroy()
   swipeViewOver?.destroy()
-  animView?.destroy()
+  stopBldPlay()
+  bldView?.destroy()
   chartInstance?.destroy()
 })
 </script>
@@ -973,61 +1049,43 @@ onUnmounted(() => {
 .swipe-arrow { color: var(--color-text-tertiary); flex-shrink: 0; }
 
 /* ══════════════════════════════
-   動畫播放模式
+   建物發展模式
 ══════════════════════════════ */
-.animate-layout { display: flex; flex-direction: column; height: 100%; gap: 10px; padding: 12px; }
-.anim-map-wrap {
-  flex: 1; min-height: 0;
-  border-radius: 10px; overflow: hidden;
-  position: relative;
-  border: 0.5px solid var(--color-border-tertiary);
+.building-layout { display: flex; flex-direction: column; height: 100%; gap: 0; }
+.bld-map-wrap {
+  flex: 1; min-height: 0; position: relative;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
 }
-.anim-badge {
-  position: absolute; top: 12px; left: 12px;
-  display: flex; flex-direction: column; gap: 4px;
-  z-index: 5; pointer-events: none;
+.bld-badge {
+  position: absolute; top: 12px; left: 12px; z-index: 10;
+  background: rgba(15,23,42,0.78); border-radius: 10px;
+  padding: 8px 14px; display: flex; flex-direction: column; gap: 2px;
+  pointer-events: none; backdrop-filter: blur(6px);
 }
-.anim-year { font-size: 20px; font-weight: 700; color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,0.6); }
-.anim-tag  { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 5px; }
-.anim-ctrl {
-  position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 8px; z-index: 5;
-}
-.anim-prev, .anim-next {
-  width: 32px; height: 32px; border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.3);
-  background: rgba(15,23,42,0.7); color: #fff;
-  font-size: 18px; cursor: pointer; backdrop-filter: blur(6px);
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.15s;
-}
-.anim-prev:hover, .anim-next:hover { background: rgba(59,130,246,0.5); border-color: #3b82f6; }
-.anim-play {
-  width: 40px; height: 40px; border-radius: 50%;
-  border: none; background: #3b82f6; color: #fff;
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 2px 12px rgba(59,130,246,0.4);
-  transition: all 0.15s;
-}
-.anim-play:hover { background: #2563eb; }
+.bld-year  { font-size: 26px; font-weight: 800; color: #fff; line-height: 1; }
+.bld-count { font-size: 11px; color: #94a3b8; }
 
-.anim-thumb-row {
-  display: flex; gap: 8px; overflow-x: auto;
-  padding: 8px 2px; flex-shrink: 0;
-}
-.anim-thumb-row::-webkit-scrollbar { height: 3px; }
-.anim-thumb-row::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 2px; }
-.anim-thumb {
+.bld-ts-bar {
   flex-shrink: 0;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1.5px solid transparent;
-  background: var(--color-background-secondary);
-  cursor: pointer; transition: all 0.15s;
-  min-width: 70px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px;
+  background: var(--color-background-primary);
+  border-top: 0.5px solid var(--color-border-tertiary);
 }
-.anim-thumb:hover { background: var(--color-background-primary); }
-.anim-thumb.active { background: var(--color-background-primary); }
-.thumb-year { font-size: 13px; font-weight: 700; color: var(--color-text-primary); }
-.thumb-tag  { font-size: 10px; margin-top: 2px; }
+.bld-track-wrap { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.bld-track {
+  height: 4px; background: var(--color-border-tertiary);
+  border-radius: 2px; position: relative; cursor: pointer;
+}
+.bld-fill { height: 100%; background: #3b82f6; border-radius: 2px; pointer-events: none; }
+.bld-node {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #cbd5e1; border: 1.5px solid #fff;
+  transition: background 0.15s, transform 0.15s;
+  cursor: pointer;
+}
+.bld-node.passed { background: #3b82f6; }
+.bld-node.active { background: #1d4ed8; transform: translate(-50%, -50%) scale(1.5); }
+.bld-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--color-text-tertiary); }
 </style>

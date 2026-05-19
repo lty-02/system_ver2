@@ -34,6 +34,28 @@
       </div>
     </section>
 
+    <!-- 建物發展入口 -->
+    <section class="panel-section">
+      <div class="section-label">專題圖層</div>
+      <button class="bld-btn" @click="emitBuilding">
+        <div class="bld-btn-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <rect x="2" y="7" width="20" height="14" rx="2"/>
+            <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+            <line x1="12" y1="12" x2="12" y2="16"/>
+            <line x1="10" y1="14" x2="14" y2="14"/>
+          </svg>
+        </div>
+        <div class="bld-btn-body">
+          <div class="bld-btn-title">建物發展</div>
+          <div class="bld-btn-desc">逐年累計顯示建物登記，TimeSlider 互動</div>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" class="bld-btn-arrow">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      </button>
+    </section>
+
     <!-- 時期選擇（swipe 模式才顯示） -->
     <section class="panel-section" v-if="selectedMode === 'swipe'">
       <div class="section-label">對比時期</div>
@@ -86,7 +108,7 @@
         <ul class="info-list">
           <li>故事模式：捲動左側時間軸，地圖與統計指標同步切換</li>
           <li>Swipe 對比：拖曳分隔線，比較任意兩期影像差異</li>
-          <li>動畫播放：按播放鍵自動循環播放所有時期影像</li>
+          <li>建物發展：點擊「建物發展」按鈕以 TimeSlider 逐年累計建物</li>
         </ul>
       </div>
     </section>
@@ -125,15 +147,13 @@ const modes = [
     desc: '拖曳分隔線比較兩期影像',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="2" y="4" width="9" height="16" rx="2"/><rect x="13" y="4" width="9" height="16" rx="2"/></svg>',
   },
-  {
-    id: 'animate',
-    label: '動畫播放',
-    desc: '自動循環播放所有時期',
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
-  },
 ]
 
-const selectedMode  = ref<'story' | 'swipe' | 'animate'>('story')
+const selectedMode  = ref<'story' | 'swipe'>('story')
+
+function emitBuilding() {
+  emit('apply-settings', { mode: 'building', swipeLeft: swipeLeft.value, swipeRight: swipeRight.value, eraKey: selectedEraKey.value })
+}
 const swipeLeft     = ref('2000')
 const swipeRight    = ref('2025')
 const selectedEraKey = ref('2000')
@@ -251,6 +271,24 @@ function applySettings() {
 .info-header { font-size: 12px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 8px; }
 .info-list { margin: 0; padding: 0 0 0 16px; list-style: disc; }
 .info-list li { font-size: 12px; color: var(--color-text-secondary); line-height: 1.6; margin-bottom: 3px; }
+
+/* 建物發展按鈕 */
+.bld-btn {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 11px 12px; border: 1.5px solid #e2e8f0; border-radius: 8px;
+  background: #fff; cursor: pointer; text-align: left; transition: all 0.15s;
+}
+.bld-btn:hover { border-color: #475569; background: #f8fafc; }
+.bld-btn-icon {
+  width: 36px; height: 36px; border-radius: 8px; background: #f1f5f9;
+  display: flex; align-items: center; justify-content: center;
+  color: #475569; flex-shrink: 0;
+}
+.bld-btn:hover .bld-btn-icon { background: #e2e8f0; }
+.bld-btn-body { flex: 1; }
+.bld-btn-title { font-size: 13px; font-weight: 600; color: #1e293b; }
+.bld-btn-desc  { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+.bld-btn-arrow { color: #94a3b8; flex-shrink: 0; }
 
 /* 套用按鈕 */
 .panel-footer { padding: 16px 20px; border-top: 0.5px solid var(--color-border-tertiary); background: var(--color-background-primary); margin-top: auto; }
