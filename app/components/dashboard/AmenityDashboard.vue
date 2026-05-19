@@ -350,7 +350,7 @@ function renderVillages(allFeatures: any[], _xinshiFeatures: any[]) {
         type: 'simple-fill',
         color: [248, 250, 252, isXinshi ? 40 : 100],
         outline: isXinshi
-          ? { color: [15, 23, 42, 240], width: 2.0 }
+          ? { color: [0, 0, 0, 255], width: 2.5 }
           : { color: [203, 213, 225, 100], width: 0.4 },
       } as any,
     }))

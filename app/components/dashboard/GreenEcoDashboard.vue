@@ -454,7 +454,7 @@ async function renderChoropleth() {
       symbol: {
         type: 'simple-fill',
         color: [rv, gv, bv, 200],
-        outline: { color: [15, 23, 42, 120], width: 0.8 },
+        outline: { color: r.townname === '新市區' ? [0,0,0,220] : [15, 23, 42, 120], width: r.townname === '新市區' ? 2.0 : 0.8 },
       } as any,
     }))
   })
