@@ -1,7 +1,24 @@
 <template>
   <div class="ov-dash">
 
-    <!-- ── 地圖（左上）──────────────────────────────────────────── -->
+    <!-- ── KPI 卡片列（頂部全寬）──────────────────────────────── -->
+    <div class="kpi-row">
+      <div v-for="t in THEMES" :key="t.key"
+        class="kpi-card" :class="{ active: activeTheme === t.key }"
+        :style="`--c:${t.color}`" @click="switchTheme(t.key)">
+        <div class="kc-top">
+          <span class="kc-dot" :style="{ background: t.color }" />
+          <span class="kc-label">{{ t.label }}</span>
+        </div>
+        <div class="kc-val">{{ kpiAvg(t.key) }}</div>
+        <div class="kc-footer">
+          <span class="kc-unit">{{ t.unit }}</span>
+          <span class="kc-n">{{ kpiN(t.key) }}村里</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 地圖（左下）──────────────────────────────────────────── -->
     <div class="map-wrap">
       <div ref="mapEl" class="map-el" />
       <div v-if="mapLoading" class="map-loading"><div class="spinner" /></div>
@@ -15,20 +32,13 @@
         </button>
       </div>
 
-      <!-- 地圖說明 -->
-      <div class="map-info">
-        <span class="info-red-box" />新市區 &nbsp;·&nbsp; 淺色 = 無資料
-      </div>
-
       <!-- 村里 popup -->
       <transition name="popup-fade">
         <div v-if="selVill" class="map-popup">
           <div class="pu-hd">
             <div class="pu-name-row">
               <span class="pu-name">{{ selVill.name }}</span>
-              <span class="pu-town" :style="{ color: selVill.isXinshi ? '#dc2626' : '#94a3b8' }">
-                {{ selVill.townname }}
-              </span>
+              <span class="pu-town">{{ selVill.townname }}</span>
             </div>
             <button class="pu-close" @click="selVill = null">✕</button>
           </div>
@@ -51,7 +61,7 @@
       </transition>
     </div>
 
-    <!-- ── 右側面板（全高）──────────────────────────────────────── -->
+    <!-- ── 右側面板（右下，固定高度不捲動）─────────────────────── -->
     <div class="right-panel">
       <div class="rp-hdr">
         <div class="rp-title">綜合概覽</div>
@@ -59,7 +69,7 @@
       </div>
 
       <!-- 雷達圖 -->
-      <div class="chart-box">
+      <div class="chart-box radar-box">
         <div class="cb-hdr">
           <span class="cb-title">指標雷達</span>
           <span class="cb-sub">{{ selVill ? selVill.name + ' vs 均' : '新市區均值' }}</span>
@@ -116,23 +126,6 @@
           </div>
         </div>
         <canvas ref="scatterEl" class="scatter-cv" />
-      </div>
-    </div>
-
-    <!-- ── KPI 卡片列（左下）──────────────────────────────────── -->
-    <div class="kpi-row">
-      <div v-for="t in THEMES" :key="t.key"
-        class="kpi-card" :class="{ active: activeTheme === t.key }"
-        :style="`--c:${t.color}`" @click="switchTheme(t.key)">
-        <div class="kc-top">
-          <span class="kc-dot" :style="{ background: t.color }" />
-          <span class="kc-label">{{ t.label }}</span>
-        </div>
-        <div class="kc-val">{{ kpiAvg(t.key) }}</div>
-        <div class="kc-footer">
-          <span class="kc-unit">{{ t.unit }}</span>
-          <span class="kc-n">{{ kpiN(t.key) }}村里</span>
-        </div>
       </div>
     </div>
 
@@ -476,7 +469,7 @@ async function initMap() {
   const map = new ArcMap({ basemap: 'gray-vector' })
   mapView = markRaw(new MapView({
     container: mapEl.value, map,
-    center: [120.2, 23.0], zoom: 10,   // all Tainan
+    center: [120.33, 23.06], zoom: 12,  // 新市區
     ui: { components: ['zoom'] },
   }))
   mapView.ui.remove('attribution')
@@ -485,7 +478,7 @@ async function initMap() {
 }
 
 function removeAllGL() {
-  for (const id of ['bg-gl', 'choro-gl', 'label-gl', 'xinshi-gl']) {
+  for (const id of ['choro-gl', 'label-gl']) {
     const l = mapView?.map?.findLayerById?.(id); if (l) mapView.map.remove(l)
   }
 }
@@ -496,24 +489,7 @@ async function applyChoro(key: TK) {
   const def = THEMES.find(t => t.key === key)!
   const dataMap = new Map(vills.map(v => [norm(v.name), v[key]]))
 
-  // Layer 1: All Tainan — distinct village boundaries, 新市區 left transparent for choropleth layer
-  const bgGL = new GraphicsLayer({ id: 'bg-gl' })
-  for (const b of allBoundary) {
-    if (!b.geometry) continue
-    const isX = b.townname === '新市區'
-    bgGL.add(new Graphic({
-      geometry: b.geometry,
-      attributes: { name: b.name, townname: b.townname },
-      symbol: {
-        type: 'simple-fill',
-        color: isX ? [0,0,0,0] : [236,240,244,200],
-        outline: { color: isX ? [0,0,0,0] : [180,192,204,180], width: 0.5 },
-      } as any,
-    }))
-  }
-  mapView.map.add(bgGL)
-
-  // Layer 2: 新市區 colored choropleth
+  // Layer 1: 新市區 村里 choropleth
   const vals = vills.map(v => v[key])
   const choroGL = new GraphicsLayer({ id: 'choro-gl' })
   for (const v of vills) {
@@ -526,13 +502,13 @@ async function applyChoro(key: TK) {
       symbol: {
         type: 'simple-fill',
         color: [r, g, b, 215],
-        outline: { color: [220, 38, 38, 255], width: 1.5 },
+        outline: { color: [160, 180, 200, 200], width: 1 },
       } as any,
     }))
   }
   mapView.map.add(choroGL)
 
-  // Layer 3: 新市區 village name labels
+  // Layer 2: 村里名稱標籤
   const lgl = new GraphicsLayer({ id: 'label-gl' })
   for (const v of vills) {
     if (!v.geometry) continue
@@ -544,23 +520,6 @@ async function applyChoro(key: TK) {
     }))
   }
   mapView.map.add(lgl)
-
-  // Layer 4: 新市區 dissolved red border
-  const xinshiGeoms = vills.map(v => v.geometry).filter(Boolean)
-  if (xinshiGeoms.length) {
-    try {
-      const geometryEngine = await import('@arcgis/core/geometry/geometryEngine').then((m: any) => m.default ?? m)
-      const dissolved = xinshiGeoms.length === 1 ? xinshiGeoms[0] : geometryEngine.union(xinshiGeoms)
-      if (dissolved) {
-        const bgl = new GraphicsLayer({ id: 'xinshi-gl' })
-        bgl.add(new Graphic({
-          geometry: markRaw(dissolved),
-          symbol: { type: 'simple-fill', color: [0,0,0,0], outline: { color: [220,38,38,255], width: 3 } } as any,
-        }))
-        mapView.map.add(bgl)
-      }
-    } catch (e) { console.warn('[Ov] xinshi border failed', e) }
-  }
 }
 
 async function handleMapClick(evt: any) {
@@ -799,19 +758,40 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* ── 整體容器（對應 PopulationDashboard 的布局模式）── */
+/* ── 整體容器 ── */
 .ov-dash {
   width: 100%; height: 100%; overflow: hidden;
   display: grid;
-  grid-template-columns: 1fr 290px;
-  grid-template-rows: 1fr 90px;
+  grid-template-columns: 1fr 300px;
+  grid-template-rows: 100px 1fr;
   gap: 8px; padding: 8px;
   background: #f1f5f9; box-sizing: border-box;
 }
 
-/* ── 地圖：左上 ── */
+/* ── KPI 卡片列：頂部全寬 ── */
+.kpi-row {
+  grid-column: 1 / 3; grid-row: 1;
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
+}
+.kpi-card {
+  background: #fff; border-radius: 10px; border: 1.5px solid #e2e8f0;
+  padding: 12px 14px; cursor: pointer;
+  transition: border-color .15s, background .15s;
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+.kpi-card.active { border-color: var(--c); background: color-mix(in srgb, var(--c) 8%, #fff); }
+.kpi-card:hover:not(.active) { background: #f8fafc; }
+.kc-top { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.kc-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.kc-label { font-size: 11px; color: #64748b; font-weight: 500; }
+.kc-val { font-size: 22px; font-weight: 700; color: #1e293b; line-height: 1.1; letter-spacing: -0.5px; }
+.kc-footer { display: flex; justify-content: space-between; margin-top: 4px; }
+.kc-unit { font-size: 10px; color: #94a3b8; }
+.kc-n { font-size: 10px; color: #94a3b8; }
+
+/* ── 地圖：左下 ── */
 .map-wrap {
-  grid-column: 1; grid-row: 1;
+  grid-column: 1; grid-row: 2;
   position: relative; border-radius: 12px; overflow: hidden;
   border: 1px solid #e2e8f0; background: #e8eef4;
 }
@@ -836,14 +816,6 @@ onUnmounted(() => {
 .theme-btn:not(.active):hover { background: #f1f5f9; }
 .tb-pip { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 
-.map-info {
-  position: absolute; top: 10px; left: 10px; z-index: 15;
-  background: rgba(255,255,255,.88); border-radius: 8px; padding: 5px 10px;
-  font-size: 11px; color: #64748b; display: flex; align-items: center; gap: 6px;
-  backdrop-filter: blur(4px); box-shadow: 0 1px 6px rgba(0,0,0,.1);
-}
-.info-red-box { width: 14px; height: 10px; background: transparent; border: 2px solid #dc2626; border-radius: 2px; flex-shrink: 0; }
-
 /* Popup */
 .map-popup {
   position: absolute; bottom: 62px; left: 12px; z-index: 30;
@@ -853,7 +825,7 @@ onUnmounted(() => {
 .pu-hd { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
 .pu-name-row { display: flex; flex-direction: column; gap: 2px; }
 .pu-name { font-size: 14px; font-weight: 700; color: #1e293b; }
-.pu-town { font-size: 11px; font-weight: 600; }
+.pu-town { font-size: 11px; color: #94a3b8; }
 .pu-close { border: none; background: #f1f5f9; color: #64748b; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; cursor: pointer; flex-shrink: 0; }
 .pu-rows { display: flex; flex-direction: column; gap: 7px; }
 .pu-row { display: flex; flex-direction: column; gap: 3px; }
@@ -867,43 +839,46 @@ onUnmounted(() => {
 .popup-fade-enter-active, .popup-fade-leave-active { transition: opacity .2s, transform .2s; }
 .popup-fade-enter-from, .popup-fade-leave-to { opacity: 0; transform: translateY(6px); }
 
-/* ── 右側面板（全高）── */
+/* ── 右側面板：右下，flex 均分高度，禁止捲動 ── */
 .right-panel {
-  grid-column: 2; grid-row: 1 / 3;
+  grid-column: 2; grid-row: 2;
   display: flex; flex-direction: column; gap: 6px;
-  overflow-y: auto; min-height: 0;
+  overflow: hidden; min-height: 0;
 }
-.right-panel::-webkit-scrollbar { width: 4px; }
-.right-panel::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
 
 .rp-hdr { background: #fff; border-radius: 10px; padding: 9px 13px; border: 1px solid #e2e8f0; flex-shrink: 0; }
 .rp-title { font-size: 13px; font-weight: 700; color: #1e293b; }
 .rp-sub { font-size: 10px; color: #94a3b8; margin-top: 1px; display: block; }
 
-/* 共用圖表框 */
+/* 共用圖表框：flex 均分，canvas 填滿剩餘空間 */
 .chart-box {
   background: #fff; border-radius: 10px; border: 1px solid #e2e8f0;
-  padding: 9px 10px; display: flex; flex-direction: column; flex-shrink: 0;
+  padding: 9px 10px; display: flex; flex-direction: column;
+  min-height: 0;
 }
-.cb-hdr { display: flex; align-items: baseline; gap: 5px; margin-bottom: 5px; }
+.radar-box  { flex: 3; }
+.twin-row   { flex: 2.5; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.scatter-box { flex: 2.5; }
+
+.twin-row > .chart-box { flex: 1; }
+
+.cb-hdr { display: flex; align-items: baseline; gap: 5px; margin-bottom: 5px; flex-shrink: 0; }
 .cb-title { font-size: 11px; font-weight: 700; color: #1e293b; }
 .cb-sub { font-size: 9.5px; color: #94a3b8; }
 
-/* 雷達 */
-.radar-cv { width: 100%; height: 150px; display: block; }
-.radar-legend { display: flex; gap: 10px; justify-content: center; margin-top: 4px; }
+/* canvas 佔滿剩餘高度 */
+.radar-cv   { flex: 1; width: 100%; min-height: 0; display: block; }
+.donut-cv   { flex: 1; width: 100%; min-height: 0; display: block; }
+.bar-cv     { flex: 1; width: 100%; min-height: 0; display: block; }
+.scatter-cv { flex: 1; width: 100%; min-height: 0; display: block; }
+
+.radar-legend { display: flex; gap: 10px; justify-content: center; margin-top: 4px; flex-shrink: 0; }
 .rl-item { display: flex; align-items: center; gap: 4px; font-size: 9px; color: #64748b; }
 .rl-swatch { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
 .swatch-avg { background: #5B8260; opacity: .7; }
 .swatch-sel { background: #8CABD9; opacity: .7; }
 
-/* 分佈 + 排行並排 */
-.twin-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex-shrink: 0; }
-.donut-cv { width: 100%; height: 115px; display: block; }
-.bar-cv   { width: 100%; height: 115px; display: block; }
-
-/* 散佈圖 */
-.scatter-axes { display: flex; flex-direction: column; gap: 4px; margin-bottom: 5px; }
+.scatter-axes { display: flex; flex-direction: column; gap: 4px; margin-bottom: 5px; flex-shrink: 0; }
 .ax-row { display: flex; align-items: center; gap: 5px; }
 .ax-label { font-size: 10px; color: #94a3b8; min-width: 14px; font-weight: 600; }
 .ax-btns { display: flex; gap: 3px; flex-wrap: wrap; }
@@ -913,26 +888,4 @@ onUnmounted(() => {
   transition: all .15s; white-space: nowrap;
 }
 .ax-btn:hover { background: #f1f5f9; }
-.scatter-cv { width: 100%; height: 150px; display: block; }
-
-/* ── KPI 卡片列（左下）── */
-.kpi-row {
-  grid-column: 1; grid-row: 2;
-  display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px;
-  min-height: 0;
-}
-.kpi-card {
-  background: #fff; border-radius: 8px; border: 1.5px solid #e2e8f0;
-  padding: 8px 10px; cursor: pointer; transition: border-color .15s, background .15s;
-  display: flex; flex-direction: column; justify-content: space-between; min-width: 0;
-}
-.kpi-card.active { border-color: var(--c); background: color-mix(in srgb, var(--c) 6%, #fff); }
-.kpi-card:hover:not(.active) { background: #f8fafc; }
-.kc-top { display: flex; align-items: center; gap: 5px; }
-.kc-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.kc-label { font-size: 10px; color: #64748b; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.kc-val { font-size: 15px; font-weight: 700; color: #1e293b; line-height: 1.2; }
-.kc-footer { display: flex; justify-content: space-between; }
-.kc-unit { font-size: 9px; color: #94a3b8; }
-.kc-n { font-size: 9px; color: #94a3b8; }
 </style>
