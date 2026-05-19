@@ -1,7 +1,7 @@
 <template>
   <div class="ov-dash">
 
-    <!-- ── 地圖 ───────────────────────────────────────────────── -->
+    <!-- ── 地圖（上方，全寬）─────────────────────────────────────── -->
     <div class="map-wrap">
       <div ref="mapEl" class="map-el" />
       <div v-if="mapLoading" class="map-loading"><div class="spinner" /></div>
@@ -51,55 +51,55 @@
       </transition>
     </div>
 
-    <!-- ── 右側面板 ─────────────────────────────────────────────── -->
-    <div class="right-panel">
+    <!-- ── 下方面板（全寬，橫向排列）──────────────────────────────── -->
+    <div class="bottom-panel">
 
-      <!-- 標題 -->
-      <div class="rp-hdr">
-        <div class="rp-title">綜合概覽</div>
-        <div class="rp-sub">臺南市新市區 · 五大主題快速導覽</div>
-      </div>
-
-      <!-- KPI 卡片 (2×3 grid) -->
-      <div class="kpi-grid">
-        <div v-for="t in THEMES" :key="t.key"
-          class="kpi-card" :class="{ active: activeTheme === t.key }"
-          :style="`--c:${t.color}`" @click="switchTheme(t.key)">
-          <div class="kc-top">
-            <span class="kc-dot" :style="{ background: t.color }" />
-            <span class="kc-label">{{ t.label }}</span>
-          </div>
-          <div class="kc-val">{{ kpiAvg(t.key) }}</div>
-          <div class="kc-footer">
-            <span class="kc-unit">{{ t.unit }}</span>
-            <span class="kc-n">{{ kpiN(t.key) }}村里</span>
+      <!-- KPI 卡片區 -->
+      <div class="bp-kpi-section">
+        <div class="bp-hdr">
+          <span class="bp-title">綜合概覽</span>
+          <span class="bp-sub">新市區 · 五大主題</span>
+        </div>
+        <div class="kpi-grid">
+          <div v-for="t in THEMES" :key="t.key"
+            class="kpi-card" :class="{ active: activeTheme === t.key }"
+            :style="`--c:${t.color}`" @click="switchTheme(t.key)">
+            <div class="kc-top">
+              <span class="kc-dot" :style="{ background: t.color }" />
+              <span class="kc-label">{{ t.label }}</span>
+            </div>
+            <div class="kc-val">{{ kpiAvg(t.key) }}</div>
+            <div class="kc-footer">
+              <span class="kc-unit">{{ t.unit }}</span>
+              <span class="kc-n">{{ kpiN(t.key) }}村里</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- 雷達 + 分佈圓環 (並排) -->
-      <div class="twin-row">
-        <div class="chart-box">
-          <div class="cb-hdr">
-            <span class="cb-title">指標雷達</span>
-            <span class="cb-sub">{{ selVill ? selVill.name + ' vs 均' : '新市區均值' }}</span>
-          </div>
-          <canvas ref="radarEl" class="radar-cv" />
-          <div class="radar-legend">
-            <span class="rl-item"><span class="rl-swatch swatch-avg" />均值</span>
-            <span v-if="selVill" class="rl-item"><span class="rl-swatch swatch-sel" />{{ selVill.name }}</span>
-          </div>
+      <!-- 雷達圖 -->
+      <div class="chart-box">
+        <div class="cb-hdr">
+          <span class="cb-title">指標雷達</span>
+          <span class="cb-sub">{{ selVill ? selVill.name + ' vs 均' : '均值' }}</span>
         </div>
-        <div class="chart-box">
-          <div class="cb-hdr">
-            <span class="cb-title">分佈圖</span>
-            <span class="cb-sub">{{ activeThemeObj?.label }} 五分位</span>
-          </div>
-          <canvas ref="donutEl" class="donut-cv" />
+        <canvas ref="radarEl" class="radar-cv" />
+        <div class="radar-legend">
+          <span class="rl-item"><span class="rl-swatch swatch-avg" />均值</span>
+          <span v-if="selVill" class="rl-item"><span class="rl-swatch swatch-sel" />{{ selVill.name }}</span>
         </div>
       </div>
 
-      <!-- 村里排行長條圖 -->
+      <!-- 分佈圓環 -->
+      <div class="chart-box">
+        <div class="cb-hdr">
+          <span class="cb-title">分佈圖</span>
+          <span class="cb-sub">{{ activeThemeObj?.label }} 五分位</span>
+        </div>
+        <canvas ref="donutEl" class="donut-cv" />
+      </div>
+
+      <!-- 村里排行 -->
       <div class="chart-box">
         <div class="cb-hdr">
           <span class="cb-title">村里排行</span>
@@ -116,7 +116,7 @@
         </div>
         <div class="scatter-axes">
           <div class="ax-row">
-            <span class="ax-label">X 軸</span>
+            <span class="ax-label">X</span>
             <div class="ax-btns">
               <button v-for="t in THEMES" :key="t.key"
                 class="ax-btn" :class="{ active: scatterX === t.key }"
@@ -125,7 +125,7 @@
             </div>
           </div>
           <div class="ax-row">
-            <span class="ax-label">Y 軸</span>
+            <span class="ax-label">Y</span>
             <div class="ax-btns">
               <button v-for="t in THEMES" :key="t.key"
                 class="ax-btn" :class="{ active: scatterY === t.key }"
@@ -801,14 +801,17 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* ── 整體容器：地圖佔上方，圖表列在下方 ── */
 .ov-dash {
   width: 100%; height: 100%; overflow: hidden;
-  display: grid; grid-template-columns: 1fr 310px;
-  gap: 8px; padding: 8px; background: #f1f5f9; box-sizing: border-box;
+  display: grid;
+  grid-template-rows: 1fr 262px;
+  gap: 8px; padding: 8px;
+  background: #f1f5f9; box-sizing: border-box;
 }
 
 /* ── 地圖 ── */
-.map-wrap { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; background: #e8eef4; }
+.map-wrap { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; background: #e8eef4; min-height: 0; }
 .map-el { width: 100%; height: 100%; }
 .map-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(248,250,252,.82); z-index: 10; }
 .spinner { width: 36px; height: 36px; border-radius: 50%; border: 3px solid #e2e8f0; border-top-color: #5B8260; animation: spin .8s linear infinite; }
@@ -861,65 +864,69 @@ onUnmounted(() => {
 .popup-fade-enter-active, .popup-fade-leave-active { transition: opacity .2s, transform .2s; }
 .popup-fade-enter-from, .popup-fade-leave-to { opacity: 0; transform: translateY(6px); }
 
-/* ── 右側面板 ── */
-.right-panel {
-  display: flex; flex-direction: column; gap: 7px;
-  overflow-y: auto; min-height: 0;
+/* ── 下方橫向面板 ── */
+.bottom-panel {
+  display: grid;
+  grid-template-columns: 210px 170px 160px 190px 1fr;
+  gap: 7px;
+  min-height: 0;
 }
-.right-panel::-webkit-scrollbar { width: 4px; }
-.right-panel::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
 
-.rp-hdr { background: #fff; border-radius: 10px; padding: 10px 14px; border: 1px solid #e2e8f0; flex-shrink: 0; }
-.rp-title { font-size: 14px; font-weight: 700; color: #1e293b; }
-.rp-sub { font-size: 10px; color: #94a3b8; display: block; margin-top: 1px; }
+/* KPI 區塊 */
+.bp-kpi-section {
+  display: flex; flex-direction: column; gap: 5px; min-width: 0;
+}
+.bp-hdr { padding: 0 2px 2px; }
+.bp-title { font-size: 13px; font-weight: 700; color: #1e293b; }
+.bp-sub { font-size: 10px; color: #94a3b8; margin-left: 5px; }
 
-/* KPI 卡片 */
-.kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; flex-shrink: 0; }
+.kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; flex: 1; }
 .kpi-card {
   background: #fff; border-radius: 8px; border: 1.5px solid #e2e8f0;
-  padding: 8px 10px; cursor: pointer; transition: border-color .15s, background .15s;
+  padding: 7px 9px; cursor: pointer; transition: border-color .15s, background .15s;
+  min-width: 0;
 }
 .kpi-card.active { border-color: var(--c); background: color-mix(in srgb, var(--c) 6%, #fff); }
 .kpi-card:hover:not(.active) { background: #f8fafc; }
-.kc-top { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; }
-.kc-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.kc-label { font-size: 10px; color: #64748b; font-weight: 500; }
-.kc-val { font-size: 14px; font-weight: 700; color: #1e293b; line-height: 1.2; }
+.kc-top { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
+.kc-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.kc-label { font-size: 10px; color: #64748b; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kc-val { font-size: 13px; font-weight: 700; color: #1e293b; line-height: 1.2; white-space: nowrap; }
 .kc-footer { display: flex; justify-content: space-between; margin-top: 2px; }
 .kc-unit { font-size: 9px; color: #94a3b8; }
 .kc-n { font-size: 9px; color: #94a3b8; }
 
-/* 雷達 + 圓環 */
-.twin-row { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; flex-shrink: 0; }
+/* 共用圖表框 */
 .chart-box {
   background: #fff; border-radius: 10px; border: 1px solid #e2e8f0;
-  padding: 9px 10px; display: flex; flex-direction: column;
+  padding: 8px 10px; display: flex; flex-direction: column; min-width: 0; min-height: 0;
 }
-.cb-hdr { display: flex; align-items: baseline; gap: 5px; margin-bottom: 5px; flex-shrink: 0; }
+.cb-hdr { display: flex; align-items: baseline; gap: 5px; margin-bottom: 4px; flex-shrink: 0; }
 .cb-title { font-size: 11px; font-weight: 700; color: #1e293b; }
 .cb-sub { font-size: 9.5px; color: #94a3b8; }
-.radar-cv { width: 100%; height: 130px; display: block; }
-.radar-legend { display: flex; gap: 10px; justify-content: center; margin-top: 4px; flex-shrink: 0; }
+
+/* 雷達 */
+.radar-cv { flex: 1; width: 100%; min-height: 0; display: block; }
+.radar-legend { display: flex; gap: 10px; justify-content: center; margin-top: 3px; flex-shrink: 0; }
 .rl-item { display: flex; align-items: center; gap: 4px; font-size: 9px; color: #64748b; }
 .rl-swatch { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
 .swatch-avg { background: #5B8260; opacity: .7; }
 .swatch-sel { background: #8CABD9; opacity: .7; }
-.donut-cv { width: 100%; height: 130px; display: block; }
 
-/* Bar chart */
-.bar-cv { width: 100%; height: 180px; display: block; }
+/* 圓環 / 長條 */
+.donut-cv { flex: 1; width: 100%; min-height: 0; display: block; }
+.bar-cv   { flex: 1; width: 100%; min-height: 0; display: block; }
 
-/* Scatter */
-.scatter-box { flex-shrink: 0; }
-.scatter-axes { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
-.ax-row { display: flex; align-items: center; gap: 6px; }
-.ax-label { font-size: 10px; color: #94a3b8; min-width: 28px; font-weight: 500; }
+/* 散佈圖 */
+.scatter-axes { display: flex; flex-direction: column; gap: 3px; margin-bottom: 5px; flex-shrink: 0; }
+.ax-row { display: flex; align-items: center; gap: 5px; }
+.ax-label { font-size: 10px; color: #94a3b8; min-width: 14px; font-weight: 600; }
 .ax-btns { display: flex; gap: 3px; flex-wrap: wrap; }
 .ax-btn {
-  padding: 2px 7px; border-radius: 10px; border: 1px solid #e2e8f0;
+  padding: 2px 6px; border-radius: 10px; border: 1px solid #e2e8f0;
   font-size: 10px; color: #64748b; cursor: pointer; background: #f8fafc;
   transition: all .15s; white-space: nowrap;
 }
 .ax-btn:hover { background: #f1f5f9; }
-.scatter-cv { width: 100%; height: 180px; display: block; }
+.scatter-cv { flex: 1; width: 100%; min-height: 0; display: block; }
 </style>
