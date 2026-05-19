@@ -516,9 +516,13 @@ async function initBuilding() {
     await bldView.when()
     await ws.load()
 
-    // Find the building feature layer (has date / b_name fields)
+    // Find the building feature layer by title, then fall back to field names
     let found: any = null
     ws.allLayers.forEach((l: any) => {
+      if (found) return
+      if (String(l.title ?? '').includes('南科園區三維建物使用執照年份')) found = l
+    })
+    if (!found) ws.allLayers.forEach((l: any) => {
       if (found) return
       const names: string[] = (l.fields ?? []).map((f: any) => String(f.name).toLowerCase())
       if (names.includes('date') || names.includes('b_name')) found = l
