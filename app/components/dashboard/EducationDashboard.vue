@@ -351,6 +351,19 @@ function renderVillages(allFeatures: any[], _xinshiFeatures: any[]) {
     }))
   }
   mapView.map.add(gl, 0)
+
+  // Village name labels
+  if (allBoundaryFeatures.length) {
+    const existingLbl = mapView.map.findLayerById('label-gl'); if (existingLbl) mapView.map.remove(existingLbl)
+    const lgl = new GraphicsLayer({ id: 'label-gl' })
+    for (const f of allBoundaryFeatures) {
+      if (!f.geometry || !f.name) continue
+      const centroid = f.geometry.centroid ?? f.geometry.extent?.center
+      if (!centroid) continue
+      lgl.add(new Graphic({ geometry: centroid, symbol: { type: 'text', text: f.name, color: [30,41,59,220], haloColor: [255,255,255,200], haloSize: 1.5, font: { size: 9 } } as any }))
+    }
+    mapView.map.add(lgl)
+  }
 }
 
 // ── Add thick border around 新市區 ────────────────────────────
@@ -490,10 +503,9 @@ async function renderTownChoropleth() {
     return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16), 200]
   }
 
-  const existing = mapView.map.findLayerById('village-gl'); if (existing) mapView.map.remove(existing)
-  const xbgl = mapView.map.findLayerById('xinshi-border-gl'); if (xbgl) mapView.map.remove(xbgl)
-  const tbgl = mapView.map.findLayerById('town-border-gl'); if (tbgl) mapView.map.remove(tbgl)
-  const choroExist = mapView.map.findLayerById('choro-gl'); if (choroExist) mapView.map.remove(choroExist)
+  for (const lid of ['village-gl', 'xinshi-border-gl', 'town-border-gl', 'choro-gl', 'label-gl']) {
+    const el = mapView.map.findLayerById(lid); if (el) mapView.map.remove(el)
+  }
 
   const gl = new GraphicsLayer({ id: 'choro-gl' })
   const borderGL = new GraphicsLayer({ id: 'town-border-gl' })
@@ -514,6 +526,15 @@ async function renderTownChoropleth() {
   }
   mapView.map.add(gl, 0)
   mapView.map.add(borderGL)
+
+  // Town name labels
+  const existingLbl = mapView.map.findLayerById('label-gl'); if (existingLbl) mapView.map.remove(existingLbl)
+  const lgl = new GraphicsLayer({ id: 'label-gl' })
+  for (const [tn, poly] of townPolygons) {
+    const centroid = poly.centroid ?? poly.extent?.center
+    if (centroid) lgl.add(new Graphic({ geometry: centroid, symbol: { type: 'text', text: tn, color: [30,41,59,240], haloColor: [255,255,255,220], haloSize: 2, font: { size: 11, weight: 'bold' } } as any }))
+  }
+  mapView.map.add(lgl)
   if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }
 }
 
