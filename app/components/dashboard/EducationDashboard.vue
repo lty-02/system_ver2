@@ -345,7 +345,7 @@ function renderVillages(allFeatures: any[], _xinshiFeatures: any[]) {
         type: 'simple-fill',
         color: [248, 250, 252, isXinshi ? 40 : 100],
         outline: isXinshi
-          ? { color: [0, 0, 0, 255], width: 2.5 }
+          ? { color: [220, 38, 38, 255], width: 2.5 }
           : { color: [203, 213, 225, 100], width: 0.4 },
       } as any,
     }))
@@ -377,7 +377,7 @@ async function addXinshiBorder() {
     const dissolved = xinshiGeoms.length === 1 ? xinshiGeoms[0] : geometryEngine.union(xinshiGeoms)
     if (!dissolved) return
     const bgl = new GraphicsLayer({ id: 'xinshi-border-gl' })
-    bgl.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type: 'simple-fill', color: [0, 0, 0, 0], outline: { color: [0, 0, 0, 255], width: 2.5 } } as any }))
+    bgl.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type: 'simple-fill', color: [0, 0, 0, 0], outline: { color: [220, 38, 38, 255], width: 2.5 } } as any }))
     mapView.map.add(bgl, 0)
   } catch {}
 }

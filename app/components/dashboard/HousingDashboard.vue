@@ -615,6 +615,18 @@ function renderChoropleth() {
     }))
   })
 
+  // Village name labels
+  const existingLbl = mapView.map.findLayerById?.('label-gl')
+  if (existingLbl) mapView.map.remove(existingLbl)
+  const lgl = new GraphicsLayer({ id: 'label-gl' })
+  for (const r of rows) {
+    if (!r.geo || !r.name) continue
+    const centroid = r.geo.centroid ?? r.geo.extent?.center
+    if (!centroid) continue
+    lgl.add(new Graphic({ geometry: centroid, symbol: { type: 'text', text: r.name, color: [30,41,59,220], haloColor: [255,255,255,200], haloSize: 1.5, font: { size: 9 } } as any }))
+  }
+  mapView.map.add(lgl)
+
   if (sciGL) {
     try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {}
   }

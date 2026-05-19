@@ -454,7 +454,7 @@ async function renderChoropleth() {
       symbol: {
         type: 'simple-fill',
         color: [rv, gv, bv, 200],
-        outline: { color: r.townname === '新市區' ? [0,0,0,220] : [15, 23, 42, 120], width: r.townname === '新市區' ? 2.0 : 0.8 },
+        outline: { color: r.townname === '新市區' ? [220,38,38,255] : [15, 23, 42, 120], width: r.townname === '新市區' ? 2.0 : 0.8 },
       } as any,
     }))
   })
@@ -469,7 +469,7 @@ async function renderChoropleth() {
       const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
       const dissolved = xinshiGeoms.length === 1 ? xinshiGeoms[0] : geometryEngine.union(xinshiGeoms)
       const borderGL = new GraphicsLayer({ id: 'xinshi-border-gl' })
-      borderGL.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type: 'simple-fill', color: [0,0,0,0], outline: { color: [0,0,0,255], width: 2.5 } } as any }))
+      borderGL.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type: 'simple-fill', color: [0,0,0,0], outline: { color: [220,38,38,255], width: 2.5 } } as any }))
       mapView.map.add(borderGL)
     } catch (e) { console.warn('[GreenEco] xinshi border failed', e) }
   }

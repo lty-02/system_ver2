@@ -106,9 +106,17 @@ const emit = defineEmits<{
 }>()
 
 const role = ref<'public' | 'authority'>('public')
-const activeTheme = ref('population')
+const activeTheme = ref('overview')
 
 const authorityThemes = [
+  {
+    id: 'overview',
+    name: '綜合概覽',
+    sub: '人口、房市、銀髮、脆弱度、生態',
+    color: '#4f7396',
+    lightBg: '#eef4fb',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+  },
   {
     id: 'vulnerability',
     name: '社會脆弱度',
@@ -136,6 +144,14 @@ const authorityThemes = [
 ]
 
 const themes = [
+  {
+    id: 'overview',
+    name: '綜合概覽',
+    sub: '人口、房市、銀髮、脆弱度、生態',
+    color: '#4f7396',
+    lightBg: '#eef4fb',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+  },
   {
     id: 'population',
     name: '人口結構',
@@ -180,7 +196,7 @@ const themes = [
 
 function setRole(r: 'public' | 'authority') {
   role.value = r
-  const defaultTheme = r === 'authority' ? 'vulnerability' : 'population'
+  const defaultTheme = r === 'authority' ? 'overview' : 'overview'
   activeTheme.value = defaultTheme
   emit('role-change', r)
   emit('theme-change', defaultTheme)
