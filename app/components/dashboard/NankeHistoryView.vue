@@ -251,6 +251,8 @@ let swipeViewBase: any  = null   // 底層 MapView（右側 / 近期影像）
 let swipeViewOver: any  = null   // 上層 MapView（左側 / 早期影像，clip-path 裁切）
 let bldView: any        = null
 let bldLayer: any       = null
+let bldLayerView: any   = null
+let bldOidsByYear       = new Map<number, number[]>()
 let bldPlayTimer: ReturnType<typeof setInterval> | null = null
 const bldYears    = ref<number[]>([])
 const bldYear     = ref(2000)
@@ -536,13 +538,27 @@ async function initBuilding() {
     bldLayer = found
     try { await bldLayer.load() } catch {}
 
+    // Get layerView for objectId-based filtering (avoids SQL date issues on I3S)
+    bldLayerView = markRaw(await bldView.whenLayerView(bldLayer))
+
+    const oidField: string = bldLayer.objectIdField ?? 'OBJECTID'
     const res = await bldLayer.queryFeatures({
-      where: '1=1', outFields: ['date'], returnGeometry: false, num: 20000,
+      where: '1=1', outFields: ['date', oidField], returnGeometry: false, num: 50000,
     })
+    bldOidsByYear.clear()
     const yearSet = new Set<number>()
     for (const f of res?.features ?? []) {
       const d = f.attributes?.date ?? f.attributes?.DATE
-      if (d != null) { const y = new Date(d).getFullYear(); if (y > 1980 && y < 2050) yearSet.add(y) }
+      const oid = f.attributes?.[oidField]
+      if (d != null && oid != null) {
+        const y = new Date(d).getFullYear()
+        if (y > 1980 && y < 2050) {
+          yearSet.add(y)
+          const arr = bldOidsByYear.get(y) ?? []
+          arr.push(oid)
+          bldOidsByYear.set(y, arr)
+        }
+      }
     }
     bldYears.value = [...yearSet].sort((a, b) => a - b)
     if (bldYears.value.length) {
@@ -554,12 +570,14 @@ async function initBuilding() {
 }
 
 async function applyBldFilter() {
-  if (!bldLayer) return
+  if (!bldLayerView) return
   const yr = bldYear.value
-  bldLayer.definitionExpression = `date < timestamp '${yr + 1}-01-01 00:00:00'`
-  try {
-    bldCount.value = await bldLayer.queryFeatureCount({ where: `date < timestamp '${yr + 1}-01-01 00:00:00'` })
-  } catch { bldCount.value = null }
+  const oids: number[] = []
+  for (const [y, ids] of bldOidsByYear) {
+    if (y <= yr) oids.push(...ids)
+  }
+  bldLayerView.filter = { objectIds: oids }
+  bldCount.value = oids.length
 }
 
 async function jumpBldYear(yr: number) {
@@ -762,6 +780,8 @@ onUnmounted(() => {
   swipeViewBase?.destroy()
   swipeViewOver?.destroy()
   stopBldPlay()
+  bldLayerView = null
+  bldOidsByYear.clear()
   bldView?.destroy()
   chartInstance?.destroy()
 })
