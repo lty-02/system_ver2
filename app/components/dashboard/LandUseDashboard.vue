@@ -403,12 +403,10 @@ async function initMap() {
 }
 
 function removeAllGL() {
-  const existing = mapView?.map?.findLayerById?.('choro-gl')
-  if (existing) mapView.map.remove(existing)
-  const xinshiGL = mapView?.map?.findLayerById?.('xinshi-border-gl')
-  if (xinshiGL) mapView.map.remove(xinshiGL)
-  const townGL = mapView?.map?.findLayerById?.('town-border-gl')
-  if (townGL) mapView.map.remove(townGL)
+  for (const id of ['choro-gl', 'xinshi-border-gl', 'town-border-gl', 'label-gl']) {
+    const gl = mapView?.map?.findLayerById?.(id)
+    if (gl) mapView.map.remove(gl)
+  }
 }
 
 function renderChoropleth(key: LayerKey) {
@@ -452,6 +450,19 @@ function renderChoropleth(key: LayerKey) {
   }
 
   mapView.map.add(gl)
+
+  // Village name labels
+  if (allBoundaryFeatures.length) {
+    const lgl = new GraphicsLayer({ id: 'label-gl' })
+    for (const f of allBoundaryFeatures) {
+      if (!f.geometry || !f.name) continue
+      const centroid = f.geometry.centroid ?? f.geometry.extent?.center
+      if (!centroid) continue
+      lgl.add(new Graphic({ geometry: centroid, symbol: { type: 'text', text: f.name, color: [30,41,59,220], haloColor: [255,255,255,200], haloSize: 1.5, font: { size: 9 } } as any }))
+    }
+    mapView.map.add(lgl)
+  }
+
   if (sciGL) {
     try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {}
   }
@@ -605,6 +616,18 @@ async function buildAndRenderTownMode(key: LayerKey) {
 
   mapView.map.add(gl)
   mapView.map.add(borderGL)
+
+  // Town name labels
+  const lgl = new GraphicsLayer({ id: 'label-gl' })
+  for (const [tn, geoms] of townGeoMap) {
+    try {
+      const dissolved = geoms.length === 1 ? geoms[0] : geometryEngine.union(geoms.filter(Boolean))
+      if (!dissolved) continue
+      const centroid = dissolved.centroid ?? dissolved.extent?.center
+      if (centroid) lgl.add(new Graphic({ geometry: centroid, symbol: { type: 'text', text: tn, color: [30,41,59,240], haloColor: [255,255,255,220], haloSize: 2, font: { size: 11, weight: 'bold' } } as any }))
+    } catch {}
+  }
+  mapView.map.add(lgl)
   if (sciGL) {
     try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {}
   }
@@ -622,6 +645,7 @@ async function switchScaleMode(mode: 'village' | 'town') {
     await addXinshiBorder()
     try { await mapView?.goTo({ center: [120.295483, 23.080482], zoom: 12 }) } catch {}
   }
+  drawAllCharts()
 }
 
 async function handleMapClick(event: any) {

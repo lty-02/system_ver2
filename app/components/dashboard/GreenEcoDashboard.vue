@@ -295,7 +295,7 @@ function buildKPIs() {
 
 // ── 工具：移除所有 GL 圖層 ────────────────────────────────────
 function removeAllGL() {
-  for (const id of ['choro-gl', 'town-border-gl', 'xinshi-border-gl']) {
+  for (const id of ['choro-gl', 'town-border-gl', 'xinshi-border-gl', 'label-gl']) {
     const gl = mapView?.map?.findLayerById?.(id)
     if (gl) mapView.map.remove(gl)
   }
@@ -396,6 +396,19 @@ async function renderTownChoropleth() {
         } as any,
       }))
     }
+    // Town name labels
+    const labelGL = new GraphicsLayer({ id: 'label-gl' })
+    for (const [townname, geoms] of townGeoms.entries()) {
+      const filtered = geoms.filter(Boolean)
+      if (!filtered.length) continue
+      try {
+        const dissolved = filtered.length === 1 ? filtered[0] : geometryEngine.union(filtered)
+        if (!dissolved) continue
+        const centroid = dissolved.centroid ?? dissolved.extent?.center
+        if (centroid) labelGL.add(new Graphic({ geometry: centroid, symbol: { type: 'text', text: townname, color: [30,41,59,240], haloColor: [255,255,255,220], haloSize: 2, font: { size: 11, weight: 'bold' } } as any }))
+      } catch {}
+    }
+    mapView.map.add(labelGL)
     mapView.map.add(borderGL)
   } catch (e) { console.warn('[GreenEco] town border failed', e) }
 
@@ -460,6 +473,17 @@ async function renderChoropleth() {
       mapView.map.add(borderGL)
     } catch (e) { console.warn('[GreenEco] xinshi border failed', e) }
   }
+
+  // Village name labels
+  const lgl = new GraphicsLayer({ id: 'label-gl' })
+  for (const r of allRows) {
+    const geo = activeYear.value === 2020 ? r.geo20 : r.geo22
+    if (!geo) continue
+    const centroid = geo.centroid ?? geo.extent?.center
+    if (!centroid) continue
+    lgl.add(new Graphic({ geometry: centroid, symbol: { type: 'text', text: r.name, color: [30,41,59,220], haloColor: [255,255,255,200], haloSize: 1.5, font: { size: 9 } } as any }))
+  }
+  mapView.map.add(lgl)
 
   if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }
 }
