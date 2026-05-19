@@ -1158,7 +1158,14 @@ onMounted(async () => {
           case 'care':  processCare(feats,  allScores24.care);         break
           case 'eco':   processEco(feats,   allScores24.eco);          break
           case 'house': processHouse(feats, allScores24.house, false); break
-          case 'env':   processEnv(feats,   allScores24.env,   false); break
+          case 'env':
+            processEnv(feats, allScores24.env, false)
+            // 若初始新市區查詢失敗導致 envPct 全為 0，以全台南資料補填並重繪
+            if (!scores24.env.size) {
+              processEnv(feats, scores24.env, true)
+              nextTick().then(() => { if (scaleMode.value === 'village' && !changeMode.env) drawEnv() })
+            }
+            break
         }
       } catch {}
     }
@@ -1257,7 +1264,7 @@ onUnmounted(() => {
 /* ── 右側 ── */
 .right-col {
   grid-column: 2; grid-row: 1 / 3;
-  display: flex; flex-direction: column; gap: 8px; min-height: 0;
+  display: grid; grid-template-rows: 1fr 1fr; gap: 8px; min-height: 0;
 }
 
 /* ── 下排 ── */
