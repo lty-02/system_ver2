@@ -639,7 +639,8 @@ async function applyChoro(idxKey: IdxKey) {
     if (!geometry) continue
     const v = sm.get(name)
     const color = v != null ? toRgba(v.score) : [200, 200, 200, 100]
-    gl.add(new Graphic({ geometry, attributes: { name }, symbol: { type: 'simple-fill', color, outline: { color: [15,23,42,160], width: 1.0 } } as any }))
+    const isXinshi = (f as any).townname === '新市區'
+    gl.add(new Graphic({ geometry, attributes: { name }, symbol: { type: 'simple-fill', color, outline: { color: isXinshi?[0,0,0,220]:[15,23,42,160], width: isXinshi?2.0:1.0 } } as any }))
   }
   mapView.map.add(gl)
 

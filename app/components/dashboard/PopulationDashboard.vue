@@ -407,7 +407,8 @@ async function applyChoro(key: CardKey, colors: readonly string[]) {
     for (const f of features) {
       const v = dataMap.get(f.name)
       const color = v != null ? toColor(v) : [200,200,200,120]
-      gl.add(new Graphic({ geometry: f.geometry, attributes: { name: f.name }, symbol: { type:'simple-fill', color, outline:{color:[15,23,42,160],width:1.0} } as any }))
+      const isXinshi = (f as any).townname === '新市區'
+      gl.add(new Graphic({ geometry: f.geometry, attributes: { name: f.name }, symbol: { type:'simple-fill', color, outline:{color: isXinshi?[0,0,0,220]:[15,23,42,160], width: isXinshi?2.0:1.0} } as any }))
     }
     mapView.map.add(gl)
 
