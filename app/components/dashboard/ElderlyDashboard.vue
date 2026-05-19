@@ -659,7 +659,7 @@ async function applyChoro(idxKey: IdxKey) {
   // Draw thick xinshi border
   const xinshiGeoms = allBoundaryFeatures.filter(f => f.townname === '新市區').map(f => f.geometry).filter(Boolean)
   if (xinshiGeoms.length > 0) {
-    const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+    const geometryEngine = await import('@arcgis/core/geometry/geometryEngine').then((m: any) => m.default ?? m)
     const dissolved = xinshiGeoms.length === 1 ? xinshiGeoms[0] : geometryEngine.union(xinshiGeoms)
     const bgl = new GraphicsLayer({ id: 'xinshi-border-gl' })
     bgl.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type: 'simple-fill', color: [0,0,0,0], outline: { color: [220,38,38,255], width: 2.5 } } as any }))
@@ -737,7 +737,7 @@ async function applyTownChoro(idxKey: IdxKey) {
 
   const gl = new GraphicsLayer({ id: 'choro-gl' })
   const borderGL = new GraphicsLayer({ id: 'town-border-gl' })
-  const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+  const geometryEngine = await import('@arcgis/core/geometry/geometryEngine').then((m: any) => m.default ?? m)
 
   const townGeoMap = new Map<string, any[]>()
   for (const f of allBoundaryFeatures) {

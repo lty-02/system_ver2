@@ -373,7 +373,7 @@ async function addXinshiBorder() {
   const xinshiGeoms = allBoundaryFeatures.filter(f => f.townname === '新市區').map(f => f.geometry).filter(Boolean)
   if (!xinshiGeoms.length || !mapView) return
   try {
-    const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+    const geometryEngine = await import('@arcgis/core/geometry/geometryEngine').then((m: any) => m.default ?? m)
     const dissolved = xinshiGeoms.length === 1 ? xinshiGeoms[0] : geometryEngine.union(xinshiGeoms)
     if (!dissolved) return
     const bgl = new GraphicsLayer({ id: 'xinshi-border-gl' })
@@ -461,7 +461,7 @@ async function loadAllTainanFacilities(ws: any) {
 // ── Render town choropleth (town mode) ───────────────────────
 async function renderTownChoropleth() {
   if (!mapView || !allBoundaryFeatures.length) return
-  const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+  const geometryEngine = await import('@arcgis/core/geometry/geometryEngine').then((m: any) => m.default ?? m)
 
   const townGeoMap = new Map<string, any[]>()
   for (const f of allBoundaryFeatures) {
@@ -657,7 +657,7 @@ async function loadData() {
 
       // ── Build buffered polygon (union of village polygons + 500m buffer) ──
       try {
-        const geometryEngine = await import('@arcgis/core/geometry/geometryEngine')
+        const geometryEngine = await import('@arcgis/core/geometry/geometryEngine').then((m: any) => m.default ?? m)
         const polys = villageFeatures.map((f: any) => f.geometry).filter(Boolean)
         if (polys.length > 0) {
           const union = polys.length === 1 ? polys[0] : geometryEngine.union(polys)

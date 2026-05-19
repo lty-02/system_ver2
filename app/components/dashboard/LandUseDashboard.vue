@@ -478,7 +478,7 @@ async function addXinshiBorder() {
     .filter(Boolean)
   if (!xinshiGeoms.length || !mapView) return
   try {
-    const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+    const geometryEngine = await import('@arcgis/core/geometry/geometryEngine').then((m: any) => m.default ?? m)
     const dissolved = xinshiGeoms.length === 1
       ? xinshiGeoms[0]
       : geometryEngine.union(xinshiGeoms)
@@ -508,7 +508,7 @@ async function buildAndRenderTownMode(key: LayerKey) {
   const data = layerData.value[srcKey]
   if (!data || !data.geos.length) return
 
-  const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+  const geometryEngine = await import('@arcgis/core/geometry/geometryEngine').then((m: any) => m.default ?? m)
 
   // Build town → dominant zone map using spatial intersect (if not cached)
   if (townDominantZone.size === 0) {
