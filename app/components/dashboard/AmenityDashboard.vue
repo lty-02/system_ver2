@@ -356,6 +356,19 @@ function renderVillages(allFeatures: any[], _xinshiFeatures: any[]) {
     }))
   }
   mapView.map.add(gl, 0)
+
+  // Village name labels
+  if (allBoundaryFeatures.length) {
+    const existingLbl = mapView.map.findLayerById('label-gl'); if (existingLbl) mapView.map.remove(existingLbl)
+    const lgl = new GraphicsLayer({ id: 'label-gl' })
+    for (const f of allBoundaryFeatures) {
+      if (!f.geometry || !f.name) continue
+      const centroid = f.geometry.centroid ?? f.geometry.extent?.center
+      if (!centroid) continue
+      lgl.add(new Graphic({ geometry: centroid, symbol: { type: 'text', text: f.name, color: [30,41,59,220], haloColor: [255,255,255,200], haloSize: 1.5, font: { size: 9 } } as any }))
+    }
+    mapView.map.add(lgl)
+  }
 }
 
 // ── Render facility points for active key ─────────────────────
@@ -513,10 +526,9 @@ async function renderTownChoropleth() {
   }
 
   // Remove existing layers
-  const existingVillage = mapView.map.findLayerById('village-gl'); if (existingVillage) mapView.map.remove(existingVillage)
-  const existingXinshi = mapView.map.findLayerById('xinshi-border-gl'); if (existingXinshi) mapView.map.remove(existingXinshi)
-  const existingTownBorder = mapView.map.findLayerById('town-border-gl'); if (existingTownBorder) mapView.map.remove(existingTownBorder)
-  const existingChoro = mapView.map.findLayerById('choro-gl'); if (existingChoro) mapView.map.remove(existingChoro)
+  for (const lid of ['village-gl', 'xinshi-border-gl', 'town-border-gl', 'choro-gl', 'label-gl']) {
+    const el = mapView.map.findLayerById(lid); if (el) mapView.map.remove(el)
+  }
 
   const gl = new GraphicsLayer({ id: 'choro-gl' })
   const borderGL = new GraphicsLayer({ id: 'town-border-gl' })
@@ -553,6 +565,15 @@ async function renderTownChoropleth() {
 
   mapView.map.add(gl, 0)
   mapView.map.add(borderGL)
+
+  // Town name labels
+  const existingLbl = mapView.map.findLayerById('label-gl'); if (existingLbl) mapView.map.remove(existingLbl)
+  const lgl = new GraphicsLayer({ id: 'label-gl' })
+  for (const [tn, poly] of townPolygons) {
+    const centroid = poly.centroid ?? poly.extent?.center
+    if (centroid) lgl.add(new Graphic({ geometry: centroid, symbol: { type: 'text', text: tn, color: [30,41,59,240], haloColor: [255,255,255,220], haloSize: 2, font: { size: 11, weight: 'bold' } } as any }))
+  }
+  mapView.map.add(lgl)
   if (sciGL) {
     try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {}
   }
