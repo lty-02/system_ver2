@@ -164,7 +164,7 @@ const THEMES = [
     fmt: (v: number|null) => v != null ? v.toFixed(3) : '—' },
   { key: 'green' as TK, label: '綠覆蓋率', color: '#16a34a', unit: '%',
     colors: ['#f0fdf4','#86efac','#16a34a','#15803d','#14532d'] as const,
-    fmt: (v: number|null) => v != null ? (v * 100).toFixed(1) + '%' : '—' },
+    fmt: (v: number|null) => v != null ? v.toFixed(1) + '%' : '—' },
 ] as const
 
 interface BF { name: string; geometry: any; townname: string }
