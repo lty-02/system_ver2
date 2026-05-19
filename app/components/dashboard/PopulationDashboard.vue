@@ -408,7 +408,7 @@ async function applyChoro(key: CardKey, colors: readonly string[]) {
       const v = dataMap.get(f.name)
       const color = v != null ? toColor(v) : [200,200,200,120]
       const isXinshi = (f as any).townname === '新市區'
-      gl.add(new Graphic({ geometry: f.geometry, attributes: { name: f.name }, symbol: { type:'simple-fill', color, outline:{color: isXinshi?[0,0,0,220]:[15,23,42,160], width: isXinshi?2.0:1.0} } as any }))
+      gl.add(new Graphic({ geometry: f.geometry, attributes: { name: f.name }, symbol: { type:'simple-fill', color, outline:{color: isXinshi?[220,38,38,255]:[15,23,42,160], width: isXinshi?2.0:1.0} } as any }))
     }
     mapView.map.add(gl)
 
@@ -432,7 +432,7 @@ async function applyChoro(key: CardKey, colors: readonly string[]) {
       const existingBgl = mapView.map.findLayerById('xinshi-border-gl')
       if (existingBgl) mapView.map.remove(existingBgl)
       const bgl = new GraphicsLayer({ id: 'xinshi-border-gl' })
-      bgl.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type:'simple-fill', color:[0,0,0,0], outline:{color:[0,0,0,255],width:2.5} } as any }))
+      bgl.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type:'simple-fill', color:[0,0,0,0], outline:{color:[220,38,38,255],width:2.5} } as any }))
       mapView.map.add(bgl)
     }
 
@@ -522,7 +522,7 @@ async function applyTownChoro(key: CardKey) {
       const dissolved = geoms.length===1 ? geoms[0] : geometryEngine.union(geoms.filter(Boolean))
       if (dissolved) {
         const isX = townname==='新市區'
-        borderGL.add(new Graphic({ geometry: markRaw(dissolved), symbol:{type:'simple-fill',color:[0,0,0,0],outline:{color:isX?[0,0,0,255]:[15,23,42,200],width:isX?3.0:2.0}} as any }))
+        borderGL.add(new Graphic({ geometry: markRaw(dissolved), symbol:{type:'simple-fill',color:[0,0,0,0],outline:{color:isX?[220,38,38,255]:[15,23,42,200],width:isX?3.0:2.0}} as any }))
       }
     } catch {}
   }

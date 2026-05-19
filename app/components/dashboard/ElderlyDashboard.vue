@@ -640,7 +640,7 @@ async function applyChoro(idxKey: IdxKey) {
     const v = sm.get(name)
     const color = v != null ? toRgba(v.score) : [200, 200, 200, 100]
     const isXinshi = (f as any).townname === '新市區'
-    gl.add(new Graphic({ geometry, attributes: { name }, symbol: { type: 'simple-fill', color, outline: { color: isXinshi?[0,0,0,220]:[15,23,42,160], width: isXinshi?2.0:1.0 } } as any }))
+    gl.add(new Graphic({ geometry, attributes: { name }, symbol: { type: 'simple-fill', color, outline: { color: isXinshi?[220,38,38,255]:[15,23,42,160], width: isXinshi?2.0:1.0 } } as any }))
   }
   mapView.map.add(gl)
 
@@ -662,7 +662,7 @@ async function applyChoro(idxKey: IdxKey) {
     const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
     const dissolved = xinshiGeoms.length === 1 ? xinshiGeoms[0] : geometryEngine.union(xinshiGeoms)
     const bgl = new GraphicsLayer({ id: 'xinshi-border-gl' })
-    bgl.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type: 'simple-fill', color: [0,0,0,0], outline: { color: [0,0,0,255], width: 2.5 } } as any }))
+    bgl.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type: 'simple-fill', color: [0,0,0,0], outline: { color: [220,38,38,255], width: 2.5 } } as any }))
     mapView.map.add(bgl)
   }
 
@@ -756,7 +756,7 @@ async function applyTownChoro(idxKey: IdxKey) {
       const dissolved = geoms.length === 1 ? geoms[0] : geometryEngine.union(geoms.filter(Boolean))
       if (dissolved) {
         const isX = townname === '新市區'
-        borderGL.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type: 'simple-fill', color: [0,0,0,0], outline: { color: isX ? [0,0,0,255] : [15,23,42,200], width: isX ? 3.0 : 2.0 } } as any }))
+        borderGL.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type: 'simple-fill', color: [0,0,0,0], outline: { color: isX ? [220,38,38,255] : [15,23,42,200], width: isX ? 3.0 : 2.0 } } as any }))
       }
     } catch {}
   }
@@ -1106,8 +1106,6 @@ onMounted(async () => {
   // 地圖初始化（同 PopulationDashboard）
   await initMap()
 
-  if (cachedGeos.length) applyChoro('mob')
-
   // 載入邊界背景 + allBoundaryFeatures
   if (boundaryUrl) {
     try {
@@ -1125,6 +1123,7 @@ onMounted(async () => {
           return { geometry: markRaw(f.geometry), townname: tn, name: villKey ? String(a[villKey] ?? '') : '' }
         }).filter((f: any) => f.geometry)
         console.log('[EldDash] allBoundaryFeatures:', allBoundaryFeatures.length)
+        if (cachedGeos.length) applyChoro('mob')
 
         const xinshiFeats = bRes.features.filter((f: any) => {
           const a = f.attributes ?? {}
