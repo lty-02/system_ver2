@@ -83,8 +83,8 @@
       </div>
     </div>
 
-    <!-- ══ 下排 5 張卡 ══ -->
-    <div class="bottom-row">
+    <!-- ══ 右側 2 張卡 ══ -->
+    <div class="right-col">
 
       <!-- 行動健康：各村里 ADL 需求比 -->
       <div class="ind-card" :class="{ 'card-active': activeIdx==='mob' }" @click="activateIndex('mob')">
@@ -115,6 +115,10 @@
         <div class="ind-desc">居住型態：獨居 / 老老照顧 / 非獨居</div>
         <div class="canvas-wrap"><canvas :ref="el => setRef('care', el as HTMLCanvasElement)"></canvas></div>
       </div>
+    </div>
+
+    <!-- ══ 下排 3 張卡 ══ -->
+    <div class="bottom-row">
 
       <!-- 經濟狀況：低收比例堆疊 -->
       <div class="ind-card" :class="{ 'card-active': activeIdx==='eco' }" @click="activateIndex('eco')">
@@ -645,7 +649,7 @@ async function applyChoro(idxKey: IdxKey) {
     const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
     const dissolved = xinshiGeoms.length === 1 ? xinshiGeoms[0] : geometryEngine.union(xinshiGeoms)
     const bgl = new GraphicsLayer({ id: 'xinshi-border-gl' })
-    bgl.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type: 'simple-fill', color: [0,0,0,0], outline: { color: [0,0,0,255], width: 4.0 } } as any }))
+    bgl.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type: 'simple-fill', color: [0,0,0,0], outline: { color: [0,0,0,255], width: 2.5 } } as any }))
     mapView.map.add(bgl)
   }
 
@@ -738,7 +742,8 @@ async function applyTownChoro(idxKey: IdxKey) {
     try {
       const dissolved = geoms.length === 1 ? geoms[0] : geometryEngine.union(geoms.filter(Boolean))
       if (dissolved) {
-        borderGL.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type: 'simple-fill', color: [0,0,0,0], outline: { color: [0,0,0,255], width: townname === '新市區' ? 3.5 : 2.0 } } as any }))
+        const isX = townname === '新市區'
+        borderGL.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type: 'simple-fill', color: [0,0,0,0], outline: { color: isX ? [0,0,0,255] : [15,23,42,200], width: isX ? 3.0 : 2.0 } } as any }))
       }
     } catch {}
   }
@@ -1153,14 +1158,7 @@ onMounted(async () => {
           case 'care':  processCare(feats,  allScores24.care);         break
           case 'eco':   processEco(feats,   allScores24.eco);          break
           case 'house': processHouse(feats, allScores24.house, false); break
-          case 'env':
-            processEnv(feats, allScores24.env, false)
-            // If initial 新市區 query failed, populate envPct from all-Tainan data and redraw
-            if (!scores24.env.size) {
-              processEnv(feats, scores24.env, true)
-              nextTick().then(() => { if (scaleMode.value === 'village' && !changeMode.env) drawEnv() })
-            }
-            break
+          case 'env':   processEnv(feats,   allScores24.env,   false); break
         }
       } catch {}
     }
@@ -1195,7 +1193,7 @@ onUnmounted(() => {
 .eld-dash {
   width: 100%; height: 100%; overflow: hidden;
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr 270px;
   grid-template-rows: 1fr 215px;
   gap: 8px; padding: 8px;
   background: #f1f5f9;
@@ -1204,7 +1202,7 @@ onUnmounted(() => {
 
 /* ── 地圖 ── */
 .map-wrap {
-  grid-column: 1; grid-row: 1; /* spans full width in single-column grid */
+  grid-column: 1; grid-row: 1;
   position: relative; border-radius: 12px; overflow: hidden;
   border: 1px solid #e2e8f0; background: #e2e8f0;
 }
@@ -1256,10 +1254,16 @@ onUnmounted(() => {
   background: linear-gradient(to right, #2166ac,#4393c3,#92c5de,#d1e5f0,#f7f7f7,#fddbc7,#f4a582,#d6604d,#b2182b);
 }
 
-/* ── 下排 5 張卡 ── */
+/* ── 右側 ── */
+.right-col {
+  grid-column: 2; grid-row: 1 / 3;
+  display: flex; flex-direction: column; gap: 8px; min-height: 0;
+}
+
+/* ── 下排 ── */
 .bottom-row {
   grid-column: 1; grid-row: 2;
-  display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; min-height: 0;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; min-height: 0;
 }
 
 /* ── 通用卡片 ── */
