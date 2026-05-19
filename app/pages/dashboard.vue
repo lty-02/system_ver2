@@ -158,7 +158,7 @@ const temporalLayerKey = ref('household')
 
 // 行政區概覽
 const areaRole  = ref<'public' | 'authority'>('public')
-const areaTheme = ref('population')
+const areaTheme = ref('overview')
 
 // ── 南科設定 ──
 const nankeSettings = ref({ mode: 'story', swipeLeft: '2000', swipeRight: '2025', eraKey: '2000' })
