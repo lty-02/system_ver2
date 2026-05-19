@@ -1,8 +1,11 @@
 <template>
   <div class="ap-root">
 
+    <!-- 決策機關：綜合概覽 (shared) -->
+    <OverviewDashboard v-if="theme === 'overview'" />
+
     <!-- 決策機關：社會脆弱度 -->
-    <SocialVulnerabilityDashboard v-if="userRole === 'authority' && theme === 'vulnerability'" />
+    <SocialVulnerabilityDashboard v-else-if="userRole === 'authority' && theme === 'vulnerability'" />
     <LandUseDashboard    v-else-if="userRole === 'authority' && theme === 'landuse'" />
     <GreenEcoDashboard  v-else-if="userRole === 'authority' && theme === 'nature'" />
 
@@ -23,6 +26,7 @@
     <template v-else>
       <!-- 人口結構：整頁 PopulationDashboard -->
       <PopulationDashboard v-if="theme === 'population'" />
+
 
       <!-- 房市交易：整頁 HousingDashboard -->
       <HousingDashboard v-else-if="theme === 'housing'" />
@@ -199,6 +203,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import OverviewDashboard             from '@/components/dashboard/OverviewDashboard.vue'
 import PopulationDashboard          from '@/components/dashboard/PopulationDashboard.vue'
 import ElderlyDashboard             from '@/components/dashboard/ElderlyDashboard.vue'
 import SocialVulnerabilityDashboard from '@/components/dashboard/SocialVulnerabilityDashboard.vue'
