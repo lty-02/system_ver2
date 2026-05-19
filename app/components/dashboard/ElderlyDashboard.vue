@@ -1264,7 +1264,7 @@ onUnmounted(() => {
 /* ── 右側 ── */
 .right-col {
   grid-column: 2; grid-row: 1 / 3;
-  display: flex; flex-direction: column; gap: 8px; min-height: 0;
+  display: grid; grid-template-rows: 1fr 1fr; gap: 8px; min-height: 0;
 }
 
 /* ── 下排 ── */
