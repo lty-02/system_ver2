@@ -74,7 +74,9 @@
           <span class="cb-title">指標雷達</span>
           <span class="cb-sub">{{ selVill ? selVill.name + ' vs 均' : '新市區均值' }}</span>
         </div>
-        <canvas ref="radarEl" class="radar-cv" />
+        <div class="cv-wrap">
+          <canvas ref="radarEl" />
+        </div>
         <div class="radar-legend">
           <span class="rl-item"><span class="rl-swatch swatch-avg" />均值</span>
           <span v-if="selVill" class="rl-item"><span class="rl-swatch swatch-sel" />{{ selVill.name }}</span>
@@ -88,14 +90,18 @@
             <span class="cb-title">五分位分佈</span>
             <span class="cb-sub">{{ activeThemeObj?.label }}</span>
           </div>
-          <canvas ref="donutEl" class="donut-cv" />
+          <div class="cv-wrap">
+            <canvas ref="donutEl" />
+          </div>
         </div>
         <div class="chart-box">
           <div class="cb-hdr">
             <span class="cb-title">村里排行</span>
             <span class="cb-sub">前 12</span>
           </div>
-          <canvas ref="barEl" class="bar-cv" />
+          <div class="cv-wrap">
+            <canvas ref="barEl" />
+          </div>
         </div>
       </div>
 
@@ -125,7 +131,9 @@
             </div>
           </div>
         </div>
-        <canvas ref="scatterEl" class="scatter-cv" />
+        <div class="cv-wrap">
+          <canvas ref="scatterEl" />
+        </div>
       </div>
     </div>
 
@@ -762,7 +770,7 @@ onUnmounted(() => {
 .ov-dash {
   width: 100%; height: 100%; overflow: hidden;
   display: grid;
-  grid-template-columns: 1fr 300px;
+  grid-template-columns: 1fr 420px;
   grid-template-rows: 100px 1fr;
   gap: 8px; padding: 8px;
   background: #f1f5f9; box-sizing: border-box;
@@ -781,11 +789,11 @@ onUnmounted(() => {
 }
 .kpi-card.active { border-color: var(--c); background: color-mix(in srgb, var(--c) 8%, #fff); }
 .kpi-card:hover:not(.active) { background: #f8fafc; }
-.kc-top { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.kc-top { display: flex; align-items: center; gap: 6px; }
 .kc-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .kc-label { font-size: 11px; color: #64748b; font-weight: 500; }
 .kc-val { font-size: 22px; font-weight: 700; color: #1e293b; line-height: 1.1; letter-spacing: -0.5px; }
-.kc-footer { display: flex; justify-content: space-between; margin-top: 4px; }
+.kc-footer { display: flex; justify-content: space-between; }
 .kc-unit { font-size: 10px; color: #94a3b8; }
 .kc-n { font-size: 10px; color: #94a3b8; }
 
@@ -793,7 +801,7 @@ onUnmounted(() => {
 .map-wrap {
   grid-column: 1; grid-row: 2;
   position: relative; border-radius: 12px; overflow: hidden;
-  border: 1px solid #e2e8f0; background: #e8eef4;
+  border: 1px solid #e2e8f0; background: #e8eef4; min-height: 0;
 }
 .map-el { width: 100%; height: 100%; }
 .map-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(248,250,252,.82); z-index: 10; }
@@ -839,7 +847,7 @@ onUnmounted(() => {
 .popup-fade-enter-active, .popup-fade-leave-active { transition: opacity .2s, transform .2s; }
 .popup-fade-enter-from, .popup-fade-leave-to { opacity: 0; transform: translateY(6px); }
 
-/* ── 右側面板：右下，flex 均分高度，禁止捲動 ── */
+/* ── 右側面板：固定寬 420px，flex 分配高度，禁止捲動 ── */
 .right-panel {
   grid-column: 2; grid-row: 2;
   display: flex; flex-direction: column; gap: 6px;
@@ -850,27 +858,33 @@ onUnmounted(() => {
 .rp-title { font-size: 13px; font-weight: 700; color: #1e293b; }
 .rp-sub { font-size: 10px; color: #94a3b8; margin-top: 1px; display: block; }
 
-/* 共用圖表框：flex 均分，canvas 填滿剩餘空間 */
+/* 圖表外框 */
 .chart-box {
   background: #fff; border-radius: 10px; border: 1px solid #e2e8f0;
-  padding: 9px 10px; display: flex; flex-direction: column;
-  min-height: 0;
+  padding: 9px 10px; display: flex; flex-direction: column; min-height: 0;
 }
-.radar-box  { flex: 3; }
-.twin-row   { flex: 2.5; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.scatter-box { flex: 2.5; }
+.radar-box   { flex: 3; min-height: 0; }
+.scatter-box { flex: 2.5; min-height: 0; }
 
-.twin-row > .chart-box { flex: 1; }
+/* twin-row 是 flex child，內含 2 欄 grid */
+.twin-row {
+  flex: 2.5; min-height: 0;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+}
+.twin-row > .chart-box { min-height: 0; }
 
 .cb-hdr { display: flex; align-items: baseline; gap: 5px; margin-bottom: 5px; flex-shrink: 0; }
 .cb-title { font-size: 11px; font-weight: 700; color: #1e293b; }
 .cb-sub { font-size: 9.5px; color: #94a3b8; }
 
-/* canvas 佔滿剩餘高度 */
-.radar-cv   { flex: 1; width: 100%; min-height: 0; display: block; }
-.donut-cv   { flex: 1; width: 100%; min-height: 0; display: block; }
-.bar-cv     { flex: 1; width: 100%; min-height: 0; display: block; }
-.scatter-cv { flex: 1; width: 100%; min-height: 0; display: block; }
+/* ── canvas 包裝層：相對定位，canvas 絕對填滿 ── */
+/* 這是防止 Chart.js 無限增長的標準做法 */
+.cv-wrap {
+  flex: 1; min-height: 0; position: relative; overflow: hidden;
+}
+.cv-wrap canvas {
+  position: absolute; inset: 0; width: 100% !important; height: 100% !important;
+}
 
 .radar-legend { display: flex; gap: 10px; justify-content: center; margin-top: 4px; flex-shrink: 0; }
 .rl-item { display: flex; align-items: center; gap: 4px; font-size: 9px; color: #64748b; }
