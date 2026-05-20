@@ -170,22 +170,56 @@
 
     <!-- ═══════ 建物發展 ═══════ -->
     <div v-else-if="activeMode === 'building'" class="building-layout">
-      <div class="bld-map-wrap">
+
+      <!-- 地圖卡片 -->
+      <div class="bld-map-card">
         <div ref="bldMapDivRef" class="map-div"></div>
         <div class="map-loading" v-if="isLoading"><div class="spinner"></div><span>載入建物資料中…</span></div>
+
         <!-- 年份 badge：懸浮左上 -->
         <div class="bld-badge" v-if="bldYears.length">
           <span class="bld-year-label">年份</span>
           <span class="bld-year">{{ bldYear }}</span>
           <span class="bld-count" v-if="bldCount !== null">{{ bldCount.toLocaleString() }} 棟</span>
         </div>
+
+        <!-- 年份渲染色階圖例：右上 -->
+        <div class="bld-legend" v-if="colorByYear && bldYears.length">
+          <div class="bld-legend-bar"></div>
+          <div class="bld-legend-labels">
+            <span>{{ bldYears[0] }}</span>
+            <span>{{ bldYears[bldYears.length - 1] }}</span>
+          </div>
+        </div>
+
+        <!-- 右上控制列 -->
+        <div class="bld-map-controls" v-if="bldYears.length">
+          <button
+            class="bld-ctrl-btn"
+            :class="{ active: colorByYear }"
+            @click="toggleColorByYear"
+            title="依年份著色"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+              <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+            </svg>
+            <span>年份著色</span>
+          </button>
+        </div>
+
         <!-- 播放鍵：懸浮右下 -->
         <button class="bld-play-fab" @click="toggleBldPlay" v-if="bldYears.length">
           <svg v-if="!isBldPlaying" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>
           <svg v-else viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
         </button>
       </div>
-      <div class="bld-ts-bar" v-if="bldYears.length">
+
+      <!-- 時間軸卡片 -->
+      <div class="bld-ts-card" v-if="bldYears.length">
+        <div class="bld-ts-header">
+          <span class="bld-ts-title">建物登記時序</span>
+          <span class="bld-ts-range">{{ bldYears[0] }} – {{ bldYears[bldYears.length - 1] }}</span>
+        </div>
         <div class="bld-track-wrap">
           <div class="bld-track" ref="bldTrackRef" @click="onBldTrackClick">
             <div class="bld-fill" :style="{ width: bldProgress + '%' }"></div>
@@ -203,6 +237,7 @@
           </div>
         </div>
       </div>
+
     </div>
 
   </div>
@@ -253,11 +288,13 @@ let bldView: any        = null
 let bldLayer: any       = null
 let bldLayerView: any   = null
 let bldOidsByYear       = new Map<number, number[]>()
+let bldOriginalRenderer: any = null
 let bldPlayTimer: ReturnType<typeof setInterval> | null = null
-const bldYears    = ref<number[]>([])
-const bldYear     = ref(2000)
-const bldCount    = ref<number | null>(null)
+const bldYears     = ref<number[]>([])
+const bldYear      = ref(2000)
+const bldCount     = ref<number | null>(null)
 const isBldPlaying = ref(false)
+const colorByYear  = ref(false)
 const bldProgress = computed(() => {
   if (!bldYears.value.length) return 0
   const i = bldYears.value.indexOf(bldYear.value)
@@ -585,6 +622,40 @@ async function jumpBldYear(yr: number) {
   await applyBldFilter()
 }
 
+async function toggleColorByYear() {
+  if (!bldLayer || !bldYears.value.length) return
+  colorByYear.value = !colorByYear.value
+  if (colorByYear.value) {
+    if (!bldOriginalRenderer) bldOriginalRenderer = bldLayer.renderer
+    const minEpoch = new Date(bldYears.value[0]!, 0, 1).getTime()
+    const maxEpoch = new Date(bldYears.value[bldYears.value.length - 1]!, 11, 31).getTime()
+    const [
+      { default: SimpleRenderer },
+      { default: MeshSymbol3D },
+      { default: FillSymbol3DLayer },
+    ] = await Promise.all([
+      import('@arcgis/core/renderers/SimpleRenderer'),
+      import('@arcgis/core/symbols/MeshSymbol3D'),
+      import('@arcgis/core/symbols/FillSymbol3DLayer'),
+    ])
+    bldLayer.renderer = new SimpleRenderer({
+      symbol: new MeshSymbol3D({ symbolLayers: [new FillSymbol3DLayer()] }),
+      visualVariables: [{
+        type: 'color',
+        field: 'date',
+        stops: [
+          { value: minEpoch, color: [180, 215, 255, 255] },
+          { value: minEpoch + (maxEpoch - minEpoch) * 0.33, color: [80, 145, 240, 255] },
+          { value: minEpoch + (maxEpoch - minEpoch) * 0.66, color: [40, 90, 200, 255] },
+          { value: maxEpoch, color: [15, 45, 140, 255] },
+        ],
+      }],
+    })
+  } else {
+    if (bldOriginalRenderer) bldLayer.renderer = bldOriginalRenderer
+  }
+}
+
 async function onBldTrackClick(e: MouseEvent) {
   if (!bldTrackRef.value || !bldYears.value.length) return
   const rect = bldTrackRef.value.getBoundingClientRect()
@@ -780,6 +851,8 @@ onUnmounted(() => {
   swipeViewBase?.destroy()
   swipeViewOver?.destroy()
   stopBldPlay()
+  colorByYear.value = false
+  bldOriginalRenderer = null
   bldLayerView = null
   bldOidsByYear.clear()
   bldView?.destroy()
@@ -1074,10 +1147,19 @@ onUnmounted(() => {
 /* ══════════════════════════════
    建物發展模式
 ══════════════════════════════ */
-.building-layout { display: flex; flex-direction: column; height: 100%; gap: 0; }
-.bld-map-wrap {
+.building-layout {
+  display: flex; flex-direction: column; height: 100%;
+  gap: 8px; padding: 10px;
+  background: var(--color-background-secondary, #f8fafc);
+  box-sizing: border-box;
+}
+
+/* 地圖卡片 */
+.bld-map-card {
   flex: 1; min-height: 0; position: relative;
-  border-bottom: 0.5px solid var(--color-border-tertiary);
+  border-radius: 12px; overflow: hidden;
+  border: 0.5px solid var(--color-border-secondary, #e2e8f0);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
 /* 年份 badge — 輕量系統風格 */
@@ -1094,10 +1176,47 @@ onUnmounted(() => {
 .bld-year  { font-size: 18px; font-weight: 700; color: var(--color-text-primary, #1e293b); line-height: 1.1; }
 .bld-count { font-size: 10px; color: var(--color-text-secondary, #64748b); margin-top: 1px; }
 
+/* 地圖右上控制列 */
+.bld-map-controls {
+  position: absolute; top: 10px; right: 10px; z-index: 10;
+  display: flex; gap: 6px;
+}
+.bld-ctrl-btn {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 6px;
+  border: 0.5px solid var(--color-border-secondary, #e2e8f0);
+  background: var(--color-background-primary, #fff);
+  color: var(--color-text-secondary, #64748b);
+  font-size: 11px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.bld-ctrl-btn:hover { border-color: #3B5BDB; color: #3B5BDB; }
+.bld-ctrl-btn.active { background: #3B5BDB; border-color: #3B5BDB; color: #fff; }
+
+/* 年份色階圖例 */
+.bld-legend {
+  position: absolute; bottom: 50px; right: 10px; z-index: 10;
+  background: var(--color-background-primary, #fff);
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: 8px; padding: 8px 10px;
+  pointer-events: none; box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+  min-width: 110px;
+}
+.bld-legend-bar {
+  height: 8px; border-radius: 4px;
+  background: linear-gradient(to right, #b4d7ff, #5091f0, #285ac8, #0f2d8c);
+  margin-bottom: 4px;
+}
+.bld-legend-labels {
+  display: flex; justify-content: space-between;
+  font-size: 9px; color: var(--color-text-tertiary, #9ca3af);
+}
+
 /* 播放鍵 FAB — 懸浮右下 */
 .bld-play-fab {
-  position: absolute; bottom: 12px; right: 12px; z-index: 10;
-  width: 36px; height: 36px; border-radius: 50%;
+  position: absolute; bottom: 10px; right: 10px; z-index: 10;
+  width: 34px; height: 34px; border-radius: 50%;
   border: none; background: #3B5BDB; color: #fff;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; box-shadow: 0 2px 10px rgba(59,91,219,0.4);
@@ -1106,12 +1225,21 @@ onUnmounted(() => {
 .bld-play-fab:hover { background: #2f4ec8; transform: scale(1.08); }
 .bld-play-fab:active { transform: scale(0.96); }
 
-.bld-ts-bar {
+/* 時間軸卡片 */
+.bld-ts-card {
   flex-shrink: 0;
-  padding: 10px 16px;
-  background: var(--color-background-primary);
-  border-top: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-primary, #fff);
+  border: 0.5px solid var(--color-border-secondary, #e2e8f0);
+  border-radius: 10px; padding: 10px 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
 }
+.bld-ts-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px;
+}
+.bld-ts-title { font-size: 11px; font-weight: 600; color: var(--color-text-primary, #1e293b); }
+.bld-ts-range { font-size: 10px; color: var(--color-text-tertiary, #9ca3af); }
+
 .bld-track-wrap { display: flex; flex-direction: column; gap: 5px; }
 .bld-track {
   height: 4px; background: var(--color-border-tertiary);
