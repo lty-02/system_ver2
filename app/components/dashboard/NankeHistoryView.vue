@@ -214,8 +214,8 @@
         </button>
       </div>
 
-      <!-- 時間軸卡片 -->
-      <div class="bld-ts-card" v-if="bldYears.length">
+      <!-- 時間軸卡片（著色模式下隱藏） -->
+      <div class="bld-ts-card" v-if="bldYears.length && !colorByYear">
         <div class="bld-ts-header">
           <span class="bld-ts-title">建物登記時序</span>
           <span class="bld-ts-range">{{ bldYears[0] }} – {{ bldYears[bldYears.length - 1] }}</span>
@@ -626,6 +626,9 @@ async function toggleColorByYear() {
   if (!bldLayer || !bldYears.value.length) return
   colorByYear.value = !colorByYear.value
   if (colorByYear.value) {
+    // Show all buildings (no year filter)
+    if (bldLayerView) bldLayerView.filter = null
+    // Apply year-color renderer
     if (!bldOriginalRenderer) bldOriginalRenderer = bldLayer.renderer
     const minEpoch = new Date(bldYears.value[0]!, 0, 1).getTime()
     const maxEpoch = new Date(bldYears.value[bldYears.value.length - 1]!, 11, 31).getTime()
@@ -652,7 +655,9 @@ async function toggleColorByYear() {
       }],
     })
   } else {
+    // Restore original renderer and re-apply year filter
     if (bldOriginalRenderer) bldLayer.renderer = bldOriginalRenderer
+    await applyBldFilter()
   }
 }
 

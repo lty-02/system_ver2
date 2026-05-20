@@ -10,13 +10,13 @@
       </div>
       <div class="intro-text">
         <div class="intro-title">南科發展歷程</div>
-        <div class="intro-desc">透過 2000–2025 年衛星影像，見證南部科學園區從甘蔗田到世界級半導體聚落的 30 年變遷。</div>
+        <div class="intro-desc">透過衛星影像及三維建物，見證南部科學園區從甘蔗田到世界級半導體聚落的 30 年變遷。</div>
       </div>
     </section>
 
-    <!-- 展示模式 -->
+    <!-- 衛星影像 -->
     <section class="panel-section">
-      <div class="section-label">展示模式</div>
+      <div class="section-label">衛星影像</div>
       <div class="mode-cards">
         <label
           v-for="mode in modes"
@@ -36,7 +36,7 @@
 
     <!-- 建物發展入口 -->
     <section class="panel-section">
-      <div class="section-label">專題圖層</div>
+      <div class="section-label">三維建物</div>
       <button class="bld-btn" @click="emitBuilding">
         <div class="bld-btn-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
@@ -77,39 +77,6 @@
             <option v-for="e in ERAS" :key="e.imageKey" :value="e.imageKey">{{ e.year }}</option>
           </select>
         </div>
-      </div>
-    </section>
-
-    <!-- 時期列表 -->
-    <section class="panel-section">
-      <div class="section-label">影像時期（{{ ERAS.length }} 期）</div>
-      <div class="era-list">
-        <div
-          v-for="e in ERAS"
-          :key="e.imageKey"
-          class="era-item"
-          :class="{ active: selectedEraKey === e.imageKey && selectedMode === 'story' }"
-          @click="selectedMode === 'story' && selectEra(e.imageKey)"
-        >
-          <div class="era-dot" :style="{ background: e.color }"></div>
-          <div class="era-item-body">
-            <div class="era-item-year">{{ e.year }}</div>
-            <div class="era-item-tag">{{ e.tag }}</div>
-          </div>
-          <div class="era-item-arrow" v-if="selectedMode === 'story'">›</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 說明 -->
-    <section class="panel-section info-section">
-      <div class="info-box">
-        <div class="info-header">使用說明</div>
-        <ul class="info-list">
-          <li>故事模式：捲動左側時間軸，地圖與統計指標同步切換</li>
-          <li>Swipe 對比：拖曳分隔線，比較任意兩期影像差異</li>
-          <li>建物發展：點擊「建物發展」按鈕以 TimeSlider 逐年累計建物</li>
-        </ul>
       </div>
     </section>
 
