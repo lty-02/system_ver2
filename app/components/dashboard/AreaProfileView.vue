@@ -110,7 +110,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import WebScene from '@arcgis/core/WebScene'
 import SceneView from '@arcgis/core/views/SceneView'
 import Portal from '@arcgis/core/portal/Portal'
-import type FeatureLayer from '@arcgis/core/layers/FeatureLayer'
+import FeatureLayer from '@arcgis/core/layers/FeatureLayer'
 import ClassBreaksRenderer from '@arcgis/core/renderers/ClassBreaksRenderer'
 import SimpleFillSymbol from '@arcgis/core/symbols/SimpleFillSymbol'
 import Color from '@arcgis/core/Color'
@@ -127,6 +127,10 @@ const PORTAL_URL  = 'https://igisportal.geomatics.ncku.edu.tw/portal'
 const WEBSCENE_ID = '85502d8e84934fef9412dce360fc7165'
 const XINSHI_CODE = '67000200'
 
+// 新市區村里老化指數（外部 FeatureServer，非隨 WebScene 一併載入，需另行加入地圖）
+const AGING_INDEX_URL   = 'https://services8.arcgis.com/yg9IFoJMgLZnSwbn/arcgis/rest/services/新市區村里老化指數/FeatureServer/0'
+const AGING_INDEX_TITLE = '新市村里老化指數'
+
 const LAYER_COLORS: Record<string, string[]> = {
   born:      ['#dbeafe','#93c5fd','#3b82f6','#1d4ed8','#1e3a8a'],
   dead:      ['#fee2e2','#fca5a5','#f87171','#dc2626','#7f1d1d'],
@@ -135,12 +139,14 @@ const LAYER_COLORS: Record<string, string[]> = {
   economy:   ['#ecfdf5','#6ee7b7','#10b981','#059669','#064e3b'],
   envSafety: ['#fefce8','#fde68a','#fbbf24','#d97706','#78350f'],
   mobility:  ['#fdf2f8','#fbcfe8','#f472b6','#db2777','#831843'],
+  aging:     ['#ecfeff','#a5f3fc','#22d3ee','#0891b2','#164e63'],
 }
 
 const LAYER_KEYWORDS: Record<string, string[]> = {
   born:      ['出生'], dead:      ['死亡'],
   housing:   ['住宅狀況'], careLabor: ['照護人力'],
   economy:   ['經濟狀況'], envSafety: ['環境安全'], mobility:  ['行動健康'],
+  aging:     ['老化指數'],
 }
 
 const FIELD_CANDIDATES: Record<string, string[]> = {
@@ -151,6 +157,7 @@ const FIELD_CANDIDATES: Record<string, string[]> = {
   economy:   ['G13G21G31','G13G22G31','G13G23G31','G12G21G31','G12G22G31'],
   envSafety: ['S13S21S31','S13S22S31','S12S21S31','S12S22S31'],
   mobility:  ['A12A22A33','A12A21A33','A11A22A33','A11A21A33'],
+  aging:     ['老化指數_SUM_ZEROS','老化指數'],
 }
 
 // canvas refs
@@ -201,6 +208,14 @@ onMounted(async () => {
     sceneView.map?.allLayers.forEach((l: __esri.Layer) => {
       if (l.type === 'feature') layerCache[l.title ?? ''] = l as FeatureLayer
     })
+    try {
+      const agingLayer = new FeatureLayer({ url: AGING_INDEX_URL, title: AGING_INDEX_TITLE, visible: false })
+      await agingLayer.load()
+      sceneView.map?.add(agingLayer)
+      layerCache[AGING_INDEX_TITLE] = agingLayer
+    } catch (e) {
+      console.warn('老化指數圖層載入失敗', e)
+    }
     await Promise.all([
       init(sceneView),
       loadChartJS(),
@@ -258,6 +273,11 @@ function resolveField(attrs: Record<string, unknown>, candidates: string[]): str
   const keys = Object.keys(attrs)
   for (const c of candidates) {
     const f = keys.find(k => k.toUpperCase() === c.toUpperCase())
+    if (f) return f
+  }
+  // 精確比對失敗時，退而求其次以包含關係比對（因應欄位名稱有後綴差異，如 _SUM_ZEROS）
+  for (const c of candidates) {
+    const f = keys.find(k => k.toUpperCase().includes(c.toUpperCase()))
     if (f) return f
   }
   return null
@@ -627,6 +647,7 @@ const villageLabel = computed(() => props.village === '全區' ? '新市區全�
 const activeLayerLabel = computed(() => ({
   born:'出生分布', dead:'死亡分布', housing:'老屋需求',
   careLabor:'獨居照護', economy:'經濟弱勢', envSafety:'環境風險', mobility:'行動健康',
+  aging:'老化指數',
 }[props.activeLayerKey ?? 'born'] ?? ''))
 const legendGradient = computed(() => {
   const c: string[] = LAYER_COLORS[props.activeLayerKey ?? 'born'] ?? LAYER_COLORS['born'] ?? []

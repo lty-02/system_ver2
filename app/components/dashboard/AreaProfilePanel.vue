@@ -78,6 +78,7 @@ const layers = [
   { key: 'economy',   label: '經濟弱勢',  color: '#34d399' },
   { key: 'envSafety', label: '環境風險',  color: '#fbbf24' },
   { key: 'mobility',  label: '行動健康',  color: '#f472b6' },
+  { key: 'aging',     label: '老化指數',  color: '#22d3ee' },
 ]
 
 const search      = ref('')
