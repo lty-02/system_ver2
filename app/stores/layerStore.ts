@@ -47,87 +47,94 @@ const EXCLUDED_LAYERS = [
 
 /**
  * 固定圖層名稱到類別的映射表
+ * 每個分類同時保留 _shp 別名，以兼容 WebScene 中的實際圖層標題
  */
 const LAYER_CATEGORY_MAP: Record<string, LayerCategory> = {
-  // 基礎設施資料
-  '南部科學園區_台南園區範圍': LayerCategory.Infrastructure,
-  '臺南市分棟建物框三維建物': LayerCategory.Infrastructure,
-  '2019年通用版電子地圖道路中心線': LayerCategory.Infrastructure,
-  '2019年通用版電子地圖建物平面': LayerCategory.Infrastructure,
-  '2024年臺南市中央政府機關_shp': LayerCategory.Infrastructure,
-  '2024年臺南市鄉鎮市區公所位置': LayerCategory.Infrastructure,
-  '2024年臺南市縣市政府所屬單位': LayerCategory.Infrastructure,
-  '2024年臺南市衛生所位置': LayerCategory.Infrastructure,
-  
-  // ❌ 排除的圖層（不納入分類）
-  // '樹': 不分類
-  // '地點和標籤': 不分類
-  // '建築物': 不分類
-  
-  // 公共設施與社會福利
-  '2022年臺南市加油站位置': LayerCategory.PublicFacilities,
-  '2024年國中及高中位置': LayerCategory.PublicFacilities,
-  '2024年臺南市大專院校位置': LayerCategory.PublicFacilities,
-  '2024年臺南市公園位置_shp': LayerCategory.PublicFacilities,
-  '2024年臺南市幼兒園位置': LayerCategory.PublicFacilities,
-  '2024年臺南市老人福利機構位置': LayerCategory.PublicFacilities,
-  '2024年臺南市身心障礙福利機構位置': LayerCategory.PublicFacilities,
-  '2024年臺南市兒少福利機構位置': LayerCategory.PublicFacilities,
-  '2024年臺南市活動中心位置_shp': LayerCategory.PublicFacilities,
-  '2024年臺南市特殊學校位置': LayerCategory.PublicFacilities,
-  '2024年臺南市國中及高中位置': LayerCategory.PublicFacilities,
-  '2024年臺南市國民小學位置': LayerCategory.PublicFacilities,
-  '2024年臺南市電力公司服務處位置_shp': LayerCategory.PublicFacilities,
-  '2024年臺南市電信公司服務處位置': LayerCategory.PublicFacilities,
-  '2024年臺南市醫院位置': LayerCategory.PublicFacilities,
-  '2024年臺南市體育場位置_shp': LayerCategory.PublicFacilities,
-  
-  // 經濟資料
-  '2022年臺南市自來水廠位置': LayerCategory.Economic,
-  '2022年臺南市科學園區位置': LayerCategory.Economic,
-  '2022年臺南市旅館位置': LayerCategory.Economic,
-  '2024年臺南市金融機構位置': LayerCategory.Economic,
-  '2024年臺南市郵局位置_shp': LayerCategory.Economic,
-  '2024年臺南市連鎖便利商店位置': LayerCategory.Economic,
-  '2024年臺南市自來水服務處位置_shp': LayerCategory.Economic,
-  '2024年臺南市古蹟位置': LayerCategory.Economic,
-  '2024年臺南市大賣場位置': LayerCategory.Economic,
-  '2024年臺南市天然氣公司位置': LayerCategory.Economic,
-  '2024年天然氣公司位置': LayerCategory.Economic,
-  '2024年臺南市國營事業位置': LayerCategory.Economic,
-  
-  // 交通運輸與規劃
-  '2022年臺南市台鐵車站位置': LayerCategory.Transportation,
-  '2022年臺南市交流道位置': LayerCategory.Transportation,
-  '2022年臺南市汽車客運站位置_shp': LayerCategory.Transportation,
-  '2022年臺南市停車場位置': LayerCategory.Transportation,
-  '2022年臺南市港口位置': LayerCategory.Transportation,
-  '2022年臺南市港灣位置_shp': LayerCategory.Transportation,
-  
-  // 自然環境與災害
-  '2001年淹水點位': LayerCategory.Environment,
-  '2006年淹水點位': LayerCategory.Environment,
-  '2011年淹水點位': LayerCategory.Environment,
-  '2016年淹水點位': LayerCategory.Environment,
-  '2017年臺南市地下水一級管制區': LayerCategory.Environment,
-  '2017年臺南市地下水二級管制區': LayerCategory.Environment,
-  '2020年淹水點位': LayerCategory.Environment,
-  '2020年臺南市防汛備料地點': LayerCategory.Environment,
-  '2020年臺南市河川河道': LayerCategory.Environment,
-  '2021年土壤液化潛勢地區': LayerCategory.Environment,
-  '2021年臺南市活動斷層線': LayerCategory.Environment,
-  '2021國家空氣品質測站': LayerCategory.Environment,
-  '2022年臺南市焚化爐煙囪位置': LayerCategory.Environment,
-  '2022年臺南市焚化爐廠區範圍': LayerCategory.Environment,
-  '2024年臺南市土壤液化潛勢地區': LayerCategory.Environment,
-  '2024年臺南市消防單位位置': LayerCategory.Environment,
-  '2024年臺南市環保設施位置_shp': LayerCategory.Environment,
-  '2025年臺南市保安林分布': LayerCategory.Environment,
-  '2025年臺南市地下水區分範圍': LayerCategory.Environment,
-  '2025年海嘯溢淹潛勢模擬': LayerCategory.Environment,
-  '2024年歷史坡地災害位置': LayerCategory.Environment,
 
-  
+  // ── 基礎設施資料 ──
+  '南部科學園區_台南園區範圍':         LayerCategory.Infrastructure,
+  '臺南市分棟建物框三維建物':           LayerCategory.Infrastructure,
+  '2019年通用版電子地圖道路中心線':     LayerCategory.Infrastructure,
+  '2019年通用版電子地圖建物平面':       LayerCategory.Infrastructure,
+  '2024年臺南市中央政府機關':           LayerCategory.Infrastructure,
+  '2024年臺南市中央政府機關_shp':       LayerCategory.Infrastructure,
+  '2024年臺南市鄉鎮市區公所位置':       LayerCategory.Infrastructure,
+  '2024年臺南市縣市政府所屬單位':       LayerCategory.Infrastructure,
+  '2024年臺南市衛生所位置':             LayerCategory.Infrastructure,
+  '2020年臺南市河川河道':               LayerCategory.Infrastructure,
+
+  // ── 公共設施與社會福利 ──
+  '2022年臺南市加油站位置':             LayerCategory.PublicFacilities,
+  '2024年國中及高中位置':               LayerCategory.PublicFacilities,
+  '2024年臺南市大專院校位置':           LayerCategory.PublicFacilities,
+  '2024年臺南市公園位置':               LayerCategory.PublicFacilities,
+  '2024年臺南市公園位置_shp':           LayerCategory.PublicFacilities,
+  '2024年臺南市幼兒園位置':             LayerCategory.PublicFacilities,
+  '2024年臺南市老人福利機構位置':       LayerCategory.PublicFacilities,
+  '2024年臺南市身心障礙福利機構位置':   LayerCategory.PublicFacilities,
+  '2024年臺南市兒少福利機構位置':       LayerCategory.PublicFacilities,
+  '2024年臺南市活動中心位置':           LayerCategory.PublicFacilities,
+  '2024年臺南市活動中心位置_shp':       LayerCategory.PublicFacilities,
+  '2024年臺南市特殊學校位置':           LayerCategory.PublicFacilities,
+  '2024年臺南市國中及高中位置':         LayerCategory.PublicFacilities,
+  '2024年臺南市國民小學位置':           LayerCategory.PublicFacilities,
+  '2024年臺南市自來水服務處位置':       LayerCategory.PublicFacilities,
+  '2024年臺南市自來水服務處位置_shp':   LayerCategory.PublicFacilities,
+  '2024年臺南市電力公司服務處位置':     LayerCategory.PublicFacilities,
+  '2024年臺南市電力公司服務處位置_shp': LayerCategory.PublicFacilities,
+  '2024年臺南市電信公司服務處位置':     LayerCategory.PublicFacilities,
+  '2024年臺南市天然氣公司位置':         LayerCategory.PublicFacilities,
+  '2024年天然氣公司位置':               LayerCategory.PublicFacilities,
+  '2024年臺南市醫院位置':               LayerCategory.PublicFacilities,
+  '2024年臺南市體育場位置':             LayerCategory.PublicFacilities,
+  '2024年臺南市體育場位置_shp':         LayerCategory.PublicFacilities,
+
+  // ── 經濟資料 ──
+  '2022年臺南市自來水廠位置':           LayerCategory.Economic,
+  '2022年臺南市科學園區位置':           LayerCategory.Economic,
+  '2022年臺南市旅館位置':               LayerCategory.Economic,
+  '2024年臺南市金融機構位置':           LayerCategory.Economic,
+  '2024年臺南市郵局位置':               LayerCategory.Economic,
+  '2024年臺南市郵局位置_shp':           LayerCategory.Economic,
+  '2024年臺南市連鎖便利商店位置':       LayerCategory.Economic,
+  '2024年臺南市古蹟位置':               LayerCategory.Economic,
+  '2024年臺南市大賣場位置':             LayerCategory.Economic,
+  '2024年臺南市國營事業位置':           LayerCategory.Economic,
+
+  // ── 交通運輸與規劃 ──
+  '2022年臺南市台鐵車站位置':           LayerCategory.Transportation,
+  '2022年臺南市交流道位置':             LayerCategory.Transportation,
+  '2022年臺南市汽車客運站位置':         LayerCategory.Transportation,
+  '2022年臺南市汽車客運站位置_shp':     LayerCategory.Transportation,
+  '2022年臺南市停車場位置':             LayerCategory.Transportation,
+  '2022年臺南市港口位置':               LayerCategory.Transportation,
+  '2022年臺南市港灣位置':               LayerCategory.Transportation,
+  '2022年臺南市港灣位置_shp':           LayerCategory.Transportation,
+
+  // ── 自然環境與災害 ──
+  '2001年淹水點位':                     LayerCategory.Environment,
+  '2006年淹水點位':                     LayerCategory.Environment,
+  '2011年淹水點位':                     LayerCategory.Environment,
+  '2016年淹水點位':                     LayerCategory.Environment,
+  '2020年淹水點位':                     LayerCategory.Environment,
+  '2020年臺南市防汛備料地點':           LayerCategory.Environment,
+  '2021國家空氣品質測站':               LayerCategory.Environment,
+  '2021年臺南市活動斷層線':             LayerCategory.Environment,
+  '2021年臺南市土壤液化潛勢地區':       LayerCategory.Environment,
+  '2021年土壤液化潛勢地區':             LayerCategory.Environment,
+  '2022年臺南市焚化爐廠區範圍':         LayerCategory.Environment,
+  '2022年臺南市焚化爐煙囪位置':         LayerCategory.Environment,
+  '2024年臺南市消防單位位置':           LayerCategory.Environment,
+  '2024年臺南市環保設施位置':           LayerCategory.Environment,
+  '2024年臺南市環保設施位置_shp':       LayerCategory.Environment,
+  '2024年臺南市歷史坡地災害位置':       LayerCategory.Environment,
+  '2024年歷史坡地災害位置':             LayerCategory.Environment,
+  '2024年臺南市土壤液化潛勢地區':       LayerCategory.Environment,
+  '2017年臺南市地下水一級管制區':       LayerCategory.Environment,
+  '2017年臺南市地下水二級管制區':       LayerCategory.Environment,
+  '2025年臺南市地下水區分範圍':         LayerCategory.Environment,
+  '2025年臺南市保安林分布':             LayerCategory.Environment,
+
 }
 
 /**

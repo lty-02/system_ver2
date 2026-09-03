@@ -15,13 +15,13 @@ import Polygon from '@arcgis/core/geometry/Polygon'
 export type AlertSeverity = 'Extreme' | 'Severe' | 'Moderate' | 'Minor' | 'Unknown'
 
 export const SEVERITY_CONFIG: Record<AlertSeverity, {
-  color: string; bg: string; textColor: string; icon: string; label: string
+  color: string; bg: string; textColor: string; label: string
 }> = {
-  Extreme:  { color: '#DC2626', bg: '#FEE2E2', textColor: '#991B1B', icon: '🔴', label: '極端' },
-  Severe:   { color: '#EA580C', bg: '#FFEDD5', textColor: '#9A3412', icon: '🟠', label: '嚴重' },
-  Moderate: { color: '#D97706', bg: '#FEF3C7', textColor: '#92400E', icon: '🟡', label: '中度' },
-  Minor:    { color: '#2563EB', bg: '#DBEAFE', textColor: '#1E40AF', icon: '🔵', label: '輕度' },
-  Unknown:  { color: '#64748B', bg: '#F1F5F9', textColor: '#334155', icon: '⚫', label: '未知' },
+  Extreme:  { color: '#DC2626', bg: '#FEE2E2', textColor: '#991B1B', label: '極端' },
+  Severe:   { color: '#EA580C', bg: '#FFEDD5', textColor: '#9A3412', label: '嚴重' },
+  Moderate: { color: '#D97706', bg: '#FEF3C7', textColor: '#92400E', label: '中度' },
+  Minor:    { color: '#2563EB', bg: '#DBEAFE', textColor: '#1E40AF', label: '輕度' },
+  Unknown:  { color: '#64748B', bg: '#F1F5F9', textColor: '#334155', label: '未知' },
 }
 
 // ==================== 類型定義 ====================
@@ -189,9 +189,7 @@ export const useAlerts = (
   const loadDatasets = async () => {
     try {
       const data = await $fetch<any>('/api/ncdr/datasets')
-      console.log('[useAlerts] datasets raw:', JSON.stringify(data).slice(0, 500))
       const arr = toArray(data)
-      console.log('[useAlerts] datasets array length:', arr.length, 'first item:', arr[0])
       datasets.value = arr
       .map((d: any): AlertDataset => ({
         id:      d.capCode || d.CAPCode || d.DataSetID || d.id || '',
@@ -204,7 +202,6 @@ export const useAlerts = (
         expanded: false,
       }))
         .filter(d => d.id)
-      console.log('[useAlerts] datasets parsed:', datasets.value.length)
     } catch (e) {
       console.error('[useAlerts] loadDatasets:', e)
     }
@@ -260,6 +257,16 @@ export const useAlerts = (
     return base
   }
 
+  // ==================== 地圖符號 ====================
+
+  const makeAlertPointMarker = (severity: AlertSeverity): any => ({
+    type: 'simple-marker',
+    style: 'circle',
+    color: SEVERITY_CONFIG[severity].color,
+    size: '18px',
+    outline: { color: 'white', width: 2 },
+  })
+
   // ==================== ArcGIS 圖層操作 ====================
 
   const getOrCreateLayer = (datasetId: string, name: string): GraphicsLayer => {
@@ -299,7 +306,7 @@ export const useAlerts = (
     } else if (alert.geoType === 'point' && alert.lon !== undefined && alert.lat !== undefined) {
       graphic = markRaw(new Graphic({
         geometry: new Point({ longitude: alert.lon, latitude: alert.lat }),
-        symbol:   { type: 'text', text: sv.icon, font: { size: 22 } } as any,
+        symbol:   makeAlertPointMarker(alert.severity),
         attributes: { alertIdentifier: alert.identifier, datasetId: alert.datasetId },
       }))
     }
