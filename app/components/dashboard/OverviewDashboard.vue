@@ -236,7 +236,8 @@ interface SelVill { name: string; townname: string; isXinshi: boolean; data: Rec
 let MapView: any, SceneView: any, ArcMap: any, FeatureLayer: any
 let GraphicsLayer: any, Graphic: any, esriConfig: any
 let mapView: any = null
-let sharedMap: any = null
+let sharedMap: any = null   // 2D 模式用的輕量 Map（只放平面主題圖層）
+let webScene: any = null    // 3D 模式直接沿用「行政區概覽」原本的 WebScene（cube 本來就在裡面）
 
 async function loadArcGIS() {
   const m = await Promise.all([
@@ -344,6 +345,7 @@ async function discoverLayers() {
   try { await portal.load() } catch {}
   const ws = new WebScene({ portalItem: { id: WEBSCENE_ID, portal } })
   await ws.load()
+  webScene = ws  // 保留這個 WebScene 實例，供「三維統計」直接沿用（cube 本來就在這裡）
   const fmt = (raw: string) => {
     const b = raw.replace(/\/+$/, ''); return b.endsWith('/0') ? b : `${b}/0`
   }
@@ -557,15 +559,18 @@ async function initMap() {
 
 // 2D ⇄ 3D 切換：沿用同一個 Map（choro-gl／label-gl／cube 圖層都掛在上面），
 // 只換 View 本身，平面主題圖層在 3D 場景中會維持貼地顯示。
+// 2D 模式用輕量 sharedMap；3D 模式直接沿用原本「行政區概覽」的 webScene
+// （cube 本來就放在裡面），只是把跟這裡無關的圖層都隱藏，只留選定的 cube。
 async function rebuildView(is3d: boolean) {
-  if (!mapEl.value || !sharedMap) return
+  if (!mapEl.value) return
+  if (is3d && !webScene) return  // webScene 尚未載入完成（discoverLayers 還沒跑完）
   const center = mapView?.center
   // View.destroy() 會連帶 destroy 掉 view.map（esri 內部固定行為），
-  // 所以要先把 map 從舊 view 卸下，sharedMap 才能繼續被下一個 view 重用。
+  // 所以要先把 map 從舊 view 卸下，sharedMap/webScene 才能繼續被重用。
   if (mapView) { try { mapView.map = null; mapView.destroy() } catch {} }
   if (is3d) {
     mapView = markRaw(new SceneView({
-      container: mapEl.value, map: sharedMap,
+      container: mapEl.value, map: webScene,
       camera: {
         position: { longitude: center?.longitude ?? 120.33, latitude: (center?.latitude ?? 23.06) - 0.045, z: 4500 },
         tilt: 55, heading: 0,
@@ -573,6 +578,7 @@ async function rebuildView(is3d: boolean) {
       ui: { components: ['zoom'] },
     }))
   } else {
+    if (!sharedMap) return
     mapView = markRaw(new MapView({
       container: mapEl.value, map: sharedMap,
       center: [120.33, 23.06], zoom: 12,
@@ -584,30 +590,41 @@ async function rebuildView(is3d: boolean) {
   mapView.on('click', handleMapClick)
 }
 
+// webScene 被其他儀表板共用、圖層很多，切到 3D 時只留下我們自己加的
+// choro-gl／label-gl 底圖，跟目前選定的那個 cube，其餘全部隱藏。
+function isolateSceneLayers(keep: any) {
+  if (!webScene) return
+  webScene.allLayers.forEach((l: any) => {
+    l.visible = l === keep || l.id === 'choro-gl' || l.id === 'label-gl'
+  })
+}
+
+async function prepareCube(key: string) {
+  const def = CUBES.find(c => c.key === key)
+  if (!def || !webScene) return
+  const layer = cubeLayers[key]
+  if (!layer) { console.warn('[Ov] 找不到 cube 圖層:', def.label); return }
+  try { await layer.load() } catch (e) { console.warn('[Ov] cube 圖層載入失敗:', def.label, e) }
+  await applyCubeRenderer(layer, def)
+  isolateSceneLayers(layer)
+  activeCubeLayer = layer
+  activeCube.value = key
+}
+
 async function toggle3D() {
-  show3D.value = !show3D.value
-  await rebuildView(show3D.value)
-  if (!show3D.value) {
-    if (activeCubeLayer) { try { sharedMap.remove(activeCubeLayer) } catch {} }
-    activeCubeLayer = null
-    activeCube.value = null
-  } else if (CUBES.length) {
-    await selectCube(CUBES[0]!.key)
+  const turningOn = !show3D.value
+  if (turningOn) {
+    const key = activeCube.value ?? CUBES[0]?.key ?? null
+    if (key) await prepareCube(key)
   }
+  show3D.value = turningOn
+  await rebuildView(turningOn)
+  await applyChoro(activeTheme.value)
+  if (!turningOn) { activeCubeLayer = null; activeCube.value = null }
 }
 
 async function selectCube(key: string) {
-  const def = CUBES.find(c => c.key === key)
-  if (!def || !sharedMap) return
-  activeCube.value = key
-  if (activeCubeLayer) { try { sharedMap.remove(activeCubeLayer) } catch {} }
-  const layer = cubeLayers[key]
-  if (!layer) { console.warn('[Ov] 找不到 cube 圖層:', def.label); activeCubeLayer = null; return }
-  try { await layer.load() } catch (e) { console.warn('[Ov] cube 圖層載入失敗:', def.label, e) }
-  await applyCubeRenderer(layer, def)
-  layer.visible = true
-  sharedMap.add(layer)
-  activeCubeLayer = layer
+  await prepareCube(key)
 }
 
 // 依文件指定之 7 段級距（ClassBreaksRenderer）為 cube 圖層染色。
