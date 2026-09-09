@@ -599,28 +599,46 @@ function isolateSceneLayers(keep: any) {
   })
 }
 
+// 可見度切換一定要先做且同步完成，染色（load + renderer）失敗也不該擋住
+// 圖層顯示或卡住外層的 3D 切換，所以拆開、包 try/catch、絕不 throw 出去。
 async function prepareCube(key: string) {
   const def = CUBES.find(c => c.key === key)
   if (!def || !webScene) return
   const layer = cubeLayers[key]
   if (!layer) { console.warn('[Ov] 找不到 cube 圖層:', def.label); return }
-  try { await layer.load() } catch (e) { console.warn('[Ov] cube 圖層載入失敗:', def.label, e) }
-  await applyCubeRenderer(layer, def)
+  activeCube.value = key
   isolateSceneLayers(layer)
   activeCubeLayer = layer
-  activeCube.value = key
+  try {
+    await layer.load()
+    await applyCubeRenderer(layer, def)
+  } catch (e) {
+    console.error('[Ov] cube 染色失敗（圖層仍會顯示，只是可能沒套用文件級距顏色）:', def.label, e)
+  }
 }
 
+// 三維統計切換：view 的建立/銷毀（rebuildView）一定要 await，
+// 但 cube 的染色是 best-effort、不 await，避免它卡住或讓整個切換失敗。
 async function toggle3D() {
   const turningOn = !show3D.value
-  if (turningOn) {
-    const key = activeCube.value ?? CUBES[0]?.key ?? null
-    if (key) await prepareCube(key)
+  const key = turningOn ? (activeCube.value ?? CUBES[0]?.key ?? null) : null
+  if (turningOn && key) {
+    // 先同步隱藏其他圖層，避免 3D 場景出現前先閃過一堆不相關圖層
+    isolateSceneLayers(cubeLayers[key] ?? null)
   }
   show3D.value = turningOn
-  await rebuildView(turningOn)
-  await applyChoro(activeTheme.value)
-  if (!turningOn) { activeCubeLayer = null; activeCube.value = null }
+  try {
+    await rebuildView(turningOn)
+    await applyChoro(activeTheme.value)
+  } catch (e) {
+    console.error('[Ov] 切換 2D/3D 失敗:', e)
+  }
+  if (turningOn && key) {
+    prepareCube(key).catch(e => console.error('[Ov] prepareCube 失敗:', e))
+  } else if (!turningOn) {
+    activeCubeLayer = null
+    activeCube.value = null
+  }
 }
 
 async function selectCube(key: string) {
