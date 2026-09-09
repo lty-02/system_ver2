@@ -644,18 +644,40 @@ async function applyCubeRenderer(layer: any, def: CubeDef) {
     import('@arcgis/core/symbols/FillSymbol3DLayer'),
   ])
   const isMesh = layer.geometryType === 'mesh' || layer.geometryType === 'multipatch'
+  const mkSymbol = (color: string, i: number) => isMesh
+    ? new MeshSymbol3D({ symbolLayers: [new FillSymbol3DLayer({ material: { color } })] })
+    : new PointSymbol3D({ symbolLayers: [new ObjectSymbol3DLayer({
+        resource: { primitive: 'cube' },
+        material: { color },
+        width: 60, depth: 60, height: 40 + i * 30,
+      })] })
   const classBreakInfos = def.breaks.map(([min, max], i) => ({
-    minValue: min,
-    maxValue: max,
-    symbol: isMesh
-      ? new MeshSymbol3D({ symbolLayers: [new FillSymbol3DLayer({ material: { color: def.colors[i] } })] })
-      : new PointSymbol3D({ symbolLayers: [new ObjectSymbol3DLayer({
-          resource: { primitive: 'cube' },
-          material: { color: def.colors[i] },
-          width: 60, depth: 60, height: 40 + i * 30,
-        })] }),
+    minValue: min, maxValue: max, symbol: mkSymbol(def.colors[i]!, i),
   }))
-  layer.renderer = new ClassBreaksRenderer({ field: def.field, classBreakInfos } as any)
+  const field = resolveCubeField(layer, def.field)
+  console.log(`[Ov] cube「${def.label}」欄位: 文件給的="${def.field}" → 實際使用="${field}"，圖層 fields:`,
+    (layer.fields ?? []).map((f: any) => f.name))
+  layer.renderer = new ClassBreaksRenderer({
+    field, classBreakInfos,
+    // 保底：萬一有欄位值落在給定級距之外（或欄位仍對不上），至少用灰色顯示出來，
+    // 而不是被 ClassBreaksRenderer 判定「無對應 class」而整個不畫（無聲消失，難以排查）。
+    defaultSymbol: mkSymbol('#94a3b8', 3),
+  } as any)
+}
+
+// 文件給的欄位名稱有些含「表名.欄位」（如 新市區買賣.COUNT_SUM_ZEROS），
+// 服務發布後常會被清成底線或整段拿掉表名前綴，這裡對照圖層實際欄位做容錯比對。
+function resolveCubeField(layer: any, wanted: string): string {
+  const fields: string[] = (layer.fields ?? []).map((f: any) => f.name).filter(Boolean)
+  if (!fields.length) return wanted
+  if (fields.includes(wanted)) return wanted
+  const norm = (s: string) => s.replace(/[.\s]/g, '_').replace(/_+/g, '_').toUpperCase()
+  const wantedNorm = norm(wanted)
+  const exact = fields.find(f => norm(f) === wantedNorm)
+  if (exact) return exact
+  const core = norm(wanted.replace(/^.*\./, '').replace(/_SUM_ZEROS$|_MEDIAN_ZEROS$/i, ''))
+  const fuzzy = fields.find(f => { const fn = norm(f); return fn.includes(core) || core.includes(fn) })
+  return fuzzy ?? wanted
 }
 
 function removeAllGL() {
