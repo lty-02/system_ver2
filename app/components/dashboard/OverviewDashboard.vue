@@ -30,7 +30,23 @@
           :style="`--c:${t.color}`" @click="switchTheme(t.key)">
           <span class="tb-pip" :style="{ background: t.color }" />{{ t.label }}
         </button>
+        <span class="tb-divider" />
+        <button class="theme-btn mode-btn" :class="{ active: show3D }" @click="toggle3D">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+            <path d="M12 2 3 7v10l9 5 9-5V7z"/><path d="M3 7l9 5 9-5M12 12v10"/>
+          </svg>
+          三維統計
+        </button>
       </div>
+
+      <!-- 三維統計：cube 圖層選擇（8選1）-->
+      <transition name="popup-fade">
+        <div v-if="show3D" class="cube-bar">
+          <button v-for="c in CUBES" :key="c.key"
+            class="cube-btn" :class="{ active: activeCube === c.key }"
+            @click="selectCube(c.key)">{{ c.label }}</button>
+        </div>
+      </transition>
 
       <!-- 村里 popup -->
       <transition name="popup-fade">
@@ -167,6 +183,48 @@ const THEMES = [
     fmt: (v: number|null) => v != null ? v.toFixed(1) + '%' : '—' },
 ] as const
 
+// ── 三維統計（cube 圖層）── 8 選 1，欄位與級距依「新市區村里 X cube」文件指定
+interface CubeDef {
+  key: string; label: string; field: string
+  match: (title: string) => boolean
+  breaks: [number, number][]
+  colors: string[]
+}
+const CUBES: CubeDef[] = [
+  { key: 'newhouse', label: '買賣新成屋數量', field: '新市區買賣.COUNT_SUM_ZEROS',
+    match: t => t.includes('新成屋'),
+    breaks: [[0,3],[4,10],[11,20],[21,31],[32,60],[61,112],[113,184]],
+    colors: ['#eff6ff','#bfdbfe','#93c5fd','#60a5fa','#3b82f6','#1d4ed8','#1e3a8a'] },
+  { key: 'aging', label: '老化指數', field: '老化指數_SUM_ZEROS',
+    match: t => t.includes('老化指數'),
+    breaks: [[36.42,47.628866],[47.628867,73.1],[73.100001,93.852459],[93.85246,115],[115.000001,148.34],[148.340001,206.7],[206.700001,258.55263]],
+    colors: ['#ecfeff','#a5f3fc','#67e8f9','#22d3ee','#0891b2','#0e7490','#164e63'] },
+  { key: 'pop2', label: '人口數', field: '人口數_SUM_ZEROS',
+    match: t => t.includes('人口數') && !t.includes('青壯年') && !t.includes('遷入'),
+    breaks: [[795,1126],[1126,2218],[2218,3206],[3206,3680],[3680,4279],[4279,5318],[5318,7933]],
+    colors: ['#eef2ff','#c7d2fe','#a5b4fc','#818cf8','#6366f1','#4338ca','#312e81'] },
+  { key: 'socialGrowth', label: '社會增加率', field: '社會增加率_SUM_ZEROS',
+    match: t => t.includes('社會增加率'),
+    breaks: [[-25.07,-14.85],[-14.849999,-7],[-6.999999,-0.89],[-0.889999,6],[6.000001,14.05],[14.050001,27],[27.000001,47.91]],
+    colors: ['#b91c1c','#f87171','#fecaca','#f1f5f9','#bbf7d0','#4ade80','#15803d'] },
+  { key: 'youngAdult', label: '青壯年人口數', field: '青壯年人口數_20_44__SUM_ZEROS',
+    match: t => t.includes('青壯年'),
+    breaks: [[268,420],[421,793],[794,1264],[1265,1486],[1487,1669],[1670,2160],[2161,3267]],
+    colors: ['#f0fdf4','#bbf7d0','#86efac','#4ade80','#22c55e','#15803d','#14532d'] },
+  { key: 'priceMedian', label: '不動產買賣單價中位數', field: '新市區買賣.單價__萬元_坪__MEDIAN_ZEROS',
+    match: t => t.includes('單價') && t.includes('中位數'),
+    breaks: [[0,4.014097],[4.014098,10.08],[10.080001,13.618194],[13.618195,17.005],[17.005001,21.121523],[21.121524,26.84],[26.840001,34.491244]],
+    colors: ['#fff7ed','#fed7aa','#fdba74','#fb923c','#ea580c','#c2410c','#7c2d12'] },
+  { key: 'reCount', label: '不動產買賣數量', field: '新市區買賣.COUNT_SUM_ZEROS',
+    match: t => t.includes('買賣') && t.includes('數量') && !t.includes('新成屋'),
+    breaks: [[0,11],[12,26],[27,49],[50,90],[91,139],[140,230],[231,457]],
+    colors: ['#fefce8','#fef08a','#fde047','#facc15','#ca8a04','#a16207','#713f12'] },
+  { key: 'inMigration', label: '總遷入人口數', field: '總遷入人口數_SUM_ZEROS',
+    match: t => t.includes('遷入'),
+    breaks: [[23,80],[81,152],[153,195],[196,238],[239,291],[292,398],[399,694]],
+    colors: ['#faf5ff','#e9d5ff','#d8b4fe','#c084fc','#a855f7','#7e22ce','#4c1d95'] },
+]
+
 interface BF { name: string; geometry: any; townname: string }
 interface VD {
   name: string; geometry: any; townname: string
@@ -175,20 +233,22 @@ interface VD {
 interface SelVill { name: string; townname: string; isXinshi: boolean; data: Record<TK, number|null> }
 
 // ── ArcGIS ──────────────────────────────────────────────────────
-let MapView: any, ArcMap: any, FeatureLayer: any
+let MapView: any, SceneView: any, ArcMap: any, FeatureLayer: any
 let GraphicsLayer: any, Graphic: any, esriConfig: any
 let mapView: any = null
+let sharedMap: any = null
 
 async function loadArcGIS() {
   const m = await Promise.all([
     import('@arcgis/core/views/MapView'),
+    import('@arcgis/core/views/SceneView'),
     import('@arcgis/core/Map'),
     import('@arcgis/core/layers/FeatureLayer'),
     import('@arcgis/core/layers/GraphicsLayer'),
     import('@arcgis/core/Graphic'),
     import('@arcgis/core/config'),
   ])
-  ;[MapView, ArcMap, FeatureLayer, GraphicsLayer, Graphic, esriConfig] = m.map((x: any) => x.default)
+  ;[MapView, SceneView, ArcMap, FeatureLayer, GraphicsLayer, Graphic, esriConfig] = m.map((x: any) => x.default)
   esriConfig.portalUrl = PORTAL_URL
 }
 
@@ -217,12 +277,16 @@ const activeTheme = ref<TK>('pop')
 const selVill     = ref<SelVill|null>(null)
 const scatterX    = ref<TK>('pop')
 const scatterY    = ref<TK>('mob')
+const show3D      = ref(false)
+const activeCube  = ref<string|null>(null)
 
 let allBoundary: BF[] = []  // All Tainan village boundaries
 let vills: VD[] = []         // 新市區 only — with indicator data
 let barChartInst: any = null
 let donutChartInst: any = null
 let scatterChartInst: any = null
+const cubeLayers: Record<string, any> = {}  // key → WebScene 中對應的 cube 圖層物件
+let activeCubeLayer: any = null
 
 // ── Computed ─────────────────────────────────────────────────────
 const activeThemeObj = computed(() => THEMES.find(t => t.key === activeTheme.value))
@@ -294,7 +358,13 @@ async function discoverLayers() {
     if (!housingUrl && title.includes('房市交易指標') && url) { housingUrl = url; return }
     if (!elderlyUrl && title.includes('行動健康需求指數') && url) { elderlyUrl = url; return }
     if (!svLayer && title.includes('社會脆弱度')) { svLayer = l; return }
-    if (!greenObj && title.includes('2022') && title.includes('綠覆蓋')) { greenObj = l }
+    if (!greenObj && title.includes('2022') && title.includes('綠覆蓋')) { greenObj = l; return }
+    // cube 圖層是 3D SceneLayer（type === 'scene'），跟其餘 2D FeatureLayer 分開比對避免誤配
+    if (l.type === 'scene') {
+      for (const c of CUBES) {
+        if (!cubeLayers[c.key] && c.match(title)) { cubeLayers[c.key] = l; break }
+      }
+    }
   })
   return { boundaryUrl, popUrl, housingUrl, elderlyUrl, svLayer, greenObj }
 }
@@ -474,15 +544,99 @@ async function loadGreen(layerObj: any): Promise<Map<string,number>> {
 // ── Map ──────────────────────────────────────────────────────────
 async function initMap() {
   if (!mapEl.value) return
-  const map = new ArcMap({ basemap: 'gray-vector' })
+  sharedMap = new ArcMap({ basemap: 'gray-vector' })
   mapView = markRaw(new MapView({
-    container: mapEl.value, map,
+    container: mapEl.value, map: sharedMap,
     center: [120.33, 23.06], zoom: 12,  // 新市區
     ui: { components: ['zoom'] },
   }))
   mapView.ui.remove('attribution')
   await mapView.when()
   mapView.on('click', handleMapClick)
+}
+
+// 2D ⇄ 3D 切換：沿用同一個 Map（choro-gl／label-gl／cube 圖層都掛在上面），
+// 只換 View 本身，平面主題圖層在 3D 場景中會維持貼地顯示。
+async function rebuildView(is3d: boolean) {
+  if (!mapEl.value || !sharedMap) return
+  const center = mapView?.center
+  if (mapView) { try { mapView.destroy() } catch {} }
+  if (is3d) {
+    mapView = markRaw(new SceneView({
+      container: mapEl.value, map: sharedMap,
+      camera: {
+        position: { longitude: center?.longitude ?? 120.33, latitude: (center?.latitude ?? 23.06) - 0.045, z: 4500 },
+        tilt: 55, heading: 0,
+      },
+      ui: { components: ['zoom'] },
+    }))
+  } else {
+    mapView = markRaw(new MapView({
+      container: mapEl.value, map: sharedMap,
+      center: [120.33, 23.06], zoom: 12,
+      ui: { components: ['zoom'] },
+    }))
+  }
+  mapView.ui.remove('attribution')
+  await mapView.when()
+  mapView.on('click', handleMapClick)
+}
+
+async function toggle3D() {
+  show3D.value = !show3D.value
+  await rebuildView(show3D.value)
+  if (!show3D.value) {
+    if (activeCubeLayer) { try { sharedMap.remove(activeCubeLayer) } catch {} }
+    activeCubeLayer = null
+    activeCube.value = null
+  } else if (CUBES.length) {
+    await selectCube(CUBES[0]!.key)
+  }
+}
+
+async function selectCube(key: string) {
+  const def = CUBES.find(c => c.key === key)
+  if (!def || !sharedMap) return
+  activeCube.value = key
+  if (activeCubeLayer) { try { sharedMap.remove(activeCubeLayer) } catch {} }
+  const layer = cubeLayers[key]
+  if (!layer) { console.warn('[Ov] 找不到 cube 圖層:', def.label); activeCubeLayer = null; return }
+  try { await layer.load() } catch (e) { console.warn('[Ov] cube 圖層載入失敗:', def.label, e) }
+  await applyCubeRenderer(layer, def)
+  layer.visible = true
+  sharedMap.add(layer)
+  activeCubeLayer = layer
+}
+
+// 依文件指定之 7 段級距（ClassBreaksRenderer）為 cube 圖層染色。
+// SceneLayer 可能是 point（cube 3D symbol）或 mesh/multipatch（已烘焙幾何、只能改材質色）兩種，兩種都相容處理。
+async function applyCubeRenderer(layer: any, def: CubeDef) {
+  const [
+    { default: ClassBreaksRenderer },
+    { default: PointSymbol3D },
+    { default: ObjectSymbol3DLayer },
+    { default: MeshSymbol3D },
+    { default: FillSymbol3DLayer },
+  ] = await Promise.all([
+    import('@arcgis/core/renderers/ClassBreaksRenderer'),
+    import('@arcgis/core/symbols/PointSymbol3D'),
+    import('@arcgis/core/symbols/ObjectSymbol3DLayer'),
+    import('@arcgis/core/symbols/MeshSymbol3D'),
+    import('@arcgis/core/symbols/FillSymbol3DLayer'),
+  ])
+  const isMesh = layer.geometryType === 'mesh' || layer.geometryType === 'multipatch'
+  const classBreakInfos = def.breaks.map(([min, max], i) => ({
+    minValue: min,
+    maxValue: max,
+    symbol: isMesh
+      ? new MeshSymbol3D({ symbolLayers: [new FillSymbol3DLayer({ material: { color: def.colors[i] } })] })
+      : new PointSymbol3D({ symbolLayers: [new ObjectSymbol3DLayer({
+          resource: { primitive: 'cube' },
+          material: { color: def.colors[i] },
+          width: 60, depth: 60, height: 40 + i * 30,
+        })] }),
+  }))
+  layer.renderer = new ClassBreaksRenderer({ field: def.field, classBreakInfos } as any)
 }
 
 function removeAllGL() {
@@ -823,6 +977,23 @@ onUnmounted(() => {
 .theme-btn.active { background: var(--c); color: #fff; }
 .theme-btn:not(.active):hover { background: #f1f5f9; }
 .tb-pip { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.tb-divider { width: 1px; align-self: stretch; background: #e2e8f0; margin: 2px 2px; }
+
+.mode-btn.active { background: #334155; color: #fff; }
+
+.cube-bar {
+  position: absolute; bottom: 54px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 5px; flex-wrap: wrap; max-width: 90%; justify-content: center;
+  z-index: 20; background: rgba(51,65,85,.93); border-radius: 16px;
+  padding: 6px 8px; box-shadow: 0 2px 12px rgba(0,0,0,.18); backdrop-filter: blur(6px);
+}
+.cube-btn {
+  padding: 4px 11px; border-radius: 12px; border: 1px solid rgba(255,255,255,.18);
+  font-size: 11px; font-weight: 500; color: #e2e8f0; cursor: pointer;
+  background: transparent; transition: background .15s, color .15s; white-space: nowrap;
+}
+.cube-btn.active { background: #fff; color: #334155; border-color: #fff; }
+.cube-btn:not(.active):hover { background: rgba(255,255,255,.12); }
 
 /* Popup */
 .map-popup {
