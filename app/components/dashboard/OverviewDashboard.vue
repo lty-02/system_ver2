@@ -183,46 +183,20 @@ const THEMES = [
     fmt: (v: number|null) => v != null ? v.toFixed(1) + '%' : '—' },
 ] as const
 
-// ── 三維統計（cube 圖層）── 8 選 1，欄位與級距依「新市區村里 X cube」文件指定
+// ── 三維統計（cube 圖層）── 8 選 1，直接沿用 WebScene 中原本的樣式，不再自訂渲染
 interface CubeDef {
-  key: string; label: string; field: string
+  key: string; label: string
   match: (title: string) => boolean
-  breaks: [number, number][]
-  colors: string[]
 }
 const CUBES: CubeDef[] = [
-  { key: 'newhouse', label: '買賣新成屋數量', field: '新市區買賣.COUNT_SUM_ZEROS',
-    match: t => t.includes('新成屋'),
-    breaks: [[0,3],[4,10],[11,20],[21,31],[32,60],[61,112],[113,184]],
-    colors: ['#eff6ff','#bfdbfe','#93c5fd','#60a5fa','#3b82f6','#1d4ed8','#1e3a8a'] },
-  { key: 'aging', label: '老化指數', field: '老化指數_SUM_ZEROS',
-    match: t => t.includes('老化指數'),
-    breaks: [[36.42,47.628866],[47.628867,73.1],[73.100001,93.852459],[93.85246,115],[115.000001,148.34],[148.340001,206.7],[206.700001,258.55263]],
-    colors: ['#ecfeff','#a5f3fc','#67e8f9','#22d3ee','#0891b2','#0e7490','#164e63'] },
-  { key: 'pop2', label: '人口數', field: '人口數_SUM_ZEROS',
-    match: t => t.includes('人口數') && !t.includes('青壯年') && !t.includes('遷入'),
-    breaks: [[795,1126],[1126,2218],[2218,3206],[3206,3680],[3680,4279],[4279,5318],[5318,7933]],
-    colors: ['#eef2ff','#c7d2fe','#a5b4fc','#818cf8','#6366f1','#4338ca','#312e81'] },
-  { key: 'socialGrowth', label: '社會增加率', field: '社會增加率_SUM_ZEROS',
-    match: t => t.includes('社會增加率'),
-    breaks: [[-25.07,-14.85],[-14.849999,-7],[-6.999999,-0.89],[-0.889999,6],[6.000001,14.05],[14.050001,27],[27.000001,47.91]],
-    colors: ['#b91c1c','#f87171','#fecaca','#f1f5f9','#bbf7d0','#4ade80','#15803d'] },
-  { key: 'youngAdult', label: '青壯年人口數', field: '青壯年人口數_20_44__SUM_ZEROS',
-    match: t => t.includes('青壯年'),
-    breaks: [[268,420],[421,793],[794,1264],[1265,1486],[1487,1669],[1670,2160],[2161,3267]],
-    colors: ['#f0fdf4','#bbf7d0','#86efac','#4ade80','#22c55e','#15803d','#14532d'] },
-  { key: 'priceMedian', label: '不動產買賣單價中位數', field: '新市區買賣.單價__萬元_坪__MEDIAN_ZEROS',
-    match: t => t.includes('單價') && t.includes('中位數'),
-    breaks: [[0,4.014097],[4.014098,10.08],[10.080001,13.618194],[13.618195,17.005],[17.005001,21.121523],[21.121524,26.84],[26.840001,34.491244]],
-    colors: ['#fff7ed','#fed7aa','#fdba74','#fb923c','#ea580c','#c2410c','#7c2d12'] },
-  { key: 'reCount', label: '不動產買賣數量', field: '新市區買賣.COUNT_SUM_ZEROS',
-    match: t => t.includes('買賣') && t.includes('數量') && !t.includes('新成屋'),
-    breaks: [[0,11],[12,26],[27,49],[50,90],[91,139],[140,230],[231,457]],
-    colors: ['#fefce8','#fef08a','#fde047','#facc15','#ca8a04','#a16207','#713f12'] },
-  { key: 'inMigration', label: '總遷入人口數', field: '總遷入人口數_SUM_ZEROS',
-    match: t => t.includes('遷入'),
-    breaks: [[23,80],[81,152],[153,195],[196,238],[239,291],[292,398],[399,694]],
-    colors: ['#faf5ff','#e9d5ff','#d8b4fe','#c084fc','#a855f7','#7e22ce','#4c1d95'] },
+  { key: 'newhouse', label: '買賣新成屋數量', match: t => t.includes('新成屋') },
+  { key: 'aging', label: '老化指數', match: t => t.includes('老化指數') },
+  { key: 'pop2', label: '人口數', match: t => t.includes('人口數') && !t.includes('青壯年') && !t.includes('遷入') },
+  { key: 'socialGrowth', label: '社會增加率', match: t => t.includes('社會增加率') },
+  { key: 'youngAdult', label: '青壯年人口數', match: t => t.includes('青壯年') },
+  { key: 'priceMedian', label: '不動產買賣單價中位數', match: t => t.includes('單價') && t.includes('中位數') },
+  { key: 'reCount', label: '不動產買賣數量', match: t => t.includes('買賣') && t.includes('數量') && !t.includes('新成屋') },
+  { key: 'inMigration', label: '總遷入人口數', match: t => t.includes('遷入') },
 ]
 
 interface BF { name: string; geometry: any; townname: string }
@@ -601,7 +575,9 @@ function isolateSceneLayers(keep: any) {
 
 // 可見度切換一定要先做且同步完成，染色（load + renderer）失敗也不該擋住
 // 圖層顯示或卡住外層的 3D 切換，所以拆開、包 try/catch、絕不 throw 出去。
-async function prepareCube(key: string) {
+// 不自訂渲染，單純沿用 cube 圖層在 WebScene 中原本就設定好的樣式，
+// 這裡只負責切可見度。
+function prepareCube(key: string) {
   const def = CUBES.find(c => c.key === key)
   if (!def || !webScene) return
   const layer = cubeLayers[key]
@@ -609,16 +585,8 @@ async function prepareCube(key: string) {
   activeCube.value = key
   isolateSceneLayers(layer)
   activeCubeLayer = layer
-  try {
-    await layer.load()
-    await applyCubeRenderer(layer, def)
-  } catch (e) {
-    console.error('[Ov] cube 染色失敗（圖層仍會顯示，只是可能沒套用文件級距顏色）:', def.label, e)
-  }
 }
 
-// 三維統計切換：view 的建立/銷毀（rebuildView）一定要 await，
-// 但 cube 的染色是 best-effort、不 await，避免它卡住或讓整個切換失敗。
 async function toggle3D() {
   const turningOn = !show3D.value
   const key = turningOn ? (activeCube.value ?? CUBES[0]?.key ?? null) : null
@@ -634,68 +602,15 @@ async function toggle3D() {
     console.error('[Ov] 切換 2D/3D 失敗:', e)
   }
   if (turningOn && key) {
-    prepareCube(key).catch(e => console.error('[Ov] prepareCube 失敗:', e))
+    prepareCube(key)
   } else if (!turningOn) {
     activeCubeLayer = null
     activeCube.value = null
   }
 }
 
-async function selectCube(key: string) {
-  await prepareCube(key)
-}
-
-// 依文件指定之 7 段級距（ClassBreaksRenderer）為 cube 圖層染色。
-// SceneLayer 可能是 point（cube 3D symbol）或 mesh/multipatch（已烘焙幾何、只能改材質色）兩種，兩種都相容處理。
-async function applyCubeRenderer(layer: any, def: CubeDef) {
-  const [
-    { default: ClassBreaksRenderer },
-    { default: PointSymbol3D },
-    { default: ObjectSymbol3DLayer },
-    { default: MeshSymbol3D },
-    { default: FillSymbol3DLayer },
-  ] = await Promise.all([
-    import('@arcgis/core/renderers/ClassBreaksRenderer'),
-    import('@arcgis/core/symbols/PointSymbol3D'),
-    import('@arcgis/core/symbols/ObjectSymbol3DLayer'),
-    import('@arcgis/core/symbols/MeshSymbol3D'),
-    import('@arcgis/core/symbols/FillSymbol3DLayer'),
-  ])
-  const isMesh = layer.geometryType === 'mesh' || layer.geometryType === 'multipatch'
-  const mkSymbol = (color: string, i: number) => isMesh
-    ? new MeshSymbol3D({ symbolLayers: [new FillSymbol3DLayer({ material: { color } })] })
-    : new PointSymbol3D({ symbolLayers: [new ObjectSymbol3DLayer({
-        resource: { primitive: 'cube' },
-        material: { color },
-        width: 60, depth: 60, height: 40 + i * 30,
-      })] })
-  const classBreakInfos = def.breaks.map(([min, max], i) => ({
-    minValue: min, maxValue: max, symbol: mkSymbol(def.colors[i]!, i),
-  }))
-  const field = resolveCubeField(layer, def.field)
-  console.log(`[Ov] cube「${def.label}」欄位: 文件給的="${def.field}" → 實際使用="${field}"，圖層 fields:`,
-    (layer.fields ?? []).map((f: any) => f.name))
-  layer.renderer = new ClassBreaksRenderer({
-    field, classBreakInfos,
-    // 保底：萬一有欄位值落在給定級距之外（或欄位仍對不上），至少用灰色顯示出來，
-    // 而不是被 ClassBreaksRenderer 判定「無對應 class」而整個不畫（無聲消失，難以排查）。
-    defaultSymbol: mkSymbol('#94a3b8', 3),
-  } as any)
-}
-
-// 文件給的欄位名稱有些含「表名.欄位」（如 新市區買賣.COUNT_SUM_ZEROS），
-// 服務發布後常會被清成底線或整段拿掉表名前綴，這裡對照圖層實際欄位做容錯比對。
-function resolveCubeField(layer: any, wanted: string): string {
-  const fields: string[] = (layer.fields ?? []).map((f: any) => f.name).filter(Boolean)
-  if (!fields.length) return wanted
-  if (fields.includes(wanted)) return wanted
-  const norm = (s: string) => s.replace(/[.\s]/g, '_').replace(/_+/g, '_').toUpperCase()
-  const wantedNorm = norm(wanted)
-  const exact = fields.find(f => norm(f) === wantedNorm)
-  if (exact) return exact
-  const core = norm(wanted.replace(/^.*\./, '').replace(/_SUM_ZEROS$|_MEDIAN_ZEROS$/i, ''))
-  const fuzzy = fields.find(f => { const fn = norm(f); return fn.includes(core) || core.includes(fn) })
-  return fuzzy ?? wanted
+function selectCube(key: string) {
+  prepareCube(key)
 }
 
 function removeAllGL() {
