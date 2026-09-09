@@ -560,7 +560,9 @@ async function initMap() {
 async function rebuildView(is3d: boolean) {
   if (!mapEl.value || !sharedMap) return
   const center = mapView?.center
-  if (mapView) { try { mapView.destroy() } catch {} }
+  // View.destroy() 會連帶 destroy 掉 view.map（esri 內部固定行為），
+  // 所以要先把 map 從舊 view 卸下，sharedMap 才能繼續被下一個 view 重用。
+  if (mapView) { try { mapView.map = null; mapView.destroy() } catch {} }
   if (is3d) {
     mapView = markRaw(new SceneView({
       container: mapEl.value, map: sharedMap,
