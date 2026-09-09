@@ -48,6 +48,17 @@
         </div>
       </transition>
 
+      <!-- 圖例：2D 主題用自畫色階；3D cube 用 ArcGIS Legend 元件直接讀取 WebScene 原本的樣式 -->
+      <div v-if="!show3D" class="map-legend">
+        <div class="legend-title">{{ activeThemeObj?.label }}</div>
+        <div class="legend-bar" :style="{ background: legendGradient }" />
+        <div class="legend-labels"><span>低</span><span>高</span></div>
+      </div>
+      <div v-show="show3D" class="cube-legend-wrap">
+        <div class="legend-title">{{ activeCubeLabel }}</div>
+        <div ref="cubeLegendEl" class="cube-legend" />
+      </div>
+
       <!-- 村里 popup -->
       <transition name="popup-fade">
         <div v-if="selVill" class="map-popup">
@@ -208,12 +219,25 @@ interface SelVill { name: string; townname: string; isXinshi: boolean; data: Rec
 
 // ── ArcGIS ──────────────────────────────────────────────────────
 let MapView: any, SceneView: any, ArcMap: any, FeatureLayer: any
-let GraphicsLayer: any, Graphic: any, esriConfig: any
+let GraphicsLayer: any, Graphic: any, esriConfig: any, Legend: any
 let mapView: any = null
 let sharedMap: any = null   // 2D 模式用的輕量 Map（只放平面主題圖層）
 let webScene: any = null    // 3D 模式直接沿用「行政區概覽」原本的 WebScene（cube 本來就在裡面）
+let legendWidget: any = null
+
+// Legend 元件依賴 esri 官方 CSS（icon、排版），這個 app 目前沒有全域載入過，
+// 用跟 Chart.js 一樣的動態 <link> 注入方式補上，版本對齊 package.json 的 @arcgis/core。
+function loadEsriCss() {
+  if (document.getElementById('esri-css')) return
+  const link = document.createElement('link')
+  link.id = 'esri-css'
+  link.rel = 'stylesheet'
+  link.href = 'https://js.arcgis.com/4.34/esri/themes/light/main.css'
+  document.head.appendChild(link)
+}
 
 async function loadArcGIS() {
+  loadEsriCss()
   const m = await Promise.all([
     import('@arcgis/core/views/MapView'),
     import('@arcgis/core/views/SceneView'),
@@ -222,8 +246,9 @@ async function loadArcGIS() {
     import('@arcgis/core/layers/GraphicsLayer'),
     import('@arcgis/core/Graphic'),
     import('@arcgis/core/config'),
+    import('@arcgis/core/widgets/Legend'),
   ])
-  ;[MapView, SceneView, ArcMap, FeatureLayer, GraphicsLayer, Graphic, esriConfig] = m.map((x: any) => x.default)
+  ;[MapView, SceneView, ArcMap, FeatureLayer, GraphicsLayer, Graphic, esriConfig, Legend] = m.map((x: any) => x.default)
   esriConfig.portalUrl = PORTAL_URL
 }
 
@@ -243,6 +268,7 @@ async function loadChartJS() {
 
 // ── State ────────────────────────────────────────────────────────
 const mapEl       = ref<HTMLDivElement|null>(null)
+const cubeLegendEl = ref<HTMLDivElement|null>(null)
 const radarEl     = ref<HTMLCanvasElement|null>(null)
 const donutEl     = ref<HTMLCanvasElement|null>(null)
 const barEl       = ref<HTMLCanvasElement|null>(null)
@@ -265,6 +291,11 @@ let activeCubeLayer: any = null
 
 // ── Computed ─────────────────────────────────────────────────────
 const activeThemeObj = computed(() => THEMES.find(t => t.key === activeTheme.value))
+const legendGradient = computed(() => {
+  const c = activeThemeObj.value?.colors
+  return c ? `linear-gradient(to right, ${c.join(',')})` : ''
+})
+const activeCubeLabel = computed(() => CUBES.find(c => c.key === activeCube.value)?.label ?? '')
 
 // ── Helpers ──────────────────────────────────────────────────────
 function getVillname(a: Record<string,any>): string {
@@ -595,6 +626,7 @@ async function toggle3D() {
     isolateSceneLayers(cubeLayers[key] ?? null)
   }
   show3D.value = turningOn
+  if (legendWidget) { try { legendWidget.destroy() } catch {}; legendWidget = null }
   try {
     await rebuildView(turningOn)
     await applyChoro(activeTheme.value)
@@ -603,6 +635,10 @@ async function toggle3D() {
   }
   if (turningOn && key) {
     prepareCube(key)
+    // Legend 元件直接讀取 mapView 上目前可見圖層的原生 renderer，不用自己猜顏色/級距
+    if (Legend && mapView && cubeLegendEl.value) {
+      legendWidget = new Legend({ view: mapView, container: cubeLegendEl.value })
+    }
   } else if (!turningOn) {
     activeCubeLayer = null
     activeCube.value = null
@@ -889,6 +925,7 @@ onMounted(async () => {
 onUnmounted(() => {
   barChartInst?.destroy(); donutChartInst?.destroy(); scatterChartInst?.destroy()
   barChartInst = donutChartInst = scatterChartInst = null
+  try { legendWidget?.destroy() } catch {}; legendWidget = null
   try { mapView?.destroy() } catch {}; mapView = null
 })
 </script>
@@ -968,6 +1005,20 @@ onUnmounted(() => {
 }
 .cube-btn.active { background: #fff; color: #334155; border-color: #fff; }
 .cube-btn:not(.active):hover { background: rgba(255,255,255,.12); }
+
+/* 圖例 */
+.map-legend, .cube-legend-wrap {
+  position: absolute; top: 12px; right: 12px; z-index: 20;
+  background: rgba(255,255,255,.93); border-radius: 10px;
+  padding: 8px 12px; box-shadow: 0 2px 12px rgba(0,0,0,.14); backdrop-filter: blur(6px);
+  min-width: 140px;
+}
+.legend-title { font-size: 11px; font-weight: 700; color: #1e293b; margin-bottom: 6px; }
+.legend-bar { height: 8px; border-radius: 4px; }
+.legend-labels { display: flex; justify-content: space-between; font-size: 9.5px; color: #94a3b8; margin-top: 3px; }
+.cube-legend { max-height: 220px; overflow-y: auto; font-size: 11px; }
+.cube-legend :deep(.esri-legend) { background: transparent; padding: 0; font-family: inherit; }
+.cube-legend :deep(.esri-widget) { background: transparent; }
 
 /* Popup */
 .map-popup {
