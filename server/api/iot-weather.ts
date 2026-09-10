@@ -11,9 +11,17 @@ export default defineEventHandler(async (event) => {
       let raw = ''
       res.on('data', chunk => raw += chunk)
       res.on('end', () => {
+        // 把上游真實的 HTTP 狀態碼帶回去，讓前端的 response.ok 判斷準確
+        event.node.res.statusCode = res.statusCode ?? 502
         try { resolve(JSON.parse(raw)) }
-        catch (e) { reject(new Error('JSON parse 失敗')) }
+        catch (e) {
+          event.node.res.statusCode = 502
+          resolve({ error: 'JSON parse 失敗', status: res.statusCode, raw: raw.slice(0, 500) })
+        }
       })
-    }).on('error', reject)
+    }).on('error', (e) => {
+      event.node.res.statusCode = 502
+      resolve({ error: e.message })
+    })
   })
 })
