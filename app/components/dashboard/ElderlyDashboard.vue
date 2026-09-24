@@ -35,6 +35,10 @@
             {{ c.shortLabel }}
           </button>
         </div>
+        <div class="scale-tabs">
+          <button class="scale-tab" :class="{active:scaleMode==='town'}" @click="switchScaleMode('town')">鄉鎮市區</button>
+          <button class="scale-tab" :class="{active:scaleMode==='village'}" @click="switchScaleMode('village')">村里</button>
+        </div>
       </div>
 
       <!-- 圖例 -->
@@ -197,6 +201,13 @@ const INDICES = [
 let MapView: any, ArcMap: any, FeatureLayer: any
 let GraphicsLayer: any, Graphic: any, esriConfig: any
 
+// ── Scale mode (村里 / 鄉鎮市區) ─────────────────────────────
+const scaleMode = ref<'village'|'town'>('village')
+let allBoundaryFeatures: Array<{geometry: any; townname: string; name: string}> = []
+const allScores24 = reactive<Record<IdxKey, ScoreMap>>({
+  mob: new Map(), care: new Map(), eco: new Map(), house: new Map(), env: new Map()
+})
+
 async function loadArcGIS() {
   const m = await Promise.all([
     import('@arcgis/core/views/MapView'),
@@ -273,8 +284,8 @@ const scores23 = reactive<Record<IdxKey, ScoreMap>>({
 const areaBreakdown = reactive<Record<string, Record<string, number>>>({})
 // 住宅：per-village 細項（供 grouped bar）
 const houseVill = ref<Map<string, { e12: number; e22: number; e32: number; total: number }>>(new Map())
-// 環境安全：全區三維風險 %
-const envPct = ref({ lique: 0, fault: 0, flood: 0 })
+// 環境安全：全區互斥風險分類 % (各類加總=100%)
+const envPct = ref({ noRisk: 0, lique: 0, fault: 0, flood: 0, multi: 0 })
 
 const kpis = ref([
   { key: 'total',   label: '老年人口', unit: '人', color: '#C1395E', val: null as string|null },
@@ -394,6 +405,16 @@ async function queryWithGeo(url: string): Promise<any[]> {
   return []
 }
 
+// ── 查詢全台南資料（不含幾何）────────────────────────────────
+async function queryAllTainan(url: string): Promise<any[]> {
+  const fl = new FeatureLayer({ url, outFields: ['*'] })
+  try { await fl.load() } catch {}
+  try {
+    const res = await fl.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: false })
+    return res.features
+  } catch (e) { console.warn('[EldDash] queryAllTainan failed', e); return [] }
+}
+
 // ── 組合欄位偵測（大小寫不敏感）& 村里名稱解析 ───────────────
 const COMB_RE = /^[A-Za-z]\d{2}[A-Za-z]\d{2}[A-Za-z]\d{2}$/
 
@@ -502,7 +523,7 @@ function processHouse(features: any[], target: ScoreMap, isCurrent = false) {
 
 // ── 環境安全（S1x=液化, S2x=斷層, S3x=淹水）────────────────
 function processEnv(features: any[], target: ScoreMap, isCurrent = false) {
-  const area = { lique: 0, fault: 0, flood: 0, total: 0 }
+  const area = { noRisk: 0, lique: 0, fault: 0, flood: 0, multi: 0, total: 0 }
   const tmp = new Map<string, { lique: number; fault: number; flood: number; total: number }>()
   for (const f of features) {
     const a = f.attributes ?? {}
@@ -516,18 +537,30 @@ function processEnv(features: any[], target: ScoreMap, isCurrent = false) {
       const c1 = k.slice(0, 3).toUpperCase()
       const c2 = k.slice(3, 6).toUpperCase()
       const c3 = k.slice(6, 9).toUpperCase()
-      if (c1 === 'S12' || c1 === 'S13') { vm.lique += n; area.lique += n }
-      if (c2 === 'S22')                 { vm.fault += n; area.fault += n }
-      if (c3 === 'S32' || c3 === 'S33') { vm.flood += n; area.flood += n }
+      const isL = c1 === 'S12' || c1 === 'S13'
+      const isF = c2 === 'S22'
+      const isW = c3 === 'S32' || c3 === 'S33'
+      if (isL) vm.lique += n
+      if (isF) vm.fault += n
+      if (isW) vm.flood += n
+      // Classify into mutually exclusive categories for area totals
+      const riskCount = (isL ? 1 : 0) + (isF ? 1 : 0) + (isW ? 1 : 0)
+      if (riskCount === 0)      area.noRisk += n
+      else if (riskCount >= 2) area.multi  += n
+      else if (isL)            area.lique  += n
+      else if (isF)            area.fault  += n
+      else                     area.flood  += n
     }
     const v = vm.total > 0 ? (vm.lique + vm.fault + vm.flood) / (3 * vm.total) : 0
     target.set(village, { score: v, total: vm.total })
   }
   const t = area.total || 1
   if (isCurrent) envPct.value = {
-    lique: area.lique / t * 100,
-    fault: area.fault / t * 100,
-    flood: area.flood / t * 100,
+    noRisk: area.noRisk / t * 100,
+    lique:  area.lique  / t * 100,
+    fault:  area.fault  / t * 100,
+    flood:  area.flood  / t * 100,
+    multi:  area.multi  / t * 100,
   }
 }
 
@@ -537,7 +570,7 @@ async function initMap() {
   const m = new ArcMap({ basemap: 'gray-vector' })
   mapView = markRaw(new MapView({
     container: mapDivRef.value, map: m,
-    center: [120.31, 23.07], zoom: 12,
+    center: [120.295483, 23.080482], zoom: 12,
     ui: { components: ['zoom'] },
   }))
   mapView.ui.remove('attribution')
@@ -546,7 +579,7 @@ async function initMap() {
 }
 
 function removeAllGL() {
-  for (const id of ['choro-gl', 'calc-gl']) {
+  for (const id of ['choro-gl', 'calc-gl', 'town-border-gl', 'xinshi-border-gl', 'label-gl']) {
     const gl = mapView?.map?.findLayerById?.(id)
     if (gl) mapView.map.remove(gl)
   }
@@ -575,9 +608,13 @@ function renderBoundaryBg(allFeatures: any[], xinshiSet: Set<any>) {
 }
 
 // ── 面量圖渲染 ────────────────────────────────────────────────
-function applyChoro(idxKey: IdxKey) {
-  if (!mapView || !cachedGeos.length) return
-  const sm  = scores24[idxKey]
+async function applyChoro(idxKey: IdxKey) {
+  if (!mapView) return
+  // Use allBoundaryFeatures if available, fall back to cachedGeos
+  const geoSource = allBoundaryFeatures.length ? allBoundaryFeatures : cachedGeos
+  if (!geoSource.length) return
+  // Use allScores24 for coloring (all Tainan), scores24 stays for KPIs/charts
+  const sm  = allScores24[idxKey].size ? allScores24[idxKey] : scores24[idxKey]
   const def = INDICES.find(i => i.key === idxKey)!
   const colors = def.colors
 
@@ -596,12 +633,39 @@ function applyChoro(idxKey: IdxKey) {
 
   removeAllGL()
   const gl = new GraphicsLayer({ id: 'choro-gl' })
-  for (const { name, geometry } of cachedGeos) {
+  for (const f of geoSource) {
+    const name = (f as any).name
+    const geometry = (f as any).geometry
+    if (!geometry) continue
     const v = sm.get(name)
     const color = v != null ? toRgba(v.score) : [200, 200, 200, 100]
-    gl.add(new Graphic({ geometry, attributes: { name }, symbol: { type: 'simple-fill', color, outline: { color: [255,255,255,160], width: 0.6 } } as any }))
+    const isXinshi = (f as any).townname === '新市區'
+    gl.add(new Graphic({ geometry, attributes: { name }, symbol: { type: 'simple-fill', color, outline: { color: isXinshi?[220,38,38,255]:[15,23,42,160], width: isXinshi?2.0:1.0 } } as any }))
   }
   mapView.map.add(gl)
+
+  // Village name labels
+  if (allBoundaryFeatures.length) {
+    const lgl = new GraphicsLayer({ id: 'label-gl' })
+    for (const f of allBoundaryFeatures) {
+      if (!f.geometry || !f.name) continue
+      const centroid = f.geometry.centroid ?? f.geometry.extent?.center
+      if (!centroid) continue
+      lgl.add(new Graphic({ geometry: centroid, symbol: { type: 'text', text: f.name, color: [30,41,59,220], haloColor: [255,255,255,200], haloSize: 1.5, font: { size: 9 } } as any }))
+    }
+    mapView.map.add(lgl)
+  }
+
+  // Draw thick xinshi border
+  const xinshiGeoms = allBoundaryFeatures.filter(f => f.townname === '新市區').map(f => f.geometry).filter(Boolean)
+  if (xinshiGeoms.length > 0) {
+    const geometryEngine = await import('@arcgis/core/geometry/geometryEngine').then((m: any) => m.default ?? m)
+    const dissolved = xinshiGeoms.length === 1 ? xinshiGeoms[0] : geometryEngine.union(xinshiGeoms)
+    const bgl = new GraphicsLayer({ id: 'xinshi-border-gl' })
+    bgl.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type: 'simple-fill', color: [0,0,0,0], outline: { color: [220,38,38,255], width: 2.5 } } as any }))
+    mapView.map.add(bgl)
+  }
+
   if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }
 }
 
@@ -628,10 +692,133 @@ function applyChangeChoro(idxKey: IdxKey) {
   for (const { name, geometry } of cachedGeos) {
     const d = diffs.get(name)
     if (d == null) continue
-    gl.add(new Graphic({ geometry, attributes: { name }, symbol: { type: 'simple-fill', color: toColor(d), outline: { color: [255,255,255,160], width: 0.6 } } as any }))
+    gl.add(new Graphic({ geometry, attributes: { name }, symbol: { type: 'simple-fill', color: toColor(d), outline: { color: [15,23,42,160], width: 1.0 } } as any }))
   }
   mapView.map.add(gl)
   if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }
+}
+
+// ── 鄉鎮市區模式 ──────────────────────────────────────────────
+function buildTownScores(idxKey: IdxKey): Map<string, number> {
+  const nameToTown = new Map(allBoundaryFeatures.map(f => [f.name, f.townname]))
+  const townAgg = new Map<string, number[]>()
+  for (const [vill, vs] of allScores24[idxKey]) {
+    const tn = nameToTown.get(vill) ?? ''
+    if (!tn) continue
+    if (!townAgg.has(tn)) townAgg.set(tn, [])
+    townAgg.get(tn)!.push(vs.score)
+  }
+  const result = new Map<string, number>()
+  for (const [tn, scores] of townAgg) {
+    result.set(tn, scores.reduce((s, v) => s + v, 0) / scores.length)
+  }
+  return result
+}
+
+async function applyTownChoro(idxKey: IdxKey) {
+  if (!mapView || !allBoundaryFeatures.length) return
+  const def = INDICES.find(i => i.key === idxKey)!
+  const { colors } = def
+  const townScores = buildTownScores(idxKey)
+  const vals = [...townScores.values()].filter(isFinite)
+  const mn = Math.min(...vals), mx = Math.max(...vals)
+  const range = mn === mx ? 1 : mx - mn
+  const hexToRgba = (hex: string, a: number) =>
+    [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16), a]
+  const toColor = (v: number) => {
+    const t = (v - mn) / range
+    const idx = Math.min(colors.length - 1, Math.floor(t * colors.length))
+    return hexToRgba(colors[idx]!, 220)
+  }
+
+  removeAllGL()
+  const xbgl = mapView.map.findLayerById('xinshi-border-gl')
+  if (xbgl) mapView.map.remove(xbgl)
+
+  const gl = new GraphicsLayer({ id: 'choro-gl' })
+  const borderGL = new GraphicsLayer({ id: 'town-border-gl' })
+  const geometryEngine = await import('@arcgis/core/geometry/geometryEngine').then((m: any) => m.default ?? m)
+
+  const townGeoMap = new Map<string, any[]>()
+  for (const f of allBoundaryFeatures) {
+    if (!f.townname || !f.geometry) continue
+    if (!townGeoMap.has(f.townname)) townGeoMap.set(f.townname, [])
+    townGeoMap.get(f.townname)!.push(f.geometry)
+  }
+
+  for (const [townname, geoms] of townGeoMap) {
+    const v = townScores.get(townname)
+    const color = v != null ? toColor(v) : [200, 200, 200, 120]
+    for (const geo of geoms) {
+      gl.add(new Graphic({ geometry: geo, attributes: { townname }, symbol: { type: 'simple-fill', color, outline: { color: [...(color.slice(0,3) as [number,number,number]), 60], width: 0.3 } } as any }))
+    }
+    try {
+      const dissolved = geoms.length === 1 ? geoms[0] : geometryEngine.union(geoms.filter(Boolean))
+      if (dissolved) {
+        const isX = townname === '新市區'
+        borderGL.add(new Graphic({ geometry: markRaw(dissolved), symbol: { type: 'simple-fill', color: [0,0,0,0], outline: { color: isX ? [220,38,38,255] : [15,23,42,200], width: isX ? 3.0 : 2.0 } } as any }))
+      }
+    } catch {}
+  }
+  mapView.map.add(gl)
+  mapView.map.add(borderGL)
+
+  // Town name labels
+  const lgl = new GraphicsLayer({ id: 'label-gl' })
+  for (const [townname, geoms] of townGeoMap) {
+    try {
+      const dissolved = geoms.length === 1 ? geoms[0] : geometryEngine.union(geoms.filter(Boolean))
+      if (!dissolved) continue
+      const centroid = dissolved.centroid ?? dissolved.extent?.center
+      if (centroid) lgl.add(new Graphic({ geometry: centroid, symbol: { type: 'text', text: townname, color: [30,41,59,240], haloColor: [255,255,255,220], haloSize: 2, font: { size: 11, weight: 'bold' } } as any }))
+    } catch {}
+  }
+  mapView.map.add(lgl)
+  if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }
+}
+
+async function switchScaleMode(mode: 'village'|'town') {
+  scaleMode.value = mode
+  selectedVill.value = null
+  if (mode === 'town') {
+    await applyTownChoro(activeIdx.value)
+    try { await mapView?.goTo({ center: [120.2, 23.05], zoom: 10 }) } catch {}
+    drawAllTownCharts()
+  } else {
+    await applyChoro(activeIdx.value)
+    try { await mapView?.goTo({ center: [120.295483, 23.080482], zoom: 12 }) } catch {}
+    redrawAll()
+  }
+}
+
+function drawTownBar(key: IdxKey, idxDef: { key: IdxKey; color: string; shortLabel: string }) {
+  const canvas = canvasRefs.get(key); if (!canvas || !Chart) return
+  const scores = buildTownScores(key)
+  const sorted = [...scores.entries()].sort((a, b) => b[1] - a[1])
+  chartInst.get(key)?.destroy()
+  chartInst.set(key, new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: sorted.map(([tn]) => tn),
+      datasets: [{
+        data: sorted.map(([, s]) => +(s * 100).toFixed(1)),
+        backgroundColor: sorted.map(([tn]) => tn === '新市區' ? idxDef.color + 'cc' : '#94a3b8cc'),
+        borderWidth: 0, borderRadius: 2,
+      }],
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { font: { size: 9 } }, title: { display: true, text: '%', font: { size: 9 } } },
+        y: { ticks: { font: { size: 8 } } },
+      },
+    },
+  }))
+}
+
+function drawAllTownCharts() {
+  for (const idx of INDICES) drawTownBar(idx.key, idx)
 }
 
 // ── 地圖切換 ──────────────────────────────────────────────────
@@ -778,7 +965,9 @@ function drawEco() {
 
   const sorted = [...scores24.eco.entries()].sort(([, a], [, b]) => b.score - a.score).slice(0, 8)
   const colors = INDICES[2].colors
-  const toC = (s: number) => colors[Math.min(4, Math.floor(s * 5))]!
+  const maxScore = Math.max(...sorted.map(([, v]) => v.score), 0.001)
+  // Darken: always use colors[2]-colors[4] range, relative to max score
+  const toC = (s: number) => colors[Math.min(4, 2 + Math.floor((s / maxScore) * 3))]!
 
   chartInst.set('eco', new Chart(canvas, {
     type: 'bar',
@@ -834,35 +1023,30 @@ function drawHouse() {
   }))
 }
 
-// 5. 環境安全：極座標面積圖（3 維風險）
+// 5. 環境安全：環形圖（互斥風險分類，加總=100%）
 function drawEnv() {
   const canvas = canvasRefs.get('env'); if (!canvas || !Chart) return
   chartInst.get('env')?.destroy()
   if (changeMode.env) { drawDivBar('env'); return }
 
-  const { lique, fault, flood } = envPct.value
+  const { noRisk, lique, fault, flood, multi } = envPct.value
 
   chartInst.set('env', new Chart(canvas, {
-    type: 'bar',
+    type: 'doughnut',
     data: {
-      labels: ['土壤液化潛勢', '地質敏感帶', '淹水潛勢'],
+      labels: ['無環境風險', '液化潛勢', '地質敏感帶', '淹水潛勢', '複合風險'],
       datasets: [{
-        data: [+lique.toFixed(1), +fault.toFixed(1), +flood.toFixed(1)],
-        backgroundColor: ['#B3A86A', '#C67052', '#89A7C2'],
-        borderColor:     ['#8a6a38', '#8a3e28', '#4a7290'],
-        borderWidth: 1, borderRadius: 3,
+        data: [+noRisk.toFixed(1), +lique.toFixed(1), +fault.toFixed(1), +flood.toFixed(1), +multi.toFixed(1)],
+        backgroundColor: ['#94a3b8cc', '#B3A86Acc', '#C67052cc', '#89A7C2cc', '#C1395Ecc'],
+        borderColor:     ['#64748b',   '#7a6a38',   '#8a3e28',   '#4a7290',   '#8a1e3c'],
+        borderWidth: 1.5,
       }],
     },
     options: {
-      indexAxis: 'y',
-      responsive: true, maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false, cutout: '58%',
       plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: (c: any) => ` ${Number(c.raw).toFixed(1)}% 老年人口暴露` } },
-      },
-      scales: {
-        x: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 9 } }, max: 100, beginAtZero: true },
-        y: { grid: { display: false }, ticks: { font: { size: 9 } } },
+        legend: { display: true, position: 'right', labels: { font: { size: 8 }, boxWidth: 9, padding: 5 } },
+        tooltip: { callbacks: { label: (c: any) => ` ${c.label}: ${Number(c.raw).toFixed(1)}%` } },
       },
     },
   }))
@@ -921,20 +1105,26 @@ onMounted(async () => {
 
   // 地圖初始化（同 PopulationDashboard）
   await initMap()
-  // goTo 村里範圍（同 PopulationDashboard 用 fl.fullExtent）
-  if (flRef) {
-    try { await mapView.goTo(flRef.fullExtent.expand(1.4)) } catch {}
-  }
 
-  if (cachedGeos.length) applyChoro('mob')
-
-  // 載入邊界背景
+  // 載入邊界背景 + allBoundaryFeatures
   if (boundaryUrl) {
     try {
       const bFL = new FeatureLayer({ url: boundaryUrl, outFields: ['*'] })
       await bFL.load()
       const bRes = await bFL.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
       if (bRes?.features?.length > 0) {
+        // Populate allBoundaryFeatures for town mode
+        allBoundaryFeatures = (bRes.features ?? []).map((f: any) => {
+          const a = f.attributes ?? {}
+          const keys = Object.keys(a)
+          const townKey = keys.find(k => /^TOWN(NAME)?$/i.test(k))
+          const tn = townKey ? String(a[townKey] ?? '') : ''
+          const villKey = keys.find(k => /^(VILLAGE|VILLNAME|VILNAME)$/i.test(k))
+          return { geometry: markRaw(f.geometry), townname: tn, name: villKey ? String(a[villKey] ?? '') : '' }
+        }).filter((f: any) => f.geometry)
+        console.log('[EldDash] allBoundaryFeatures:', allBoundaryFeatures.length)
+        if (cachedGeos.length) applyChoro('mob')
+
         const xinshiFeats = bRes.features.filter((f: any) => {
           const a = f.attributes ?? {}
           return a.TOWN === '新市區' || a.TOWNNAME === '新市區' || String(a.TOWNCODE) === '67000200'
@@ -943,6 +1133,7 @@ onMounted(async () => {
         // Move boundary-bg-gl below choro-gl
         const bgGL = mapView.map.findLayerById?.('boundary-bg-gl')
         if (bgGL) mapView.map.reorder(bgGL, 0)
+        if (sciGL) { try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {} }
         console.log('[EldDash] 邊界背景載入完成')
       }
     } catch (e) {
@@ -965,7 +1156,7 @@ onMounted(async () => {
             geometry: f.geometry,
             symbol: {
               type: 'simple-fill',
-              color: [240, 202, 80, 30],
+              color: [0, 0, 0, 0],
               outline: { color: [207, 149, 70, 230], width: 2.5 },
             } as any,
           }))
@@ -978,6 +1169,33 @@ onMounted(async () => {
       console.warn('[EldDash] 南科圖層載入失敗', e)
     }
   }
+
+  // 非同步載入全台南資料（供鄉鎮市區模式用）
+  ;(async () => {
+    for (const idx of INDICES) {
+      const url = urls[idx.key].cur
+      if (!url) continue
+      try {
+        const feats = await queryAllTainan(url)
+        if (!feats.length) continue
+        switch (idx.key) {
+          case 'mob':   processMob(feats,   allScores24.mob);          break
+          case 'care':  processCare(feats,  allScores24.care);         break
+          case 'eco':   processEco(feats,   allScores24.eco);          break
+          case 'house': processHouse(feats, allScores24.house, false); break
+          case 'env':
+            processEnv(feats, allScores24.env, false)
+            // 若初始新市區查詢失敗導致 envPct 全為 0，以全台南資料補填並重繪
+            if (!scores24.env.size) {
+              processEnv(feats, scores24.env, true)
+              nextTick().then(() => { if (scaleMode.value === 'village' && !changeMode.env) drawEnv() })
+            }
+            break
+        }
+      } catch {}
+    }
+    console.log('[EldDash] allScores24 loaded:', Object.fromEntries(Object.entries(allScores24).map(([k,v]) => [k, (v as Map<any,any>).size])))
+  })()
 
   // 背景載入前一年（用於變化量）
   Promise.all(INDICES.map(async idx => {
@@ -998,6 +1216,7 @@ onUnmounted(() => {
   mapView?.destroy(); mapView = null
   sciGL = null
   cachedGeos = []
+  allBoundaryFeatures = []
   chartInst.forEach(c => c?.destroy()); chartInst.clear()
 })
 </script>
@@ -1042,6 +1261,9 @@ onUnmounted(() => {
 .ki-v { font-size: 15px; font-weight: 700; line-height: 1.1; }
 .ki-u { font-size: 9px; color: #94a3b8; }
 .ind-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+.scale-tabs { display: flex; gap: 4px; margin-top: 6px; }
+.scale-tab { padding: 2px 8px; border-radius: 10px; border: 1px solid #d1d5db; background: #fff; font-size: 10px; color: #475569; cursor: pointer; }
+.scale-tab.active { background: #1e293b; color: #fff; border-color: #1e293b; }
 .ind-pill {
   display: flex; align-items: center; gap: 4px; padding: 3px 7px;
   border: 1px solid #e2e8f0; border-radius: 20px; background: #f8fafc;
@@ -1067,7 +1289,7 @@ onUnmounted(() => {
 /* ── 右側 ── */
 .right-col {
   grid-column: 2; grid-row: 1 / 3;
-  display: flex; flex-direction: column; gap: 8px; min-height: 0;
+  display: grid; grid-template-rows: 1fr 1fr; gap: 8px; min-height: 0;
 }
 
 /* ── 下排 ── */

@@ -20,8 +20,10 @@ export enum LayerCategory {
   PublicFacilities = 'public_facilities',  // 公共設施與社會福利
   Economic = 'economic',                    // 經濟資料
   Transportation = 'transportation',        // 交通運輸與規劃
-  Environment = 'environment', 
-  Cadastral = 'cadastral',              //地籍圖層
+  Environment = 'environment',              // 自然環境與災害
+  Cadastral = 'cadastral',                  // 地政圖資
+  Satellite = 'satellite',                  // SPOT衛星影像
+  Cultural = 'cultural',                    // 園區人文生態景觀
 }
 
 /**
@@ -33,8 +35,20 @@ export const LayerCategoryNames: Record<LayerCategory, string> = {
   [LayerCategory.Economic]: '經濟資料',
   [LayerCategory.Transportation]: '交通運輸與規劃',
   [LayerCategory.Environment]: '自然環境與災害',
-  [LayerCategory.Cadastral]:         '地政圖資', 
+  [LayerCategory.Cadastral]:  '地政圖資',
+  [LayerCategory.Satellite]:  'SPOT衛星影像',
+  [LayerCategory.Cultural]:   '園區人文生態景觀',
 }
+
+/**
+ * 基礎設施類別中，預設關閉的圖層（不自動加入地圖）
+ * 使用 includes 判斷，兼容 WebScene 標題略有差異的情況
+ */
+const isInfrastructureDefaultOff = (title: string): boolean =>
+  title.includes('都市計畫區') ||
+  title.includes('都市計畫使用分區') ||
+  title.includes('非都市土地使用編定') ||
+  title.includes('非都市土地使用分區')
 
 /**
  * 排除的圖層列表（不納入任何分類，完全隱藏）
@@ -66,6 +80,16 @@ const LAYER_CATEGORY_MAP: Record<string, LayerCategory> = {
   '計畫實驗區村里界':                   LayerCategory.Infrastructure,
   '計畫實驗區鄉鎮市區界':               LayerCategory.Infrastructure,
   '2020年臺南市河川河道':               LayerCategory.Infrastructure,
+  '2025年臺南市都市計畫區':             LayerCategory.Infrastructure,
+  '2025年臺南市都市計畫使用分區':       LayerCategory.Infrastructure,
+  '2025年臺南市非都市土地使用編定':     LayerCategory.Infrastructure,
+  '2025年臺南市非都市土地使用分區':     LayerCategory.Infrastructure,
+
+  // ── SPOT 衛星影像 ──
+  '2020年1月31日SPOT衛星真實色彩影像': LayerCategory.Satellite,
+  '2020年1月31日SPOT衛星NIR假色影像':  LayerCategory.Satellite,
+  '2022年3月5日SPOT衛星真實色彩影像':  LayerCategory.Satellite,
+  '2022年3月5日SPOT衛星NIR假色影像':   LayerCategory.Satellite,
 
   // ── 公共設施與社會福利 ──
   '2022年臺南市加油站位置':             LayerCategory.PublicFacilities,
@@ -139,6 +163,16 @@ const LAYER_CATEGORY_MAP: Record<string, LayerCategory> = {
   '2017年臺南市地下水二級管制區':       LayerCategory.Environment,
   '2025年臺南市地下水區分範圍':         LayerCategory.Environment,
   '2025年臺南市保安林分布':             LayerCategory.Environment,
+  '2020年臺南市綠覆蓋':                 LayerCategory.Environment,
+  '2022年臺南市綠覆蓋':                 LayerCategory.Environment,
+
+  // ── 園區人文生態景觀 ──
+  '藝術變電箱':                         LayerCategory.Cultural,
+  '花蹤':                               LayerCategory.Cultural,
+  '景觀水塔':                           LayerCategory.Cultural,
+  '生態水鳥點位':                       LayerCategory.Cultural,
+  '生態滯洪池點位':                     LayerCategory.Cultural,
+  '考古遺跡點位':                       LayerCategory.Cultural,
 
 }
 
@@ -157,7 +191,29 @@ const getCategoryByTitle = (title: string): LayerCategory | null => {
   if (LAYER_CATEGORY_MAP[title]) {
     return LAYER_CATEGORY_MAP[title]
   }
-  
+
+  // 關鍵字後備比對（處理 WebScene 標題與映射表略有差異的情況）
+  if (title.includes('SPOT') || title.includes('衛星影像') || title.includes('衛星NIR')) {
+    return LayerCategory.Satellite
+  }
+  if (
+    title.includes('都市計畫區') ||
+    title.includes('都市計畫使用分區') ||
+    title.includes('非都市土地使用編定') ||
+    title.includes('非都市土地使用分區')
+  ) {
+    return LayerCategory.Infrastructure
+  }
+  if (title.includes('綠覆蓋')) {
+    return LayerCategory.Environment
+  }
+  if (
+    title === '藝術變電箱' || title === '花蹤' || title === '景觀水塔' ||
+    title.includes('生態水鳥') || title.includes('生態滯洪池') || title.includes('考古遺跡')
+  ) {
+    return LayerCategory.Cultural
+  }
+
   // 如果映射表中沒有，記錄警告並返回 null（不歸類）
   console.warn(`⚠️ 圖層 "${title}" 不在映射表中，將被排除`)
   return null
@@ -325,20 +381,21 @@ export const useLayerStore = defineStore('layer', () => {
         }
         
         const isInfrastructure = category === LayerCategory.Infrastructure
-        
+        const isDefaultOn = isInfrastructure && !isInfrastructureDefaultOff(layer.title)
+
         processedLayers.push({
           id: layer.id,
           title: layer.title || layer.id,
           type: layer.type || 'unknown',
           category: category,
-          visible: isInfrastructure ? true : false,  // 只有基礎設施預設可見
+          visible: isDefaultOn,
           opacity: layer.opacity ?? 1,
           url: layer.url,
           minScale: layer.minScale,
           maxScale: layer.maxScale,
           legendEnabled: layer.legendEnabled ?? true,
           popupEnabled: layer.popupEnabled ?? true,
-          isAddedToMap: isInfrastructure,  // 只有基礎設施預設添加
+          isAddedToMap: isDefaultOn,
         })
       }
       
@@ -353,7 +410,7 @@ export const useLayerStore = defineStore('layer', () => {
       createLayerGroups()
       
       console.log(`✅ 已載入 ${allLayers.value.length} 個圖層（已排除 ${layers.length - allLayers.value.length} 個圖層）`)
-      console.log(`📍 預設開啟 ${addedLayerIds.value.length} 個基礎設施圖層`)
+      console.log(`📍 預設開啟 ${addedLayerIds.value.length} 個圖層`)
       
       // 顯示分類統計
       console.log('📊 圖層分類統計:')

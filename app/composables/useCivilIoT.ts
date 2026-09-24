@@ -51,6 +51,9 @@ export const useCivilIoT = () => {
       if (!response.ok) throw new Error(`PM2.5 API 請求失敗: ${response.status}`)
 
       const data = await response.json()
+      if (!Array.isArray(data.value)) {
+        throw new Error(data.error || `PM2.5 API 回傳格式異常（沒有 value 陣列，status=${data.status ?? '未知'}）`)
+      }
 
       const stations: AirQualityData[] = data.value.map((datastream: any) => {
         const thing = datastream.Thing || {}
@@ -107,6 +110,9 @@ export const useCivilIoT = () => {
       if (!response.ok) throw new Error(`天氣 API 請求失敗: ${response.status}`)
 
       const data = await response.json()
+      if (!Array.isArray(data.value)) {
+        throw new Error(data.error || `天氣 API 回傳格式異常（沒有 value 陣列，status=${data.status ?? '未知'}）`)
+      }
       const stationMap = new Map<string, WeatherData>()
 
       data.value.forEach((stream: any) => {

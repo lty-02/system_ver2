@@ -1,8 +1,13 @@
 <template>
   <div class="ap-root">
 
+    <!-- 決策機關：綜合概覽 (shared) -->
+    <OverviewDashboard v-if="theme === 'overview'" />
+
     <!-- 決策機關：社會脆弱度 -->
-    <SocialVulnerabilityDashboard v-if="userRole === 'authority' && theme === 'vulnerability'" />
+    <SocialVulnerabilityDashboard v-else-if="userRole === 'authority' && theme === 'vulnerability'" />
+    <LandUseDashboard    v-else-if="userRole === 'authority' && theme === 'landuse'" />
+    <GreenEcoDashboard  v-else-if="userRole === 'authority' && theme === 'nature'" />
 
     <!-- 決策機關：尚未選擇主題 -->
     <div v-else-if="userRole === 'authority'" class="empty-authority">
@@ -21,6 +26,10 @@
     <template v-else>
       <!-- 人口結構：整頁 PopulationDashboard -->
       <PopulationDashboard v-if="theme === 'population'" />
+
+
+      <!-- 房市交易：整頁 HousingDashboard -->
+      <HousingDashboard v-else-if="theme === 'housing'" />
 
       <!-- 銀髮安居：整頁 ElderlyDashboard -->
       <ElderlyDashboard v-else-if="theme === 'elderly'" />
@@ -47,48 +56,7 @@
       <!-- 儀表板內容 -->
       <div class="dashboard-scroll">
 
-        <!-- ── 房市交易 ── -->
-        <template v-if="theme === 'housing'">
-          <div class="kpi-row">
-            <div v-for="k in housingKPIs" :key="k.label" class="kpi-card" :style="{ borderTopColor: k.color }">
-              <div class="kpi-label">{{ k.label }}</div>
-              <div class="kpi-val">—</div>
-              <div class="kpi-unit">{{ k.unit }}</div>
-            </div>
-          </div>
-          <div class="chart-grid col-2">
-            <div class="chart-card span-1">
-              <div class="chart-title">季度成交量趨勢</div>
-              <div class="chart-placeholder">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="28" height="28"><path d="M3 3v18h18"/><path d="M18 17l-5-5-4 4-3-3"/></svg>
-                <span>圖表整備中</span>
-              </div>
-            </div>
-            <div class="chart-card span-1">
-              <div class="chart-title">各區成交單價比較</div>
-              <div class="chart-placeholder">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="28" height="28"><path d="M21 21H3V3"/><rect x="7" y="10" width="3" height="11"/><rect x="13" y="6" width="3" height="15"/></svg>
-                <span>圖表整備中</span>
-              </div>
-            </div>
-          </div>
-          <div class="chart-grid col-2">
-            <div class="chart-card span-1">
-              <div class="chart-title">房型結構分布</div>
-              <div class="chart-placeholder sm">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="22" height="22"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 12L8.5 6.5"/><path d="M12 12l4 0"/></svg>
-                <span>圖表整備中</span>
-              </div>
-            </div>
-            <div class="chart-card span-1">
-              <div class="chart-title">屋齡結構</div>
-              <div class="chart-placeholder sm">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="22" height="22"><path d="M21 21H3V3"/><rect x="7" y="13" width="3" height="8"/><rect x="13" y="9" width="3" height="12"/></svg>
-                <span>圖表整備中</span>
-              </div>
-            </div>
-          </div>
-        </template>
+        <!-- 房市交易已移至 HousingDashboard 整頁 -->
 
         <!-- ── 生活機能（placeholder kept, replaced by AmenityDashboard above） ── -->
         <template v-if="theme === 'amenity_disabled'">
@@ -235,18 +203,22 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import OverviewDashboard             from '@/components/dashboard/OverviewDashboard.vue'
 import PopulationDashboard          from '@/components/dashboard/PopulationDashboard.vue'
 import ElderlyDashboard             from '@/components/dashboard/ElderlyDashboard.vue'
 import SocialVulnerabilityDashboard from '@/components/dashboard/SocialVulnerabilityDashboard.vue'
 import AmenityDashboard             from '@/components/dashboard/AmenityDashboard.vue'
 import EducationDashboard           from '@/components/dashboard/EducationDashboard.vue'
+import LandUseDashboard             from '@/components/dashboard/LandUseDashboard.vue'
+import GreenEcoDashboard            from '@/components/dashboard/GreenEcoDashboard.vue'
+import HousingDashboard             from '@/components/dashboard/HousingDashboard.vue'
 
 const props = withDefaults(defineProps<{
   userRole?: 'public' | 'authority'
   theme?: string
 }>(), {
   userRole: 'public',
-  theme: 'population',
+  theme: 'overview',
 })
 
 const THEMES = [

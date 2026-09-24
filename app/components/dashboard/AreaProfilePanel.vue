@@ -106,9 +106,17 @@ const emit = defineEmits<{
 }>()
 
 const role = ref<'public' | 'authority'>('public')
-const activeTheme = ref('population')
+const activeTheme = ref('overview')
 
 const authorityThemes = [
+  {
+    id: 'overview',
+    name: '綜合概覽',
+    sub: '人口、房市、銀髮、脆弱度、生態',
+    color: '#4f7396',
+    lightBg: '#eef4fb',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+  },
   {
     id: 'vulnerability',
     name: '社會脆弱度',
@@ -117,9 +125,33 @@ const authorityThemes = [
     lightBg: '#f5eef7',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4M12 16h.01"/></svg>',
   },
+  {
+    id: 'landuse',
+    name: '土地利用',
+    sub: '都市計畫、非都市土地、使用分區',
+    color: '#5B8260',
+    lightBg: '#edf3ee',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+  },
+  {
+    id: 'nature',
+    name: '自然生態',
+    sub: '綠覆蓋、花蹤、水鳥、滯洪池',
+    color: '#16a34a',
+    lightBg: '#f0fdf4',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 22V12M12 12C12 12 7 9 7 4a5 5 0 0 1 10 0c0 5-5 8-5 8z"/><path d="M5 20c1.5-2 4-3 7-3s5.5 1 7 3"/></svg>',
+  },
 ]
 
 const themes = [
+  {
+    id: 'overview',
+    name: '綜合概覽',
+    sub: '人口、房市、銀髮、脆弱度、生態',
+    color: '#4f7396',
+    lightBg: '#eef4fb',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+  },
   {
     id: 'population',
     name: '人口結構',
@@ -164,7 +196,7 @@ const themes = [
 
 function setRole(r: 'public' | 'authority') {
   role.value = r
-  const defaultTheme = r === 'authority' ? 'vulnerability' : 'population'
+  const defaultTheme = r === 'authority' ? 'overview' : 'overview'
   activeTheme.value = defaultTheme
   emit('role-change', r)
   emit('theme-change', defaultTheme)

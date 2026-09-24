@@ -38,8 +38,12 @@
 
         <!-- Header -->
         <div class="panel-header">
-          <div class="panel-title">新市區生活機能</div>
+          <div class="panel-title">{{ scaleMode === 'town' ? '臺南市' : '新市區' }}生活機能</div>
           <div class="panel-sub">Tainan · 新市區</div>
+          <div class="scale-tabs">
+            <button class="scale-tab" :class="{ active: scaleMode === 'town' }" @click="switchScaleMode('town')">鄉鎮市區</button>
+            <button class="scale-tab" :class="{ active: scaleMode === 'village' }" @click="switchScaleMode('village')">村里</button>
+          </div>
         </div>
 
         <!-- Count cards 2×4 — larger numbers -->
@@ -55,7 +59,7 @@
             @click="setActive(fac.key)"
           >
             <div class="cc-count" :style="{ color: fac.color }">
-              {{ facData[fac.key]?.length ?? 0 }}
+              {{ scaleMode === 'town' ? (allFacData[fac.key]?.length ?? 0) : (facData[fac.key]?.length ?? 0) }}
             </div>
             <div class="cc-label" :style="activeKey === fac.key ? { color: fac.color } : {}">
               {{ fac.label }}
@@ -173,12 +177,20 @@ const loading        = ref(true)
 const mapDivRef      = ref<HTMLDivElement | null>(null)
 const chartCanvasRef = ref<HTMLCanvasElement | null>(null)
 const activeKey      = ref<FacKey>('activity')
+const scaleMode      = ref<'village' | 'town'>('village')
 
 interface FacItem { name: string; geometry: any; color: string; typeLabel: string }
 const facData = ref<Record<FacKey, FacItem[]>>({
   activity: [], parking: [], bank: [], post: [],
   market:   [], gas:     [], park: [], cvs:  [],
 })
+const allFacData = ref<Record<FacKey, FacItem[]>>({
+  activity: [], parking: [], bank: [], post: [],
+  market:   [], gas:     [], park: [], cvs:  [],
+})
+
+// Module-level (non-reactive) boundary feature cache
+let allBoundaryFeatures: Array<{ geometry: any; townname: string; name: string }> = []
 
 const selectedFac = ref<{ name: string; typeLabel: string; color: string } | null>(null)
 
@@ -186,11 +198,17 @@ let mapView: any  = null
 let facGL: any    = null
 let barChart: Chart | null = null
 let sciGL: any    = null
+let _ws: any      = null
 const sciParkVisible = ref(false)
 
 // ── Computed ──────────────────────────────────────────────────
 const activeFac      = computed(() => FACILITIES.find(f => f.key === activeKey.value))
-const activeFacItems = computed(() => facData.value[activeKey.value] ?? [])
+const activeFacItems = computed(() => {
+  if (scaleMode.value === 'town') {
+    return allFacData.value[activeKey.value] ?? []
+  }
+  return facData.value[activeKey.value] ?? []
+})
 
 // ── Chart ─────────────────────────────────────────────────────
 function hexToRgba(hex: string, alpha: number): string {
@@ -203,11 +221,15 @@ function hexToRgba(hex: string, alpha: number): string {
 function renderChart() {
   if (!chartCanvasRef.value) return
   const labels = FACILITIES.map(f => f.label)
-  const counts = FACILITIES.map(f => facData.value[f.key]?.length ?? 0)
+  const counts = FACILITIES.map(f =>
+    scaleMode.value === 'town'
+      ? (allFacData.value[f.key]?.length ?? 0)
+      : (facData.value[f.key]?.length ?? 0)
+  )
   const colors = FACILITIES.map(f => f.color)
 
   if (barChart) {
-    barChart.data.datasets[0].data = counts
+    barChart.data.datasets[0]!.data = counts
     barChart.update()
     return
   }
@@ -249,8 +271,10 @@ function renderChart() {
   } as any)
 }
 
-// Update chart whenever facData changes (after data load)
+// Update chart whenever facData or allFacData changes (after data load)
 watch(facData, () => { nextTick(renderChart) }, { deep: true })
+watch(allFacData, () => { nextTick(renderChart) }, { deep: true })
+watch(scaleMode, () => { nextTick(renderChart) })
 
 // ── Actions ───────────────────────────────────────────────────
 function setActive(key: FacKey) {
@@ -306,25 +330,45 @@ async function initMap(): Promise<void> {
 }
 
 // ── Render village polygons ───────────────────────────────────
-function renderVillages(allFeatures: any[], xinshiFeatures: any[]) {
+function renderVillages(allFeatures: any[], _xinshiFeatures: any[]) {
   if (!mapView || !allFeatures.length) return
-  const xinshiSet = new Set(xinshiFeatures)
+  // Try attribute-based xinshi detection; fall back to treating all as xinshi
+  // when no fields match (計畫實驗區村里界 is a 新市區-specific layer)
+  const matchCount = allFeatures.filter(f => {
+    const a = f.attributes ?? {}
+    return a.TOWN === '新市區' || a.TOWNNAME === '新市區' || String(a.TOWNCODE) === '67000200'
+  }).length
+  const allAreXinshi = matchCount === 0
   const gl = new GraphicsLayer({ id: 'village-gl' })
   for (const f of allFeatures) {
     if (!f.geometry) continue
-    const isXinshi = xinshiSet.has(f)
+    const a = f.attributes ?? {}
+    const isXinshi = allAreXinshi || a.TOWN === '新市區' || a.TOWNNAME === '新市區' || String(a.TOWNCODE) === '67000200'
     gl.add(new Graphic({
       geometry: f.geometry,
       symbol: {
         type: 'simple-fill',
-        color: [248, 250, 252, isXinshi ? 200 : 130],
+        color: [248, 250, 252, isXinshi ? 40 : 100],
         outline: isXinshi
-          ? { color: [15, 23, 42, 230], width: 1.8 }
-          : { color: [203, 213, 225, 140], width: 0.5 },
+          ? { color: [220, 38, 38, 255], width: 2.5 }
+          : { color: [203, 213, 225, 100], width: 0.4 },
       } as any,
     }))
   }
   mapView.map.add(gl, 0)
+
+  // Village name labels
+  if (allBoundaryFeatures.length) {
+    const existingLbl = mapView.map.findLayerById('label-gl'); if (existingLbl) mapView.map.remove(existingLbl)
+    const lgl = new GraphicsLayer({ id: 'label-gl' })
+    for (const f of allBoundaryFeatures) {
+      if (!f.geometry || !f.name) continue
+      const centroid = f.geometry.centroid ?? f.geometry.extent?.center
+      if (!centroid) continue
+      lgl.add(new Graphic({ geometry: centroid, symbol: { type: 'text', text: f.name, color: [30,41,59,220], haloColor: [255,255,255,200], haloSize: 1.5, font: { size: 9 } } as any }))
+    }
+    mapView.map.add(lgl)
+  }
 }
 
 // ── Render facility points for active key ─────────────────────
@@ -332,7 +376,9 @@ function renderFacPoints(key: FacKey) {
   if (!mapView) return
   if (facGL) { mapView.map.remove(facGL); facGL = null }
 
-  const items = facData.value[key]
+  const items = scaleMode.value === 'town'
+    ? (allFacData.value[key] ?? [])
+    : (facData.value[key] ?? [])
   if (!items?.length) return
 
   const fac = FACILITIES.find(f => f.key === key)!
@@ -376,6 +422,194 @@ function renderFacPoints(key: FacKey) {
   })
 }
 
+// ── Add 新市區 thick border ────────────────────────────────────
+async function addXinshiBorder() {
+  const existing = mapView?.map?.findLayerById?.('xinshi-border-gl')
+  if (existing) mapView.map.remove(existing)
+  const xinshiGeoms = allBoundaryFeatures.filter(f => f.townname === '新市區').map(f => f.geometry).filter(Boolean)
+  if (!xinshiGeoms.length || !mapView) return
+  try {
+    const geometryEngine = await import('@arcgis/core/geometry/geometryEngine').then((m: any) => m.default ?? m)
+    const dissolved = xinshiGeoms.length === 1 ? xinshiGeoms[0] : geometryEngine.union(xinshiGeoms)
+    if (!dissolved) return
+    const bgl = new GraphicsLayer({ id: 'xinshi-border-gl' })
+    bgl.add(new Graphic({
+      geometry: markRaw(dissolved),
+      symbol: { type: 'simple-fill', color: [0, 0, 0, 0], outline: { color: [220, 38, 38, 255], width: 2.5 } } as any,
+    }))
+    mapView.map.add(bgl, 0)
+  } catch (e) {
+    console.warn('[AmenityDash] xinshi border failed', e)
+  }
+}
+
+// ── Load all Tainan facilities (no spatial filter) ────────────
+async function loadAllTainanFacilities(ws: any) {
+  const layerMap = new Map<FacKey, any>()
+  ws.allLayers.forEach((l: any) => {
+    for (const fac of FACILITIES) {
+      if (!layerMap.has(fac.key) && l.title?.includes(fac.titlePart)) layerMap.set(fac.key, l)
+    }
+  })
+  await Promise.all(FACILITIES.map(async (fac) => {
+    const layer = layerMap.get(fac.key)
+    if (!layer) return
+    try { await layer.load() } catch {}
+    let queryable = layer
+    if (layer.sublayers) {
+      const sub = layer.sublayers?.getItemAt(0)
+      if (sub) { try { await sub.load() } catch {}; queryable = sub }
+    }
+    try {
+      const res = await queryable.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
+      if (res?.features?.length > 0) {
+        allFacData.value[fac.key] = res.features.map((f: any) => ({
+          name: extractName(f.attributes ?? {}),
+          typeLabel: fac.label,
+          color: fac.color,
+          geometry: f.geometry ? markRaw(f.geometry) : undefined,
+        }))
+      }
+    } catch (e) {
+      console.warn(`[AmenityDash] allTainan ${fac.label} failed`, e)
+    }
+  }))
+}
+
+// ── Render town choropleth ─────────────────────────────────────
+async function renderTownChoropleth() {
+  if (!mapView || !allBoundaryFeatures.length) return
+
+  // Build town geometry groups
+  const townGeoMap = new Map<string, any[]>()
+  for (const f of allBoundaryFeatures) {
+    if (!f.townname || !f.geometry) continue
+    if (!townGeoMap.has(f.townname)) townGeoMap.set(f.townname, [])
+    townGeoMap.get(f.townname)!.push(f.geometry)
+  }
+
+  const geometryEngine = await import('@arcgis/core/geometry/geometryEngine').then((m: any) => m.default ?? m)
+
+  // Dissolve each town
+  const townPolygons = new Map<string, any>()
+  for (const [tn, geoms] of townGeoMap) {
+    try {
+      const dissolved = geoms.length === 1 ? geoms[0] : geometryEngine.union(geoms.filter(Boolean))
+      if (dissolved) townPolygons.set(tn, dissolved)
+    } catch {}
+  }
+
+  // Count total facilities per town using spatial intersect
+  const townCount = new Map<string, number>()
+  const allItems: any[] = []
+  for (const fac of FACILITIES) {
+    const items = allFacData.value[fac.key] ?? []
+    allItems.push(...items.filter((i: any) => i.geometry))
+  }
+  for (const [tn, poly] of townPolygons) {
+    let count = 0
+    for (const item of allItems) {
+      try { if (geometryEngine.intersects(item.geometry, poly)) count++ } catch {}
+    }
+    townCount.set(tn, count)
+  }
+
+  const counts = [...townCount.values()].filter(v => v > 0).sort((a, b) => a - b)
+  const mn = counts[0] ?? 0
+  const mx = counts.at(-1) ?? 1
+  const BLUE_RAMP = ['#dbeafe', '#93c5fd', '#3b82f6', '#1d4ed8', '#1e3a8a']
+  const toColor = (v: number): [number, number, number, number] => {
+    const t = counts.length > 1 ? (v - mn) / (mx - mn || 1) : 0.5
+    const idx = Math.min(BLUE_RAMP.length - 1, Math.floor(t * BLUE_RAMP.length))
+    const hex = BLUE_RAMP[idx]!
+    return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16), 200]
+  }
+
+  // Remove existing layers
+  for (const lid of ['village-gl', 'xinshi-border-gl', 'town-border-gl', 'choro-gl', 'label-gl']) {
+    const el = mapView.map.findLayerById(lid); if (el) mapView.map.remove(el)
+  }
+
+  const gl = new GraphicsLayer({ id: 'choro-gl' })
+  const borderGL = new GraphicsLayer({ id: 'town-border-gl' })
+
+  for (const [tn, geoms] of townGeoMap) {
+    const v = townCount.get(tn) ?? 0
+    const color = v > 0 ? toColor(v) : [220, 220, 220, 120] as [number, number, number, number]
+    for (const geo of geoms) {
+      gl.add(new Graphic({
+        geometry: geo,
+        attributes: { townname: tn },
+        symbol: {
+          type: 'simple-fill',
+          color,
+          outline: { color: [...(color.slice(0, 3) as [number, number, number]), 60], width: 0.3 },
+        } as any,
+      }))
+    }
+    try {
+      const dissolved = townPolygons.get(tn)
+      if (dissolved) {
+        const isX = tn === '新市區'
+        borderGL.add(new Graphic({
+          geometry: markRaw(dissolved),
+          symbol: {
+            type: 'simple-fill',
+            color: [0, 0, 0, 0],
+            outline: { color: isX ? [0, 0, 0, 255] : [15, 23, 42, 200], width: isX ? 3.0 : 2.0 },
+          } as any,
+        }))
+      }
+    } catch {}
+  }
+
+  mapView.map.add(gl, 0)
+  mapView.map.add(borderGL)
+
+  // Town name labels
+  const existingLbl = mapView.map.findLayerById('label-gl'); if (existingLbl) mapView.map.remove(existingLbl)
+  const lgl = new GraphicsLayer({ id: 'label-gl' })
+  for (const [tn, poly] of townPolygons) {
+    const centroid = poly.centroid ?? poly.extent?.center
+    if (centroid) lgl.add(new Graphic({ geometry: centroid, symbol: { type: 'text', text: tn, color: [30,41,59,240], haloColor: [255,255,255,220], haloSize: 2, font: { size: 11, weight: 'bold' } } as any }))
+  }
+  mapView.map.add(lgl)
+  if (sciGL) {
+    try { mapView.map.reorder(sciGL, mapView.map.layers.length - 1) } catch {}
+  }
+}
+
+// ── Switch scale mode ─────────────────────────────────────────
+async function switchScaleMode(mode: 'village' | 'town') {
+  scaleMode.value = mode
+  selectedFac.value = null
+  if (mode === 'town') {
+    // Load all-Tainan data if not yet loaded
+    if (Object.keys(allFacData.value).every(k => (allFacData.value as any)[k].length === 0)) {
+      loading.value = true
+      if (_ws) await loadAllTainanFacilities(_ws)
+      loading.value = false
+    }
+    await renderTownChoropleth()
+    renderFacPoints(activeKey.value)
+    try { await mapView?.goTo({ center: [120.2, 23.05], zoom: 10 }) } catch {}
+  } else {
+    // Restore village boundary
+    const existingChoro = mapView?.map?.findLayerById?.('choro-gl'); if (existingChoro) mapView.map.remove(existingChoro)
+    const existingTownBorder = mapView?.map?.findLayerById?.('town-border-gl'); if (existingTownBorder) mapView.map.remove(existingTownBorder)
+    // Re-render village background
+    if (allBoundaryFeatures.length > 0) {
+      renderVillages(
+        allBoundaryFeatures.map(f => ({ geometry: f.geometry, attributes: { TOWNNAME: f.townname, VILLAGE: f.name } })),
+        allBoundaryFeatures.filter(f => f.townname === '新市區').map(f => ({ geometry: f.geometry, attributes: { TOWNNAME: f.townname, VILLAGE: f.name } })),
+      )
+    }
+    await addXinshiBorder()
+    renderFacPoints(activeKey.value)
+    try { await mapView?.goTo({ center: [120.31, 23.07], zoom: 12 }) } catch {}
+  }
+}
+
 // ── Load data from WebScene ───────────────────────────────────
 async function loadData() {
   await loadArcGIS()
@@ -392,6 +626,8 @@ async function loadData() {
     loading.value = false
     return
   }
+
+  _ws = ws
 
   // ── Find boundary layer ───────────────────────────────────
   let boundaryLayer: any = null
@@ -412,20 +648,32 @@ async function loadData() {
     }
 
     // Load ALL boundary features for background display
-    let allBoundaryFeatures: any[] = []
+    let rawBoundaryFeatures: any[] = []
     try {
       const allRes = await queryable.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true })
       if (allRes?.features?.length > 0) {
-        allBoundaryFeatures = allRes.features
-        console.log(`[AmenityDash] all boundary: ${allBoundaryFeatures.length} 筆`)
+        rawBoundaryFeatures = allRes.features
+        console.log(`[AmenityDash] all boundary: ${rawBoundaryFeatures.length} 筆`)
       }
     } catch (e) {
       console.warn('[AmenityDash] all boundary query failed', e)
     }
 
+    // Build allBoundaryFeatures cache (module-level)
+    if (rawBoundaryFeatures.length > 0) {
+      allBoundaryFeatures = rawBoundaryFeatures.map((f: any) => {
+        const a = f.attributes ?? {}
+        const keys = Object.keys(a)
+        const townKey = keys.find(k => /^TOWN(NAME)?$/i.test(k))
+        const tn = townKey ? String(a[townKey] ?? '') : ''
+        const villKey = keys.find(k => /^(VILLAGE|VILLNAME|VILNAME)$/i.test(k))
+        return { geometry: markRaw(f.geometry), townname: tn, name: villKey ? String(a[villKey] ?? '') : '' }
+      }).filter((f: any) => f.geometry)
+    }
+
     // Client-side filter for 新市區
-    if (allBoundaryFeatures.length > 0) {
-      villageFeatures = allBoundaryFeatures.filter((f: any) => {
+    if (rawBoundaryFeatures.length > 0) {
+      villageFeatures = rawBoundaryFeatures.filter((f: any) => {
         const a = f.attributes ?? {}
         return a.TOWN === '新市區' || a.TOWNNAME === '新市區' || String(a.TOWNCODE) === '67000200'
       })
@@ -438,7 +686,7 @@ async function loadData() {
           const result = await queryable.queryFeatures({ where, outFields: ['*'], returnGeometry: true })
           if (result?.features?.length > 0) {
             villageFeatures = result.features
-            if (!allBoundaryFeatures.length) allBoundaryFeatures = villageFeatures
+            if (!rawBoundaryFeatures.length) rawBoundaryFeatures = villageFeatures
             console.log(`[AmenityDash] boundary fallback (${where}): ${villageFeatures.length} 筆`)
             break
           }
@@ -448,20 +696,19 @@ async function loadData() {
       }
     }
 
-    const displayFeatures = allBoundaryFeatures.length > 0 ? allBoundaryFeatures : villageFeatures
+    const displayFeatures = rawBoundaryFeatures.length > 0 ? rawBoundaryFeatures : villageFeatures
     if (displayFeatures.length > 0) {
       renderVillages(displayFeatures, villageFeatures)
 
       // ── Build buffered polygon (union of village polygons + 500m buffer) ──
       try {
-        const { default: geometryEngine } = await import('@arcgis/core/geometry/geometryEngine')
+        const geometryEngine = await import('@arcgis/core/geometry/geometryEngine').then((m: any) => m.default ?? m)
         const polys = villageFeatures.map((f: any) => f.geometry).filter(Boolean)
         if (polys.length > 0) {
           const union = polys.length === 1 ? polys[0] : geometryEngine.union(polys)
           const buffered = geometryEngine.geodesicBuffer(union, 500, 'meters')
           queryGeom = markRaw(buffered)
           console.log('[AmenityDash] buffered query geometry created')
-          try { await mapView.goTo(queryGeom) } catch {}
         }
       } catch (e) {
         console.warn('[AmenityDash] geometryEngine failed, falling back to extent', e)
@@ -479,7 +726,6 @@ async function loadData() {
           if (isFinite(xmin)) {
             const sr = villageFeatures[0]?.geometry?.spatialReference
             queryGeom = markRaw(new Extent({ xmin, ymin, xmax, ymax, spatialReference: sr }))
-            try { await mapView.goTo(queryGeom.expand(1.3)) } catch {}
           }
         } catch {}
       }
@@ -578,7 +824,7 @@ async function loadData() {
             geometry: f.geometry,
             symbol: {
               type: 'simple-fill',
-              color: [240, 202, 80, 30],
+              color: [0, 0, 0, 0],
               outline: { color: [207, 149, 70, 230], width: 2.5 },
             } as any,
           }))
@@ -596,6 +842,14 @@ async function loadData() {
   loading.value = false
   await nextTick()
   renderChart()
+
+  // Add 新市區 thick border for village mode
+  await addXinshiBorder()
+
+  // Pre-load all-Tainan facilities in background for town mode performance
+  loadAllTainanFacilities(ws).catch(e => {
+    console.warn('[AmenityDash] background allTainan preload failed', e)
+  })
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────
@@ -613,6 +867,7 @@ onUnmounted(() => {
   mapView = null
   facGL = null
   sciGL = null
+  allBoundaryFeatures = []
 })
 </script>
 
@@ -689,9 +944,15 @@ onUnmounted(() => {
 .panel-header {
   flex-shrink: 0;
   display: flex; align-items: baseline; gap: 8px;
+  flex-wrap: wrap;
 }
 .panel-title { font-size: 15px; font-weight: 700; color: #1e293b; }
 .panel-sub   { font-size: 11px; color: #94a3b8; }
+
+/* Scale mode toggle */
+.scale-tabs { display: flex; gap: 4px; margin-top: 6px; }
+.scale-tab { padding: 2px 8px; border-radius: 10px; border: 1px solid #d1d5db; background: #fff; font-size: 10px; color: #475569; cursor: pointer; }
+.scale-tab.active { background: #1e293b; color: #fff; border-color: #1e293b; }
 
 /* Count grid — bigger cards 2 rows × 4 cols */
 .count-grid {
