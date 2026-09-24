@@ -42,15 +42,6 @@
           >
             提交回饋
           </NuxtLink>
-          <a
-            href="http://127.0.0.1:5173/"
-            target="_blank"
-            rel="noopener noreferrer"
-            style="color: white"
-            class="px-4 py-2 rounded transition-all duration-200 font-medium hover:opacity-80"
-          >
-            Sumo-Cesium Safety Twin
-          </a>
         </nav>
 
         <!-- 右側：用戶菜單 -->
