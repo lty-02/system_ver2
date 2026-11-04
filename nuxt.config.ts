@@ -11,6 +11,7 @@ export default defineNuxtConfig({
     public: {
       arcgisPortalUrl: 'https://igisportal.geomatics.ncku.edu.tw/portal',
       websceneId: '2ae01d33fe194607b721072b1c10dc1a',
+      sumoCesiumUrl: '', // 對應環境變數 NUXT_PUBLIC_SUMO_CESIUM_URL
     },
     ldgisApId: '',
     ldgisApPswd: '',

@@ -74,7 +74,7 @@
           ></iframe>
           <iframe
             v-else-if="activeModule === 'sumo-cesium'"
-            src="http://127.0.0.1:5173/"
+            :src="sumoCesiumUrl"
             class="embed-frame"
             allow="fullscreen"
             loading="lazy"
@@ -239,6 +239,16 @@ const modules = [
 
 
 const activeModule = ref<string | null>(null)
+
+// 未設定 NUXT_PUBLIC_SUMO_CESIUM_URL 時，沿用目前網址的主機名稱，讓外部連線也能載入
+// （localhost 改用 127.0.0.1，因 Sumo-Cesium 預設只監聽 127.0.0.1）
+const runtimeConfig = useRuntimeConfig()
+const sumoCesiumUrl = computed(() => {
+  if (runtimeConfig.public.sumoCesiumUrl) return runtimeConfig.public.sumoCesiumUrl as string
+  const { protocol, hostname } = window.location
+  const host = hostname === 'localhost' ? '127.0.0.1' : hostname
+  return `${protocol}//${host}:5173/`
+})
 
 const isFullscreenModule = computed(() =>
   (modules as any[]).find(m => m.id === activeModule.value)?.fullscreen ?? false
