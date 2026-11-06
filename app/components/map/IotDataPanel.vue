@@ -10,7 +10,6 @@
         <span class="tab-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle v-if="tab.id === 'air'" cx="12" cy="12" r="10"/>
-            <path v-else-if="tab.id === 'weather'" d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
             <g v-else-if="tab.id === 'cctv'">
               <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
             </g>
@@ -24,7 +23,7 @@
     <div class="tab-content">
 
       <div v-if="activeTab === 'air'" class="tab-pane">
-        <div v-if="isAirLoading" class="loading-state">
+        <div v-if="isAirLoading && airQualityData.length === 0" class="loading-state">
           <div class="spinner"></div><p>載入 PM2.5 中...</p>
         </div>
 
@@ -41,7 +40,18 @@
         </div>
 
         <div v-else-if="airQualityData.length > 0" class="air-quality-list">
-          <div class="list-header"><span>指定測站 ({{ airQualityData.length }})</span></div>
+          <div class="list-header list-header-row">
+            <span>環境部測站 ({{ airQualityData.length }})</span>
+            <div class="range-toggle">
+              <button
+                v-for="r in RANGES"
+                :key="r.id"
+                :class="['range-btn', { active: chartRange === r.id }]"
+                @click="chartRange = r.id"
+              >{{ r.label }}</button>
+            </div>
+          </div>
+
           <div v-for="station in airQualityData" :key="station.stationId" class="station-card">
             <div class="station-header">
               <div class="station-info">
@@ -53,93 +63,50 @@
               </div>
             </div>
             <div class="station-data">
-              <div class="data-item full-width" v-if="station.pm25 !== undefined">
+              <div class="data-item full-width">
                 <span class="data-label">PM2.5</span>
-                <span class="data-value">{{ station.pm25.toFixed(0) }} <small>μg/m³</small></span>
+                <span class="data-value">
+                  {{ station.pm25 !== undefined ? station.pm25.toFixed(0) : '--' }}
+                  <small>{{ station.unit }}</small>
+                </span>
               </div>
             </div>
+
+            <div class="stats-row">
+              <div class="stat-item">
+                <span class="stat-label">{{ rangeLabel }}平均</span>
+                <span class="stat-value">{{ fmtStat(stationStats(station).avg) }}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">最高</span>
+                <span class="stat-value">{{ fmtStat(stationStats(station).max) }}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">最低</span>
+                <span class="stat-value">{{ fmtStat(stationStats(station).min) }}</span>
+              </div>
+            </div>
+
+            <div class="chart-box">
+              <canvas :ref="el => setChartCanvas(station.stationId, el as HTMLCanvasElement | null)"></canvas>
+            </div>
+
             <div class="station-footer">
+              <span class="chart-legend">
+                <i class="legend-line"></i>PM2.5
+                <i class="legend-line dashed"></i>普通上限 35.4
+              </span>
               <span class="update-time">更新：{{ formatTimestamp(station.timestamp) }}</span>
             </div>
           </div>
-          <button class="refresh-btn" @click="loadAirQuality">重新整理</button>
+          <button class="refresh-btn" :disabled="isAirLoading" @click="loadAirQuality">
+            {{ isAirLoading ? '更新中...' : '重新整理' }}
+          </button>
         </div>
 
         <div v-else class="empty-content">
           <p class="placeholder-text">無 PM2.5 資料</p>
           <button class="load-btn" @click="loadAirQuality">載入資料</button>
-        </div>
-      </div>
-
-      <div v-if="activeTab === 'weather'" class="tab-pane">
-        <div v-if="isWeatherLoading" class="loading-state">
-          <div class="spinner"></div>
-          <p>載入天氣資料中...</p>
-        </div>
-
-        <div v-else-if="weatherError" class="error-state">
-          <div class="error-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="8" x2="12" y2="12"/>
-              <line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-          </div>
-          <p class="error-text">{{ weatherError }}</p>
-          <button class="retry-btn" @click="loadWeather">重試</button>
-        </div>
-
-        <div v-else-if="weatherData.length > 0" class="weather-list">
-          <div class="list-header">
-            <span>指定氣象站 ({{ weatherData.length }})</span>
-          </div>
-
-          <div v-for="station in weatherData" :key="station.stationId" class="station-card">
-            <div class="station-header">
-              <div class="station-info">
-                <h4 class="station-name">{{ station.stationName }}</h4>
-                <p class="station-location">{{ station.city }} {{ station.township }}</p>
-              </div>
-              <div class="weather-badge" :class="{ 'sunny': station.weather === '晴', 'cloudy': station.weather?.includes('雲'), 'rainy': station.weather?.includes('雨') }">
-                {{ station.weather || '無資料' }}
-              </div>
-            </div>
-
-            <div class="station-data grid-2">
-              <div class="data-item">
-                <span class="data-label">氣溫</span>
-                <span class="data-value">
-                  {{ station.temperature !== undefined ? station.temperature.toFixed(1) : '--' }}
-                  <small>°C</small>
-                </span>
-              </div>
-              <div class="data-item">
-                <span class="data-label">濕度</span>
-                <span class="data-value">
-                  {{ station.humidity !== undefined ? station.humidity : '--' }}
-                  <small>%</small>
-                </span>
-              </div>
-              <div class="data-item">
-                <span class="data-label">雨量</span>
-                <span class="data-value">
-                  {{ station.rainfall !== undefined ? station.rainfall : '--' }}
-                  <small>mm</small>
-                </span>
-              </div>
-            </div>
-
-            <div class="station-footer">
-              <span class="update-time">更新：{{ formatTimestamp(station.timestamp) }}</span>
-            </div>
-          </div>
-
-          <button class="refresh-btn" @click="loadWeather">重新整理</button>
-        </div>
-
-        <div v-else class="empty-content">
-          <p class="placeholder-text">無符合天氣資料</p>
-          <button class="load-btn" @click="loadWeather">載入資料</button>
         </div>
       </div>
 
@@ -215,7 +182,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import {
+  Chart,
+  LineController, LineElement, PointElement,
+  CategoryScale, LinearScale,
+  Filler, Tooltip,
+} from 'chart.js'
+import type { AirQualityData } from '@/composables/useCivilIoT'
+Chart.register(LineController, LineElement, PointElement, CategoryScale, LinearScale, Filler, Tooltip)
 
 interface Tab {
   id: string
@@ -279,7 +254,6 @@ const CCTV_DATA: CctvCam[] = [
 
 const tabs: Tab[] = [
   { id: 'air',     label: 'PM2.5', icon: '🌫️' },
-  { id: 'weather', label: '天氣',   icon: '🌤️' },
   { id: 'cctv',   label: '園區內部', icon: '📷' },
 ]
 
@@ -288,30 +262,169 @@ const activeCctv   = ref<CctvCam | null>(null)
 
 const {
   isAirLoading,
-  isWeatherLoading,
   airError,
-  weatherError,
   airQualityData,
-  weatherData,
   fetchAirQualityStations,
-  fetchWeatherStations,
   getAQILevel,
   formatTimestamp
 } = useCivilIoT()
 
 const handleTabChange = (tabId: string) => {
   activeTab.value = tabId
-  if (tabId === 'weather' && weatherData.value.length === 0) loadWeather()
-  else if (tabId === 'air' && airQualityData.value.length === 0) loadAirQuality()
+  if (tabId === 'air' && airQualityData.value.length === 0) loadAirQuality()
 }
 
 const loadAirQuality = async () => { await fetchAirQualityStations() }
-const loadWeather    = async () => { await fetchWeatherStations() }
 
 function openCctv(cam: CctvCam) { activeCctv.value = cam }
 function closeCctv()            { activeCctv.value = null }
 
+// ── PM2.5 統計圖表 ──────────────────────────────────────────
+type RangeId = '24h' | '7d'
+const RANGES: { id: RangeId; label: string; hours: number }[] = [
+  { id: '24h', label: '24 小時', hours: 24 },
+  { id: '7d',  label: '7 天',    hours: 24 * 7 },
+]
+const AQI_MODERATE_LIMIT = 35.4
+
+// 配色沿用面板的藍色系
+const COLOR_LINE   = '#60a5fa'
+const COLOR_AXIS   = '#94a3b8'
+const COLOR_GRID   = '#e2e8f0'
+const COLOR_LIMIT  = '#fbbf24'
+
+const chartRange = ref<RangeId>('24h')
+const rangeLabel = computed(() => RANGES.find(r => r.id === chartRange.value)!.label)
+
+const rangePoints = (station: AirQualityData) => {
+  const hours = RANGES.find(r => r.id === chartRange.value)!.hours
+  return station.history.slice(-hours)
+}
+
+const stationStats = (station: AirQualityData) => {
+  const values = rangePoints(station).map(p => p.value).filter((v): v is number => v !== null)
+  if (values.length === 0) return { avg: null, max: null, min: null }
+  return {
+    avg: values.reduce((a, b) => a + b, 0) / values.length,
+    max: Math.max(...values),
+    min: Math.min(...values),
+  }
+}
+
+const fmtStat = (v: number | null) => (v === null ? '--' : v.toFixed(0))
+
+const formatAxisTime = (iso: string) => {
+  const d = new Date(iso)
+  const hh = String(d.getHours()).padStart(2, '0')
+  return chartRange.value === '24h' ? `${hh}:00` : `${d.getMonth() + 1}/${d.getDate()}`
+}
+
+const chartCanvases = new Map<string, HTMLCanvasElement>()
+const charts = new Map<string, Chart>()
+
+const setChartCanvas = (id: string, el: HTMLCanvasElement | null) => {
+  if (el) chartCanvases.set(id, el)
+  else chartCanvases.delete(id)
+}
+
+const destroyCharts = () => {
+  charts.forEach(c => c.destroy())
+  charts.clear()
+}
+
+const renderCharts = async () => {
+  await nextTick()
+  destroyCharts()
+  if (activeTab.value !== 'air') return
+
+  for (const station of airQualityData.value) {
+    const canvas = chartCanvases.get(station.stationId)
+    if (!canvas) continue
+
+    const points = rangePoints(station)
+    const ctx = canvas.getContext('2d')!
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.clientHeight || 140)
+    gradient.addColorStop(0, 'rgba(96, 165, 250, 0.35)')
+    gradient.addColorStop(1, 'rgba(96, 165, 250, 0.02)')
+
+    charts.set(station.stationId, new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: points.map(p => p.time),
+        datasets: [
+          {
+            label: 'PM2.5',
+            data: points.map(p => p.value),
+            borderColor: COLOR_LINE,
+            backgroundColor: gradient,
+            borderWidth: 2,
+            fill: true,
+            tension: 0.35,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            pointHoverBackgroundColor: '#1e40af',
+            spanGaps: false,
+          },
+          {
+            label: '普通上限',
+            data: points.map(() => AQI_MODERATE_LIMIT),
+            borderColor: COLOR_LIMIT,
+            borderWidth: 1.5,
+            borderDash: [5, 4],
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            fill: false,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 300 },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          tooltip: {
+            backgroundColor: 'rgba(30, 41, 59, 0.92)',
+            titleFont: { size: 11 },
+            bodyFont: { size: 11 },
+            padding: 8,
+            filter: item => item.datasetIndex === 0,
+            callbacks: {
+              title: items => formatTimestamp(String(items[0]?.label ?? '')),
+              label: item => item.raw === null ? ' 無有效值' : ` PM2.5：${item.raw} ${station.unit}`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            border: { color: COLOR_GRID },
+            ticks: {
+              color: COLOR_AXIS,
+              font: { size: 10 },
+              maxRotation: 0,
+              autoSkip: true,
+              maxTicksLimit: chartRange.value === '24h' ? 6 : 7,
+              callback: (_v, i) => formatAxisTime(points[i]?.time ?? ''),
+            },
+          },
+          y: {
+            beginAtZero: true,
+            suggestedMax: 50,
+            grid: { color: COLOR_GRID },
+            border: { display: false },
+            ticks: { color: COLOR_AXIS, font: { size: 10 }, maxTicksLimit: 5 },
+          },
+        },
+      },
+    }))
+  }
+}
+
+watch([airQualityData, chartRange, activeTab], renderCharts)
+
 onMounted(() => { loadAirQuality() })
+onBeforeUnmount(destroyCharts)
 </script>
 
 <style scoped>
@@ -617,13 +730,8 @@ onMounted(() => { loadAirQuality() })
 
 .aqi-badge { padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; color: white; }
 
-.weather-badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; color: #475569; background-color: #e2e8f0; }
-.weather-badge.sunny { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); color: #92400e; }
-.weather-badge.cloudy { background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%); color: #475569; }
-.weather-badge.rainy { background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); color: #1e40af; }
 
 .station-data { display: grid; gap: 12px; margin-bottom: 10px; }
-.station-data.grid-2 { grid-template-columns: repeat(2, 1fr); }
 .data-item { display: flex; flex-direction: column; gap: 2px; }
 .data-item.full-width {
   background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
@@ -643,4 +751,44 @@ onMounted(() => { loadAirQuality() })
 
 .placeholder-text { font-size: 14px; font-weight: 500; color: #64748b; }
 .placeholder-hint  { font-size: 12px; color: #94a3b8; }
+
+/* ─── PM2.5 統計圖表 ─── */
+.list-header-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+.range-toggle {
+  display: flex; gap: 2px; padding: 2px;
+  background: #fff; border: 1px solid #bfdbfe; border-radius: 6px;
+}
+.range-btn {
+  padding: 2px 8px; border: none; border-radius: 4px;
+  background: transparent; color: #64748b;
+  font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.15s;
+}
+.range-btn:hover { color: #1e40af; }
+.range-btn.active { background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%); color: #fff; }
+
+.stats-row {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px;
+}
+.stat-item {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 6px 4px; border-radius: 6px;
+  background: #f8fafc; border: 1px solid #e2e8f0;
+}
+.stat-label { font-size: 10.5px; color: #64748b; }
+.stat-value { font-size: 14px; font-weight: 700; color: #1e40af; }
+
+.chart-box {
+  position: relative; height: 140px; margin-bottom: 8px;
+}
+
+.station-footer.station-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.chart-legend { display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: #64748b; }
+.legend-line {
+  display: inline-block; width: 14px; height: 0; margin-left: 4px;
+  border-top: 2px solid #60a5fa;
+}
+.legend-line.dashed { border-top: 2px dashed #fbbf24; margin-left: 8px; }
+
+.refresh-btn:disabled { opacity: 0.6; cursor: wait; transform: none; box-shadow: none; }
 </style>
